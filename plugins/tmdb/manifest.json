@@ -1,0 +1,45 @@
+{
+  "manifestVersion": 1,
+  "apiTags": ["prismedia"],
+  "id": "tmdb",
+  "name": "The Movie Database",
+  "version": "1.1.0",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Tmdb.dll",
+  "compat": {
+    "pluginApiMin": "1.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "1.0.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "apiKey",
+      "label": "TMDB API Key (v3 auth)",
+      "required": true,
+      "url": "https://www.themoviedb.org/settings/api"
+    }
+  ],
+  "supports": [
+    {
+      "entityKind": "video",
+      "actions": ["lookup-id", "lookup-url", "search"]
+    },
+    {
+      "entityKind": "video-series",
+      "actions": ["lookup-id", "lookup-url", "search", "cascade"]
+    },
+    {
+      "entityKind": "video-season",
+      "actions": ["lookup-id", "lookup-url", "search", "cascade"]
+    },
+    {
+      "entityKind": "person",
+      "actions": ["lookup-id", "lookup-url", "search"]
+    },
+    {
+      "entityKind": "studio",
+      "actions": ["lookup-id", "lookup-url", "search"]
+    }
+  ]
+}

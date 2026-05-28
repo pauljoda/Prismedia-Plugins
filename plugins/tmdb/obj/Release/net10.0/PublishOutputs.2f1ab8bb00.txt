@@ -1,0 +1,4 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/dist/Prismedia.Plugin.Tmdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/dist/Prismedia.Plugin.Tmdb.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/dist/Prismedia.Plugin.Tmdb.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/dist/Prismedia.Plugin.Tmdb.pdb

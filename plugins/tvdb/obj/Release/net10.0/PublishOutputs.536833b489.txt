@@ -1,0 +1,4 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/dist/Prismedia.Plugin.Tvdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/dist/Prismedia.Plugin.Tvdb.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/dist/Prismedia.Plugin.Tvdb.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/dist/Prismedia.Plugin.Tvdb.pdb

@@ -1,0 +1,13 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/bin/Release/net10.0/Prismedia.Plugin.AniList.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/bin/Release/net10.0/Prismedia.Plugin.AniList.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/bin/Release/net10.0/Prismedia.Plugin.AniList.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/bin/Release/net10.0/Prismedia.Plugin.AniList.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.GeneratedMSBuildEditorConfig.editorconfig
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.AssemblyInfoInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.AssemblyInfo.cs
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.csproj.CoreCompileInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/refint/Prismedia.Plugin.AniList.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.genruntimeconfig.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/ref/Prismedia.Plugin.AniList.dll

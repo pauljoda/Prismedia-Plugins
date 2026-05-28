@@ -1,0 +1,13 @@
+{
+  "name": "prismedia-community-plugins",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Community-maintained plugins for Prismedia media library.",
+  "scripts": {
+    "build": "node scripts/build-plugins.mjs"
+  },
+  "devDependencies": {
+    "fflate": "^0.8.2",
+    "js-yaml": "^4.1.0"
+  }
+}

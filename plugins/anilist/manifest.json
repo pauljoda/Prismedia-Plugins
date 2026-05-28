@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 1,
+  "apiTags": ["prismedia"],
+  "id": "anilist",
+  "name": "AniList",
+  "version": "1.0.0",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.AniList.dll",
+  "compat": {
+    "pluginApiMin": "1.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "1.0.0",
+    "prismediaMax": null
+  },
+  "auth": [],
+  "isNsfw": false,
+  "supports": [
+    { "entityKind": "video-series", "actions": ["lookup-id", "lookup-url", "search", "cascade"] },
+    { "entityKind": "video", "actions": ["lookup-id", "lookup-url", "search"] }
+  ]
+}

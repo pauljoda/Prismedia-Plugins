@@ -1,0 +1,13 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/bin/Release/net10.0/Prismedia.Plugin.Youtube.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/bin/Release/net10.0/Prismedia.Plugin.Youtube.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/bin/Release/net10.0/Prismedia.Plugin.Youtube.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/bin/Release/net10.0/Prismedia.Plugin.Youtube.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.GeneratedMSBuildEditorConfig.editorconfig
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.AssemblyInfoInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.AssemblyInfo.cs
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.csproj.CoreCompileInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/refint/Prismedia.Plugin.Youtube.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.genruntimeconfig.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/ref/Prismedia.Plugin.Youtube.dll

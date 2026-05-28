@@ -1,0 +1,4 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/dist/Prismedia.Plugin.MusicBrainz.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/dist/Prismedia.Plugin.MusicBrainz.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/dist/Prismedia.Plugin.MusicBrainz.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/dist/Prismedia.Plugin.MusicBrainz.pdb

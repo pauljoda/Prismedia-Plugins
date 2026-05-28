@@ -1,0 +1,13 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/bin/Release/net10.0/Prismedia.Plugin.Tvdb.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/bin/Release/net10.0/Prismedia.Plugin.Tvdb.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/bin/Release/net10.0/Prismedia.Plugin.Tvdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/bin/Release/net10.0/Prismedia.Plugin.Tvdb.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.GeneratedMSBuildEditorConfig.editorconfig
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.AssemblyInfoInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.AssemblyInfo.cs
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.csproj.CoreCompileInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/refint/Prismedia.Plugin.Tvdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.genruntimeconfig.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/ref/Prismedia.Plugin.Tvdb.dll

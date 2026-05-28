@@ -1,0 +1,20 @@
+{
+  "manifestVersion": 1,
+  "apiTags": ["prismedia"],
+  "id": "youtube",
+  "name": "YouTube Metadata",
+  "version": "1.0.0",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Youtube.dll",
+  "compat": {
+    "pluginApiMin": "1.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "1.0.0",
+    "prismediaMax": null
+  },
+  "auth": [],
+  "isNsfw": false,
+  "supports": [
+    { "entityKind": "video", "actions": ["lookup-id", "lookup-url", "search"] }
+  ]
+}

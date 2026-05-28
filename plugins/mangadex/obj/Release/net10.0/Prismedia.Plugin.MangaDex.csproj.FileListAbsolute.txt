@@ -1,0 +1,13 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/bin/Release/net10.0/Prismedia.Plugin.MangaDex.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/bin/Release/net10.0/Prismedia.Plugin.MangaDex.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/bin/Release/net10.0/Prismedia.Plugin.MangaDex.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/bin/Release/net10.0/Prismedia.Plugin.MangaDex.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.GeneratedMSBuildEditorConfig.editorconfig
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.AssemblyInfoInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.AssemblyInfo.cs
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.csproj.CoreCompileInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/refint/Prismedia.Plugin.MangaDex.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.genruntimeconfig.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/ref/Prismedia.Plugin.MangaDex.dll

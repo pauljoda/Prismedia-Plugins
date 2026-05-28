@@ -1,0 +1,4 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/dist/Prismedia.Plugin.AniList.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/dist/Prismedia.Plugin.AniList.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/dist/Prismedia.Plugin.AniList.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/dist/Prismedia.Plugin.AniList.pdb

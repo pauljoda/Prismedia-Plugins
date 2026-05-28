@@ -1,0 +1,21 @@
+{
+  "manifestVersion": 1,
+  "apiTags": ["prismedia"],
+  "id": "musicbrainz",
+  "name": "MusicBrainz",
+  "version": "1.0.0",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.MusicBrainz.dll",
+  "compat": {
+    "pluginApiMin": "1.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "1.0.0",
+    "prismediaMax": null
+  },
+  "auth": [],
+  "isNsfw": false,
+  "supports": [
+    { "entityKind": "audio-library", "actions": ["lookup-id", "lookup-url", "search"] },
+    { "entityKind": "audio-track", "actions": ["lookup-id", "lookup-url", "search"] }
+  ]
+}

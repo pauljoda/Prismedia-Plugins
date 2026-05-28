@@ -1,0 +1,4 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/dist/Prismedia.Plugin.Youtube.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/dist/Prismedia.Plugin.Youtube.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/dist/Prismedia.Plugin.Youtube.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/dist/Prismedia.Plugin.Youtube.pdb

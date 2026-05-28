@@ -1,0 +1,4 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/dist/Prismedia.Plugin.MangaDex.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/dist/Prismedia.Plugin.MangaDex.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/dist/Prismedia.Plugin.MangaDex.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/dist/Prismedia.Plugin.MangaDex.pdb

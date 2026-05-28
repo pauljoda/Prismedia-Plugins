@@ -1,0 +1,13 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/bin/Release/net10.0/Prismedia.Plugin.Tmdb.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/bin/Release/net10.0/Prismedia.Plugin.Tmdb.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/bin/Release/net10.0/Prismedia.Plugin.Tmdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/bin/Release/net10.0/Prismedia.Plugin.Tmdb.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.GeneratedMSBuildEditorConfig.editorconfig
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.AssemblyInfoInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.AssemblyInfo.cs
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.csproj.CoreCompileInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/refint/Prismedia.Plugin.Tmdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/Prismedia.Plugin.Tmdb.genruntimeconfig.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tmdb/obj/Release/net10.0/ref/Prismedia.Plugin.Tmdb.dll
