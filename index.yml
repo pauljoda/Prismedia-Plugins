@@ -39,7 +39,7 @@
   version: 1.1.1
   date: '2026-05-29'
   path: plugins/tmdb/tmdb.zip
-  sha256: 0134fc50a02580dcd8ab93f1c4bc43ff01944739c43632771500515477da8808
+  sha256: ef79a2f4211d608d53d80aabf98926395ba20d0acd65d62e7372b2cfd13235c8
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1

@@ -386,12 +386,16 @@ internal sealed class TmdbProposalMapper {
         return children;
     }
 
-    private Task<EntityMetadataProposal?> PersonChildAsync(int id, string name, string? profilePath, HashSet<int> seen) {
+    private async Task<EntityMetadataProposal?> PersonChildAsync(int id, string name, string? profilePath, HashSet<int> seen) {
         if (id > 0 && seen.Add(id)) {
-            return Task.FromResult(PersonFallback(id, name, profilePath));
+            try {
+                return await PersonToProposalAsync(id, "cascade");
+            } catch {
+                return PersonFallback(id, name, profilePath);
+            }
         }
 
-        return Task.FromResult(id <= 0 ? PersonFallback(id, name, profilePath) : null);
+        return id <= 0 ? PersonFallback(id, name, profilePath) : null;
     }
 
     private static EntityMetadataProposal? PersonFallback(int id, string name, string? profilePath) {

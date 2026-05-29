@@ -5,9 +5,26 @@ namespace Prismedia.Plugin.Tmdb.Tests;
 
 public sealed class TmdbProposalMapperTests {
     [Fact]
-    public async Task TvProposalUsesSeasonShellsAndCreditRelationshipsWithoutExtraHydration() {
-        using var http = new HttpClient(new StubHandler(request =>
-            throw new InvalidOperationException($"Unexpected TMDB request {request.RequestUri}")));
+    public async Task TvProposalUsesSeasonShellsAndHydratedCreditRelationships() {
+        using var http = new HttpClient(new StubHandler(request => {
+            if (request.RequestUri?.AbsolutePath == "/3/person/2140873") {
+                return """
+                    {
+                      "id": 2140873,
+                      "name": "Quinta Brunson",
+                      "biography": "Creator and performer.",
+                      "profile_path": "/quinta-full.jpg",
+                      "birthday": "1989-12-21",
+                      "deathday": null,
+                      "known_for_department": "Acting",
+                      "popularity": 12.6,
+                      "images": { "profiles": [{ "file_path": "/quinta-full.jpg", "width": 500, "height": 750 }] }
+                    }
+                    """;
+            }
+
+            throw new InvalidOperationException($"Unexpected TMDB request {request.RequestUri}");
+        }));
         var mapper = new TmdbProposalMapper(new TmdbApiClient(http, "test-key"));
         var detail = new TmdbTvDetail(
             Id: 271267,
@@ -39,7 +56,11 @@ public sealed class TmdbProposalMapperTests {
         Assert.Empty(season.Children);
         var person = Assert.Single(proposal.Relationships ?? [], row => row.TargetKind == "person");
         Assert.Equal("Quinta Brunson", person.Patch.Title);
+        Assert.Equal("Creator and performer.", person.Patch.Description);
         Assert.Equal("2140873", person.Patch.ExternalIds["tmdb"]);
+        Assert.Equal("1989-12-21", person.Patch.Dates["birth"]);
+        Assert.Equal(13, person.Patch.Stats["popularity"]);
+        Assert.Equal("Acting", person.Patch.Classification);
     }
 
     [Fact]
