@@ -3,8 +3,8 @@
   "apiTags": ["prismedia"],
   "id": "anilist",
   "name": "AniList",
-  "version": "1.0.0",
-  "date": "2026-04-25",
+  "version": "1.0.1",
+  "date": "2026-05-29",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.AniList.dll",
   "compat": {
@@ -17,6 +17,7 @@
   "isNsfw": false,
   "supports": [
     { "entityKind": "video-series", "actions": ["lookup-id", "lookup-url", "search", "cascade"] },
+    { "entityKind": "video-season", "actions": ["lookup-id", "lookup-url", "search", "cascade"] },
     { "entityKind": "video", "actions": ["lookup-id", "lookup-url", "search"] }
   ]
 }

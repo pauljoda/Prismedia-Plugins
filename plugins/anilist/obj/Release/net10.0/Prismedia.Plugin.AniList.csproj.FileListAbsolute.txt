@@ -11,3 +11,4 @@
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.pdb
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.genruntimeconfig.cache
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/ref/Prismedia.Plugin.AniList.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/anilist/obj/Release/net10.0/Prismedia.Plugin.AniList.sourcelink.json

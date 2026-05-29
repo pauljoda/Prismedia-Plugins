@@ -11,28 +11,136 @@ internal static partial class AniListPlugin {
     private const string Api = "https://graphql.anilist.co";
 
     public static async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
-        if (!request.Entity.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) && !request.Entity.Kind.Equals("video", StringComparison.OrdinalIgnoreCase)) return IdentifyPluginResult.None();
-        var id = ExternalId(request) ?? IdFromUrl(request.Query.Url) ?? FirstUrlId(request.Hints.Urls);
-        if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(ToProposal(await DetailAsync(id.Value), request.Entity.Kind, request.Entity.Id, "external-id"));
+        if (!IsSupportedKind(request.Entity.Kind)) return IdentifyPluginResult.None();
+
+        var id = ExternalId(request) ?? IdFromUrl(request.Query.Url) ?? FirstUrlId(request.Hints.Urls) ?? AncestorExternalId(request);
+        var seasonNumber = PositionValue(request, "seasonNumber", "season");
+        var episodeNumber = PositionValue(request, "episodeNumber", "episode", "sortOrder");
+        if (id is not null && !IsExplicitSearch(request)) {
+            var media = await DetailAsync(id.Value);
+            if (IsEpisodeKind(request.Entity.Kind) && episodeNumber is { } episode) {
+                var episodeProposal = await EpisodeFromContextAsync(media, seasonNumber, episode, request.Entity.Id);
+                return episodeProposal is null ? IdentifyPluginResult.None() : IdentifyPluginResult.ForProposal(episodeProposal);
+            }
+
+            if (request.Entity.Kind.Equals("video-season", StringComparison.OrdinalIgnoreCase)) {
+                return IdentifyPluginResult.ForProposal(await SeasonFromContextAsync(media, seasonNumber ?? 1, request.Entity.Id));
+            }
+
+            return IdentifyPluginResult.ForProposal(ToProposal(media, request.Entity.Kind, request.Entity.Id, "external-id"));
+        }
+
         var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (string.IsNullOrWhiteSpace(title)) return IdentifyPluginResult.None();
         var results = await SearchAsync(title);
         return IdentifyPluginResult.ForCandidates(results.Select(media => new EntitySearchCandidate(new Dictionary<string, string> { [Provider] = media.Id.ToString() }, Title(media), Year(media.StartDate), StripHtml(media.Description), media.CoverImage?.Large ?? media.CoverImage?.ExtraLarge, media.Popularity)).ToArray());
     }
 
-    private static EntityMetadataProposal ToProposal(Media media, string requestedKind, Guid targetId, string reason) {
+    internal static EntityMetadataProposal ToProposal(Media media, string requestedKind, Guid targetId, string reason) {
         var kind = requestedKind.Equals("video", StringComparison.OrdinalIgnoreCase) && IsMovieLike(media) ? "video" : "video-series";
         var tags = (media.Genres ?? []).Concat((media.Tags ?? []).Where(t => (t.Rank ?? 0) >= 60).Select(t => t.Name)).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(20).Cast<string>().ToArray();
         var dates = new Dictionary<string, string>(); if (DateString(media.StartDate) is { } start) dates["started"] = start; if (DateString(media.EndDate) is { } end) dates["ended"] = end;
         var stats = new Dictionary<string, int>(); if (media.Episodes is int episodes) stats["episodeCount"] = episodes; if (media.Duration is int duration) stats["runtimeMinutes"] = duration; if (media.Popularity is int popularity) stats["popularity"] = popularity;
         var external = new Dictionary<string, string> { [Provider] = media.Id.ToString() }; if (media.IdMal is int mal) external["mal"] = mal.ToString();
         var images = new List<ImageCandidate>(); if (!string.IsNullOrWhiteSpace(media.CoverImage?.ExtraLarge)) images.Add(new("poster", media.CoverImage!.ExtraLarge!, Provider, 10, null, null, null)); if (!string.IsNullOrWhiteSpace(media.CoverImage?.Large)) images.Add(new("poster", media.CoverImage!.Large!, Provider, 8, null, null, null)); if (!string.IsNullOrWhiteSpace(media.BannerImage)) images.Add(new("backdrop", media.BannerImage!, Provider, 7, null, null, null));
-        var children = kind == "video-series" && media.Episodes is > 0 ? Enumerable.Range(1, Math.Min(media.Episodes.Value, 200)).Select(i => EpisodeShell(media, i)).ToArray() : [];
         var relationships = CharacterRelationships(media).Concat(StudioRelationships(media)).ToArray();
-        return new EntityMetadataProposal($"anilist:{media.Id}", Provider, kind, 0.9m, reason, new EntityMetadataPatch(Title(media), StripHtml(media.Description), external, [media.SiteUrl ?? $"https://anilist.co/anime/{media.Id}"], tags, PrimaryStudio(media), [], dates, stats, new Dictionary<string, int>(), media.Format), images, children, [], targetId, relationships);
+        return new EntityMetadataProposal($"anilist:{media.Id}", Provider, kind, 0.9m, reason, new EntityMetadataPatch(Title(media), StripHtml(media.Description), external, [media.SiteUrl ?? $"https://anilist.co/anime/{media.Id}"], tags, PrimaryStudio(media), [], dates, stats, new Dictionary<string, int>(), media.Format), images, [], [], targetId, relationships);
     }
 
-    private static EntityMetadataProposal EpisodeShell(Media media, int number) => new($"anilist:{media.Id}:episode:{number}", Provider, "video", 0.65m, "series-cascade", new EntityMetadataPatch($"Episode {number}", null, new Dictionary<string, string> { [Provider] = media.Id.ToString() }, [], [], null, [], new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int> { ["episodeNumber"] = number, ["sortOrder"] = number }, null), [], [], [], null, []);
+    private static async Task<EntityMetadataProposal> SeasonFromContextAsync(Media root, int seasonNumber, Guid targetId) {
+        var parts = await SeasonPartsAsync(root);
+        if (seasonNumber == 0) return FlatSeasonShell(parts, targetId);
+        var part = parts.ElementAtOrDefault(seasonNumber - 1) ?? root;
+        return SeasonShell(part, seasonNumber, targetId, "parent-context");
+    }
+
+    private static async Task<EntityMetadataProposal?> EpisodeFromContextAsync(Media root, int? seasonNumber, int episodeNumber, Guid targetId) {
+        var parts = await SeasonPartsAsync(root);
+        if (seasonNumber is null or 0) {
+            var mapped = AbsoluteEpisode(parts, episodeNumber);
+            return mapped is null
+                ? EpisodeShell(root, episodeNumber, targetId, 0, episodeNumber, "parent-context")
+                : EpisodeShell(mapped.Value.Media, mapped.Value.EpisodeNumber, targetId, 0, episodeNumber, "parent-context");
+        }
+
+        var part = parts.ElementAtOrDefault(seasonNumber.Value - 1) ?? root;
+        return EpisodeShell(part, episodeNumber, targetId, seasonNumber.Value, episodeNumber, "parent-context");
+    }
+
+    internal static EntityMetadataProposal SeasonShell(Media media, int seasonNumber, Guid? targetId, string reason) {
+        var episodeCount = Math.Min(media.Episodes ?? 0, 200);
+        var stats = episodeCount > 0 ? new Dictionary<string, int> { ["episodeCount"] = episodeCount } : new Dictionary<string, int>();
+        var dates = new Dictionary<string, string>(); if (DateString(media.StartDate) is { } start) dates["started"] = start; if (DateString(media.EndDate) is { } end) dates["ended"] = end;
+        var images = new List<ImageCandidate>(); if (!string.IsNullOrWhiteSpace(media.CoverImage?.ExtraLarge)) images.Add(new("poster", media.CoverImage!.ExtraLarge!, Provider, 10, null, null, null)); if (!string.IsNullOrWhiteSpace(media.CoverImage?.Large)) images.Add(new("poster", media.CoverImage!.Large!, Provider, 8, null, null, null));
+        var episodes = episodeCount > 0
+            ? Enumerable.Range(1, episodeCount).Select(i => EpisodeShell(media, i, null, seasonNumber, i, "season-cascade")).ToArray()
+            : [];
+        return new EntityMetadataProposal($"anilist:{media.Id}:season:{seasonNumber}", Provider, "video-season", 0.8m, reason, new EntityMetadataPatch($"Season {seasonNumber}", StripHtml(media.Description), new Dictionary<string, string> { [Provider] = media.Id.ToString() }, [media.SiteUrl ?? $"https://anilist.co/anime/{media.Id}"], [], null, [], dates, stats, new Dictionary<string, int> { ["seasonNumber"] = seasonNumber }, null), images, episodes, [], targetId, []);
+    }
+
+    internal static EntityMetadataProposal FlatSeasonShell(IReadOnlyList<Media> parts, Guid? targetId) {
+        var first = parts.First();
+        var episodeCount = parts.Sum(part => Math.Min(part.Episodes ?? 0, 200));
+        var episodes = new List<EntityMetadataProposal>();
+        var absolute = 1;
+        foreach (var part in parts) {
+            foreach (var localEpisode in Enumerable.Range(1, Math.Min(part.Episodes ?? 0, 200))) {
+                episodes.Add(EpisodeShell(part, localEpisode, null, 0, absolute, "absolute-cascade"));
+                absolute++;
+            }
+        }
+
+        return new EntityMetadataProposal($"anilist:{first.Id}:season:0", Provider, "video-season", 0.8m, "parent-context", new EntityMetadataPatch("Season 0", null, new Dictionary<string, string> { [Provider] = first.Id.ToString() }, [first.SiteUrl ?? $"https://anilist.co/anime/{first.Id}"], [], null, [], new Dictionary<string, string>(), episodeCount > 0 ? new Dictionary<string, int> { ["episodeCount"] = episodeCount } : new Dictionary<string, int>(), new Dictionary<string, int> { ["seasonNumber"] = 0 }, null), [], episodes, [], targetId, []);
+    }
+
+    internal static EntityMetadataProposal EpisodeShell(Media media, int episodeNumber, Guid? targetId, int seasonNumber, int sortOrder, string reason) => new($"anilist:{media.Id}:s{seasonNumber}:e{sortOrder}", Provider, "video-episode", 0.65m, reason, new EntityMetadataPatch($"Episode {sortOrder}", null, new Dictionary<string, string> { [Provider] = media.Id.ToString() }, [], [], null, [], new Dictionary<string, string>(), media.Duration is int duration ? new Dictionary<string, int> { ["runtimeMinutes"] = duration } : new Dictionary<string, int>(), new Dictionary<string, int> { ["seasonNumber"] = seasonNumber, ["episodeNumber"] = sortOrder, ["sortOrder"] = sortOrder }, null), [], [], [], targetId, []);
+    private static (Media Media, int EpisodeNumber)? AbsoluteEpisode(IReadOnlyList<Media> parts, int absoluteEpisode) {
+        var offset = 0;
+        foreach (var part in parts) {
+            var count = Math.Min(part.Episodes ?? 0, 200);
+            if (absoluteEpisode <= offset + count) return (part, absoluteEpisode - offset);
+            offset += count;
+        }
+
+        return null;
+    }
+
+    private static async Task<IReadOnlyList<Media>> SeasonPartsAsync(Media root) {
+        var byId = new Dictionary<int, Media> { [root.Id] = root };
+        var pending = new Queue<int>((root.Relations?.Edges ?? [])
+            .Where(IsSeasonRelation)
+            .Select(edge => edge.Node?.Id ?? 0)
+            .Where(id => id > 0));
+        var visited = new HashSet<int> { root.Id };
+
+        while (pending.Count > 0 && byId.Count < 10) {
+            var id = pending.Dequeue();
+            if (!visited.Add(id)) continue;
+            var related = await DetailAsync(id);
+            if (!IsSeasonPart(related)) continue;
+            byId[related.Id] = related;
+            foreach (var next in (related.Relations?.Edges ?? []).Where(IsSeasonRelation).Select(edge => edge.Node?.Id ?? 0).Where(next => next > 0 && !visited.Contains(next))) pending.Enqueue(next);
+        }
+
+        return byId.Values
+            .Where(IsSeasonPart)
+            .OrderBy(media => media.StartDate?.Year ?? int.MaxValue)
+            .ThenBy(media => media.StartDate?.Month ?? 13)
+            .ThenBy(media => media.StartDate?.Day ?? 32)
+            .ThenBy(media => media.Id)
+            .ToArray();
+    }
+
+    private static bool IsSeasonRelation(MediaRelationEdge edge) =>
+        edge.Node is not null &&
+        (edge.RelationType.Equals("PREQUEL", StringComparison.OrdinalIgnoreCase) ||
+            edge.RelationType.Equals("SEQUEL", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsSeasonPart(Media media) =>
+        media.Episodes is > 0 &&
+        !string.Equals(media.Format, "MOVIE", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(media.Format, "SPECIAL", StringComparison.OrdinalIgnoreCase);
+
     private static IEnumerable<EntityMetadataProposal> CharacterRelationships(Media media) => (media.Characters?.Edges ?? []).Take(20).Select(edge => edge.Node?.Name?.Full).Where(name => !string.IsNullOrWhiteSpace(name)).Select((name, i) => new EntityMetadataProposal($"anilist:character:{Slug(name!)}", Provider, "person", 0.6m, "character", new EntityMetadataPatch(name, null, new Dictionary<string, string>(), [], [], null, [new CreditPatch(name!, "character", null, i)], new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null), [], [], [], null, []));
     private static IEnumerable<EntityMetadataProposal> StudioRelationships(Media media) => (media.Studios?.Nodes ?? []).Where(s => !string.IsNullOrWhiteSpace(s.Name)).Take(5).Select(studio => new EntityMetadataProposal($"anilist:studio:{Slug(studio.Name!)}", Provider, "studio", 0.7m, "studio", new EntityMetadataPatch(studio.Name, null, new Dictionary<string, string>(), [], [], null, [], new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null), [], [], [], null, []));
 
@@ -56,11 +164,15 @@ internal static partial class AniListPlugin {
     private static string? DateString(FuzzyDate? date) => date?.Year is null ? null : $"{date.Year:D4}-{date.Month ?? 1:D2}-{date.Day ?? 1:D2}";
     private static string Slug(string value) => Regex.Replace(value.ToLowerInvariant(), "[^a-z0-9]+", "-").Trim('-');
     private static int? ExternalId(IdentifyPluginRequest request) { foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) if (ids is not null && ids.TryGetValue(Provider, out var value) && int.TryParse(value, out var id)) return id; return null; }
+    private static int? AncestorExternalId(IdentifyPluginRequest request) { foreach (var ancestor in request.StructuralContext?.Ancestors ?? []) if (ancestor.ExternalIds is not null && ancestor.ExternalIds.TryGetValue(Provider, out var value) && int.TryParse(value, out var id)) return id; return null; }
+    private static int? PositionValue(IdentifyPluginRequest request, params string[] keys) { foreach (var key in keys) if (request.StructuralContext?.Positions.TryGetValue(key, out var value) == true) return value; return null; }
     private static int? FirstUrlId(IReadOnlyList<string> urls) => urls.Select(IdFromUrl).FirstOrDefault(id => id is not null);
     private static int? IdFromUrl(string? url) { if (string.IsNullOrWhiteSpace(url)) return null; var match = Regex.Match(url, "anilist\\.co/anime/(\\d+)", RegexOptions.IgnoreCase); return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null; }
     private static bool IsExplicitSearch(IdentifyPluginRequest request) => request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(request.Query.Title) && string.IsNullOrWhiteSpace(request.Query.Url) && request.Query.ExternalIds is not { Count: > 0 };
+    private static bool IsSupportedKind(string kind) => kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) || kind.Equals("video-season", StringComparison.OrdinalIgnoreCase) || IsEpisodeKind(kind);
+    private static bool IsEpisodeKind(string kind) => kind.Equals("video", StringComparison.OrdinalIgnoreCase) || kind.Equals("video-episode", StringComparison.OrdinalIgnoreCase);
 
-    private const string Fields = """
+    private const string BasicFields = """
       id idMal description format episodes duration status season seasonYear bannerImage averageScore meanScore popularity siteUrl isAdult genres
       title { romaji english native }
       startDate { year month day }
@@ -70,25 +182,27 @@ internal static partial class AniListPlugin {
       studios { nodes { name isAnimationStudio } }
       characters(perPage: 25, sort: [ROLE, RELEVANCE]) { edges { node { name { full } } } }
       """;
-    private static readonly string DetailQuery = $"query ($id: Int!) {{ Media(id: $id, type: ANIME) {{ {Fields} }} }}";
-    private static readonly string SearchQuery = $"query ($search: String!) {{ Page(perPage: 10) {{ media(search: $search, type: ANIME, isAdult: false, sort: [SEARCH_MATCH, POPULARITY_DESC]) {{ {Fields} }} }} }}";
+    private static readonly string DetailQuery = $"query ($id: Int!) {{ Media(id: $id, type: ANIME) {{ {BasicFields} relations {{ edges {{ relationType node {{ {BasicFields} }} }} }} }} }}";
+    private static readonly string SearchQuery = $"query ($search: String!) {{ Page(perPage: 10) {{ media(search: $search, type: ANIME, isAdult: false, sort: [SEARCH_MATCH, POPULARITY_DESC]) {{ {BasicFields} }} }} }}";
 
-    private sealed record GraphQlEnvelope<T>(T? Data, GraphQlError[]? Errors);
-    private sealed record GraphQlError(string Message);
-    private sealed record DetailData(Media? Media);
-    private sealed record SearchData(Page? Page);
-    private sealed record Page(Media[]? Media);
-    private sealed record Media(int Id, int? IdMal, MediaTitle? Title, string? Description, string? Format, int? Episodes, int? Duration, FuzzyDate? StartDate, FuzzyDate? EndDate, Image? CoverImage, string? BannerImage, int? Popularity, string[]? Genres, MediaTag[]? Tags, StudioConnection? Studios, string? SiteUrl, CharacterConnection? Characters);
-    private sealed record MediaTitle(string? Romaji, string? English, string? Native);
-    private sealed record FuzzyDate(int? Year, int? Month, int? Day);
-    private sealed record Image(string? ExtraLarge, string? Large, string? Medium, string? Color);
-    private sealed record MediaTag(string? Name, int? Rank);
-    private sealed record StudioConnection(Studio[]? Nodes);
-    private sealed record Studio(string? Name, bool? IsAnimationStudio);
-    private sealed record CharacterConnection(CharacterEdge[]? Edges);
-    private sealed record CharacterEdge(Character? Node);
-    private sealed record Character(CharacterName? Name);
-    private sealed record CharacterName(string? Full);
+    internal sealed record GraphQlEnvelope<T>(T? Data, GraphQlError[]? Errors);
+    internal sealed record GraphQlError(string Message);
+    internal sealed record DetailData(Media? Media);
+    internal sealed record SearchData(Page? Page);
+    internal sealed record Page(Media[]? Media);
+    internal sealed record Media(int Id, int? IdMal, MediaTitle? Title, string? Description, string? Format, int? Episodes, int? Duration, FuzzyDate? StartDate, FuzzyDate? EndDate, Image? CoverImage, string? BannerImage, int? Popularity, string[]? Genres, MediaTag[]? Tags, StudioConnection? Studios, string? SiteUrl, CharacterConnection? Characters, MediaRelationConnection? Relations = null);
+    internal sealed record MediaTitle(string? Romaji, string? English, string? Native);
+    internal sealed record FuzzyDate(int? Year, int? Month, int? Day);
+    internal sealed record Image(string? ExtraLarge, string? Large, string? Medium, string? Color);
+    internal sealed record MediaTag(string? Name, int? Rank);
+    internal sealed record StudioConnection(Studio[]? Nodes);
+    internal sealed record Studio(string? Name, bool? IsAnimationStudio);
+    internal sealed record CharacterConnection(CharacterEdge[]? Edges);
+    internal sealed record CharacterEdge(Character? Node);
+    internal sealed record Character(CharacterName? Name);
+    internal sealed record CharacterName(string? Full);
+    internal sealed record MediaRelationConnection(MediaRelationEdge[]? Edges);
+    internal sealed record MediaRelationEdge(string RelationType, Media? Node);
 }
 
 internal static class PluginHost { public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true, WriteIndented = false }; public static async Task<IdentifyPluginResponse> RunAsync(string[] args, Func<IdentifyPluginRequest, Task<IdentifyPluginResult>> identify) { try { if (args.Length == 0) return new(false, null, "Missing request JSON path."); var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(await File.ReadAllTextAsync(args[0]), JsonOptions); if (request is null) return new(false, null, "Request JSON was empty or invalid."); return new(true, await identify(request), null); } catch (Exception ex) { return new(false, null, ex.Message); } } }

@@ -129,10 +129,10 @@
         - search
 - id: anilist
   name: AniList
-  version: 1.0.0
-  date: '2026-04-25'
+  version: 1.0.1
+  date: '2026-05-29'
   path: plugins/anilist/anilist.zip
-  sha256: 7157fa14c2a4a47737b6e7bacca14d53e3fed59ae8168f6996d966cb59574ebf
+  sha256: 100e9140ffdbcddedc15fbe948084044646a4cb3f153cfaaf81255ab378833a2
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -145,6 +145,12 @@
     prismediaMax: null
   supports:
     - entityKind: video-series
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+        - cascade
+    - entityKind: video-season
       actions:
         - lookup-id
         - lookup-url
