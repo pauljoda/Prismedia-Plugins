@@ -260,11 +260,21 @@ internal sealed class TmdbProposalMapper {
             stats["popularity"] = (int)Math.Round(popularity);
         }
 
+        var externalIds = new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() };
+        if (!string.IsNullOrWhiteSpace(detail.ImdbId)) {
+            externalIds["imdb"] = detail.ImdbId;
+        }
+
+        var urls = new List<string> { TmdbMetadataHelpers.TmdbUrl("person", detail.Id) };
+        if (!string.IsNullOrWhiteSpace(detail.Homepage)) {
+            urls.Add(detail.Homepage);
+        }
+
         var patch = new EntityMetadataPatch(
             detail.Name,
             detail.Biography,
-            new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() },
-            [TmdbMetadataHelpers.TmdbUrl("person", detail.Id)],
+            externalIds,
+            urls,
             [],
             null,
             [],

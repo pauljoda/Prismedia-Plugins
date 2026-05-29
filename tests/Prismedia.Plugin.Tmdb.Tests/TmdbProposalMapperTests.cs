@@ -16,6 +16,9 @@ public sealed class TmdbProposalMapperTests {
                       "profile_path": "/quinta-full.jpg",
                       "birthday": "1989-12-21",
                       "deathday": null,
+                      "homepage": "https://example.test/quinta",
+                      "imdb_id": "nm6421259",
+                      "place_of_birth": "Philadelphia, Pennsylvania, USA",
                       "known_for_department": "Acting",
                       "popularity": 12.6,
                       "images": { "profiles": [{ "file_path": "/quinta-full.jpg", "width": 500, "height": 750 }] }
@@ -58,6 +61,8 @@ public sealed class TmdbProposalMapperTests {
         Assert.Equal("Quinta Brunson", person.Patch.Title);
         Assert.Equal("Creator and performer.", person.Patch.Description);
         Assert.Equal("2140873", person.Patch.ExternalIds["tmdb"]);
+        Assert.Equal("nm6421259", person.Patch.ExternalIds["imdb"]);
+        Assert.Contains("https://example.test/quinta", person.Patch.Urls);
         Assert.Equal("1989-12-21", person.Patch.Dates["birth"]);
         Assert.Equal(13, person.Patch.Stats["popularity"]);
         Assert.Equal("Acting", person.Patch.Classification);

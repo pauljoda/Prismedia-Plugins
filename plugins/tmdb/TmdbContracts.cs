@@ -131,6 +131,9 @@ internal sealed record TmdbPersonDetail(
     [property: JsonPropertyName("profile_path")] string? ProfilePath,
     [property: JsonPropertyName("birthday")] string? Birthday,
     [property: JsonPropertyName("deathday")] string? Deathday,
+    [property: JsonPropertyName("homepage")] string? Homepage,
+    [property: JsonPropertyName("imdb_id")] string? ImdbId,
+    [property: JsonPropertyName("place_of_birth")] string? PlaceOfBirth,
     [property: JsonPropertyName("known_for_department")] string? KnownForDepartment,
     [property: JsonPropertyName("popularity")] decimal? Popularity,
     [property: JsonPropertyName("images")] TmdbProfileImagesResponse? Images);
