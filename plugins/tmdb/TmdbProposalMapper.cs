@@ -89,16 +89,10 @@ internal sealed class TmdbProposalMapper {
             new Dictionary<string, int>(),
             TmdbMetadataHelpers.MapStatus(detail.Status));
 
-        var seasonSummaries = (detail.Seasons ?? []).Where(s => s.SeasonNumber >= 0).ToArray();
-        var seasonChildren = new List<EntityMetadataProposal>();
-        foreach (var summary in seasonSummaries) {
-            try {
-                var seasonDetail = await _client.GetSeasonAsync(detail.Id, summary.SeasonNumber);
-                seasonChildren.Add(await SeasonToProposalAsync(detail.Id, summary, seasonDetail.Episodes, "cascade"));
-            } catch {
-                seasonChildren.Add(await SeasonToProposalAsync(detail.Id, summary, null, "cascade"));
-            }
-        }
+        var seasonChildren = (detail.Seasons ?? [])
+            .Where(s => s.SeasonNumber >= 0)
+            .Select(summary => SeasonShellProposal(detail.Id, summary, "cascade"))
+            .ToArray();
 
         var relationships = (await BuildPersonRelationshipsAsync(detail.Credits)).ToList();
         var studioChild = detail.Networks?.FirstOrDefault() is { } network
@@ -209,6 +203,43 @@ internal sealed class TmdbProposalMapper {
             images,
             [],
             Relationships: await BuildEpisodePersonRelationshipsAsync(episode));
+    }
+
+    private static EntityMetadataProposal SeasonShellProposal(
+        int seriesId,
+        TmdbSeasonSummary season,
+        string matchReason) {
+        var dates = new Dictionary<string, string>();
+        if (!string.IsNullOrWhiteSpace(season.AirDate)) {
+            dates["air"] = season.AirDate;
+        }
+
+        var stats = new Dictionary<string, int> { ["episodeCount"] = season.EpisodeCount };
+        var positions = new Dictionary<string, int> { ["seasonNumber"] = season.SeasonNumber };
+        var externalId = season.Id is { } seasonId ? seasonId.ToString() : $"{seriesId}_s{season.SeasonNumber}";
+        var seasonUrl = $"https://www.themoviedb.org/tv/{seriesId}/season/{season.SeasonNumber}";
+        var patch = new EntityMetadataPatch(
+            string.IsNullOrWhiteSpace(season.Name) ? $"Season {season.SeasonNumber}" : season.Name,
+            season.Overview,
+            new Dictionary<string, string> { ["tmdb"] = externalId },
+            [seasonUrl],
+            [],
+            null,
+            [],
+            dates,
+            stats,
+            positions,
+            null);
+
+        return new EntityMetadataProposal(
+            $"tmdb:tv:{seriesId}:season:{season.SeasonNumber}",
+            "tmdb",
+            "video-season",
+            0.85m,
+            matchReason,
+            patch,
+            BuildImages(season.PosterPath, null, null),
+            []);
     }
 
     public async Task<EntityMetadataProposal> PersonToProposalAsync(
@@ -355,20 +386,16 @@ internal sealed class TmdbProposalMapper {
         return children;
     }
 
-    private async Task<EntityMetadataProposal?> PersonChildAsync(int id, string name, string? profilePath, HashSet<int> seen) {
+    private Task<EntityMetadataProposal?> PersonChildAsync(int id, string name, string? profilePath, HashSet<int> seen) {
         if (id > 0 && seen.Add(id)) {
-            try {
-                return await PersonToProposalAsync(id, "cascade");
-            } catch {
-                return PersonFallback(id, name, profilePath);
-            }
+            return Task.FromResult(PersonFallback(id, name, profilePath));
         }
 
-        return id <= 0 ? PersonFallback(id, name, profilePath) : null;
+        return Task.FromResult(id <= 0 ? PersonFallback(id, name, profilePath) : null);
     }
 
     private static EntityMetadataProposal? PersonFallback(int id, string name, string? profilePath) {
-        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(profilePath)) {
+        if (string.IsNullOrWhiteSpace(name)) {
             return null;
         }
 
@@ -386,9 +413,10 @@ internal sealed class TmdbProposalMapper {
             new Dictionary<string, int>(),
             new Dictionary<string, int>(),
             null);
-        var images = new List<ImageCandidate> {
-            new("poster", TmdbMetadataHelpers.ImageUrl(profilePath, "original")!, "tmdb", 10, null, null, null)
-        };
+        var posterUrl = TmdbMetadataHelpers.ImageUrl(profilePath, "original");
+        var images = posterUrl is null
+            ? []
+            : new List<ImageCandidate> { new("poster", posterUrl, "tmdb", 10, null, null, null) };
         return new EntityMetadataProposal(
             id > 0 ? $"tmdb:person:{id}" : $"tmdb:person:{name}",
             "tmdb",

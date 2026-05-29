@@ -5,6 +5,44 @@ namespace Prismedia.Plugin.Tmdb.Tests;
 
 public sealed class TmdbProposalMapperTests {
     [Fact]
+    public async Task TvProposalUsesSeasonShellsAndCreditRelationshipsWithoutExtraHydration() {
+        using var http = new HttpClient(new StubHandler(request =>
+            throw new InvalidOperationException($"Unexpected TMDB request {request.RequestUri}")));
+        var mapper = new TmdbProposalMapper(new TmdbApiClient(http, "test-key"));
+        var detail = new TmdbTvDetail(
+            Id: 271267,
+            Name: "Abbott Elementary",
+            FirstAirDate: "2021-12-07",
+            LastAirDate: "2026-05-06",
+            Overview: "A workplace comedy.",
+            PosterPath: null,
+            BackdropPath: null,
+            Genres: [],
+            NumberOfSeasons: 5,
+            NumberOfEpisodes: 72,
+            Status: "Returning Series",
+            Networks: [],
+            ProductionCompanies: [],
+            Seasons: [
+                new TmdbSeasonSummary(176944, 1, 13, "Season 1", "First year.", "2021-12-07", "/season.jpg")
+            ],
+            Credits: new TmdbCredits(
+                [new TmdbCast(2140873, "Quinta Brunson", "Janine Teagues", 0, "/quinta.jpg")],
+                []),
+            Images: null);
+
+        var proposal = await mapper.TvToProposalAsync(detail, "external-id");
+
+        var season = Assert.Single(proposal.Children);
+        Assert.Equal("video-season", season.TargetKind);
+        Assert.Equal(1, season.Patch.Positions["seasonNumber"]);
+        Assert.Empty(season.Children);
+        var person = Assert.Single(proposal.Relationships ?? [], row => row.TargetKind == "person");
+        Assert.Equal("Quinta Brunson", person.Patch.Title);
+        Assert.Equal("2140873", person.Patch.ExternalIds["tmdb"]);
+    }
+
+    [Fact]
     public async Task TvProposalUsesNetworkStudioWithoutHydratingThroughCompanyNamespace() {
         using var http = new HttpClient(new StubHandler(request => {
             if (request.RequestUri?.AbsolutePath == "/3/company/49") {

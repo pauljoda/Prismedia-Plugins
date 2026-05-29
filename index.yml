@@ -49,7 +49,7 @@
   version: 1.1.0
   date: '2026-05-22'
   path: plugins/tmdb/tmdb.zip
-  sha256: acf49f19ab05537fd784f802e32ee406ae906c8a2ec2befdb502aacedab98671
+  sha256: 18841afafc18a4974b7ab8f23b0cfe7b9db93fc4131fa109569499b86711c3c8
   runtime: dotnet-process
   isNsfw: false
   description: Movies, TV hierarchy, people, studios, and relationship cascade identification via TMDB API
