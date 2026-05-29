@@ -4,6 +4,7 @@
   "id": "anilist",
   "name": "AniList",
   "version": "1.0.0",
+  "date": "2026-04-25",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.AniList.dll",
   "compat": {

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Build a distributable `.zip` for every plugin in `plugins/` and
- * write a sha256 checksum back into `index.yml` so Prismedia clients
- * can verify downloads.
+ * Build distributable plugin `.zip` artifacts and regenerate `index.yml`
+ * from each plugin manifest. The index remains only a remote discovery
+ * catalog: manifest.json is the source of truth for plugin metadata.
  *
  * Usage: node scripts/build-plugins.mjs [plugin-id ...]
  */
@@ -74,13 +74,70 @@ function zipPlugin(pluginDir) {
   return Buffer.from(zipSync(bundle, { level: 9 }));
 }
 
-const index = yaml.load(readFileSync(indexPath, "utf8"));
-if (!Array.isArray(index)) {
-  throw new Error("index.yml must be a YAML list");
+function loadExistingIndex() {
+  if (!existsSync(indexPath)) return [];
+  const parsed = yaml.load(readFileSync(indexPath, "utf8"));
+  if (!Array.isArray(parsed)) {
+    throw new Error("index.yml must be a YAML list");
+  }
+  return parsed;
 }
 
+function discoverPluginIds() {
+  return readdirSync(pluginsDir)
+    .filter((name) => {
+      const pluginDir = join(pluginsDir, name);
+      return statSync(pluginDir).isDirectory() && existsSync(join(pluginDir, "manifest.json"));
+    })
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function requireString(value, field, id) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${id} manifest is missing required string field: ${field}`);
+  }
+  return value;
+}
+
+function optionalArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function indexEntryFromManifest(manifest, id, digest) {
+  if (manifest.id !== id) {
+    throw new Error(`Plugin directory '${id}' contains manifest id '${manifest.id}'`);
+  }
+
+  const entry = {
+    id: requireString(manifest.id, "id", id),
+    name: requireString(manifest.name, "name", id),
+    version: requireString(manifest.version, "version", id),
+    date: requireString(manifest.date, "date", id),
+    path: `plugins/${id}/${id}.zip`,
+    sha256: digest,
+    runtime: requireString(manifest.runtime, "runtime", id),
+    isNsfw: Boolean(manifest.isNsfw ?? false),
+    manifestVersion: Number(manifest.manifestVersion ?? 1),
+    apiTags: optionalArray(manifest.apiTags),
+    compat: manifest.compat,
+    supports: optionalArray(manifest.supports),
+  };
+
+  for (const key of ["description", "author", "capabilities"]) {
+    if (manifest[key] !== undefined) {
+      entry[key] = manifest[key];
+    }
+  }
+
+  return entry;
+}
+
+const existingIndex = loadExistingIndex();
+const existingById = new Map(existingIndex.map((entry) => [String(entry.id), entry]));
+const discoveredIds = discoverPluginIds();
+const knownIds = new Set(discoveredIds);
+
 if (requestedIds.size > 0) {
-  const knownIds = new Set(index.map((entry) => String(entry.id)));
   for (const id of requestedIds) {
     if (!knownIds.has(id)) {
       throw new Error(`Unknown plugin id: ${id}`);
@@ -88,51 +145,52 @@ if (requestedIds.size > 0) {
   }
 }
 
-for (const entry of index) {
-  const id = String(entry.id);
-  if (requestedIds.size > 0 && !requestedIds.has(id)) {
-    continue;
-  }
+const orderedIds = [
+  ...existingIndex.map((entry) => String(entry.id)).filter((id) => knownIds.has(id)),
+  ...discoveredIds.filter((id) => !existingById.has(id)),
+];
+const index = [];
 
+for (const id of orderedIds) {
   const pluginDir = join(pluginsDir, id);
-  if (!existsSync(pluginDir)) {
-    console.warn(`skip ${id}: ${pluginDir} missing`);
-    continue;
-  }
   const manifest = loadManifest(pluginDir);
   if (!manifest) {
-    console.warn(`skip ${id}: no manifest.json`);
-    continue;
+    throw new Error(`Plugin is missing manifest.json: ${id}`);
   }
 
   if (manifest.runtime !== "dotnet-process") {
     throw new Error(`unsupported runtime for ${id}: ${manifest.runtime}`);
   }
-  buildDotnet(pluginDir);
 
-  const zipBuf = zipPlugin(pluginDir);
   const zipPath = join(pluginDir, `${id}.zip`);
-  writeFileSync(zipPath, zipBuf);
-  const digest = sha256(zipBuf);
+  let digest;
 
-  entry.sha256 = digest;
-  entry.version = String(manifest.version ?? entry.version);
-  entry.runtime = String(manifest.runtime ?? entry.runtime);
-  if (manifest.manifestVersion) {
-    entry.manifestVersion = manifest.manifestVersion;
-    entry.apiTags = manifest.apiTags ?? [];
-    entry.compat = manifest.compat;
-    entry.supports = manifest.supports;
-    entry.isNsfw = Boolean(manifest.isNsfw ?? entry.isNsfw);
+  if (requestedIds.size === 0 || requestedIds.has(id)) {
+    buildDotnet(pluginDir);
+
+    const zipBuf = zipPlugin(pluginDir);
+    writeFileSync(zipPath, zipBuf);
+    digest = sha256(zipBuf);
+
+    console.log(
+      `built ${id} v${manifest.version} (${zipBuf.length} bytes, sha256=${digest.slice(0, 12)}...)`,
+    );
+  } else if (existsSync(zipPath)) {
+    digest = sha256(readFileSync(zipPath));
+  } else {
+    const existing = existingById.get(id);
+    if (!existing?.sha256) {
+      throw new Error(`No existing zip or index checksum for unbuilt plugin: ${id}`);
+    }
+
+    digest = String(existing.sha256);
   }
 
-  console.log(
-    `built ${id} v${entry.version} (${zipBuf.length} bytes, sha256=${digest.slice(0, 12)}…)`,
-  );
+  index.push(indexEntryFromManifest(manifest, id, digest));
 }
 
 const dumped = yaml.dump(index, { lineWidth: 200 });
 writeFileSync(indexPath, `# Prismedia Community Plugins Index\n# This file is fetched by Prismedia to discover available plugins.\n\n${dumped}`);
 
-console.log("\nindex.yml updated with fresh sha256 + versions.");
+console.log("\nindex.yml regenerated from plugin manifests.");
 console.log("Commit the updated index + plugins/*/<id>.zip to publish.");

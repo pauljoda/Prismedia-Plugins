@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prismedia.Plugin.Tmdb")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f2d1a1f80bdd2b67fe90b861baa7e91aa5dfe3ea")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6769ed3a906c1cb6925b3034fff1ac5ccc66e252")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prismedia.Plugin.Tmdb")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prismedia.Plugin.Tmdb")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
