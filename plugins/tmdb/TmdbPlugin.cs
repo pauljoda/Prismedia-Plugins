@@ -60,15 +60,16 @@ internal sealed class TmdbPlugin {
         }
 
         var detail = await _client.GetSeasonAsync(seriesId.Value, seasonNumber.Value);
+        var episodes = await RepairSeasonEpisodesAsync(seriesId.Value, seasonNumber.Value, detail.Episodes);
         var summary = new TmdbSeasonSummary(
             detail.Id,
             detail.SeasonNumber ?? seasonNumber.Value,
-            detail.Episodes.Length,
+            episodes.Length,
             detail.Name,
             detail.Overview,
             detail.AirDate,
             detail.PosterPath);
-        return Proposal(await _mapper.SeasonToProposalAsync(seriesId.Value, summary, detail.Episodes, "context"));
+        return Proposal(await _mapper.SeasonToProposalAsync(seriesId.Value, summary, episodes, "context"));
     }
 
     private async Task<IdentifyPluginResult> IdentifyPersonAsync(IdentifyPluginRequest request) {
@@ -214,6 +215,45 @@ internal sealed class TmdbPlugin {
     private async Task<EntityMetadataProposal?> EpisodeFromContextAsync(int seriesId, int seasonNumber, int episodeNumber) {
         var episode = await _client.GetEpisodeAsync(seriesId, seasonNumber, episodeNumber);
         return await _mapper.EpisodeToProposalAsync(seriesId, seasonNumber, episode, "parent-context");
+    }
+
+    private async Task<TmdbEpisode[]> RepairSeasonEpisodesAsync(
+        int seriesId,
+        int seasonNumber,
+        IReadOnlyList<TmdbEpisode> episodes) {
+        if (episodes.Count == 0) {
+            return [];
+        }
+
+        var byNumber = new Dictionary<int, TmdbEpisode>();
+        var hasDuplicate = false;
+        foreach (var episode in episodes.Where(episode => episode.EpisodeNumber > 0).OrderBy(episode => episode.EpisodeNumber)) {
+            if (!byNumber.TryAdd(episode.EpisodeNumber, episode)) {
+                hasDuplicate = true;
+            }
+        }
+
+        var maxEpisodeNumber = Math.Max(episodes.Count, byNumber.Keys.DefaultIfEmpty(0).Max());
+        var missing = Enumerable.Range(1, maxEpisodeNumber)
+            .Where(number => !byNumber.ContainsKey(number))
+            .ToArray();
+        if (!hasDuplicate && missing.Length == 0) {
+            return episodes
+                .OrderBy(episode => episode.EpisodeNumber)
+                .ToArray();
+        }
+
+        foreach (var episodeNumber in missing) {
+            try {
+                byNumber[episodeNumber] = await _client.GetEpisodeAsync(seriesId, seasonNumber, episodeNumber);
+            } catch (HttpRequestException) {
+            } catch (InvalidOperationException) {
+            }
+        }
+
+        return byNumber.Values
+            .OrderBy(episode => episode.EpisodeNumber)
+            .ToArray();
     }
 
     private sealed record TmdbReference(int Id, string MatchReason);

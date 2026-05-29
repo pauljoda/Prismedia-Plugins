@@ -188,11 +188,6 @@ internal sealed class TmdbProposalMapper {
             positions,
             null);
 
-        var images = new List<ImageCandidate>();
-        if (!string.IsNullOrWhiteSpace(episode.StillPath)) {
-            images.Add(new ImageCandidate("still", TmdbMetadataHelpers.ImageUrl(episode.StillPath, "original")!, "tmdb", 10, null, null, null));
-        }
-
         return new EntityMetadataProposal(
             $"tmdb:tv:{seriesId}:s{seasonNumber}:e{episode.EpisodeNumber}",
             "tmdb",
@@ -200,7 +195,7 @@ internal sealed class TmdbProposalMapper {
             0.9m,
             matchReason,
             patch,
-            images,
+            BuildEpisodeImages(episode),
             [],
             Relationships: await BuildEpisodePersonRelationshipsAsync(episode));
     }
@@ -548,6 +543,12 @@ internal sealed class TmdbProposalMapper {
     private static IReadOnlyList<ImageCandidate> BuildCompanyImages(string? logoPath, TmdbImagesResponse? images) {
         var result = MapImages("logo", images?.Logos, "w500").ToList();
         AddFallback(result, "logo", TmdbMetadataHelpers.ImageUrl(logoPath, "w500"), 10);
+        return result;
+    }
+
+    private static IReadOnlyList<ImageCandidate> BuildEpisodeImages(TmdbEpisode episode) {
+        var result = MapImages("still", episode.Images?.Stills, "original").ToList();
+        AddFallback(result, "still", TmdbMetadataHelpers.ImageUrl(episode.StillPath, "original"), 10);
         return result;
     }
 

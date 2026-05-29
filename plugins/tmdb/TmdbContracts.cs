@@ -82,7 +82,8 @@ internal sealed record TmdbEpisode(
     [property: JsonPropertyName("runtime")] int? Runtime,
     [property: JsonPropertyName("vote_average")] decimal? VoteAverage,
     [property: JsonPropertyName("guest_stars")] TmdbCast[]? GuestStars,
-    [property: JsonPropertyName("crew")] TmdbCrew[]? Crew);
+    [property: JsonPropertyName("crew")] TmdbCrew[]? Crew,
+    [property: JsonPropertyName("images")] TmdbEpisodeImagesResponse? Images = null);
 
 internal sealed record TmdbGenre(
     [property: JsonPropertyName("name")] string Name);
@@ -113,6 +114,9 @@ internal sealed record TmdbImagesResponse(
     [property: JsonPropertyName("posters")] TmdbImageEntry[]? Posters,
     [property: JsonPropertyName("backdrops")] TmdbImageEntry[]? Backdrops,
     [property: JsonPropertyName("logos")] TmdbImageEntry[]? Logos);
+
+internal sealed record TmdbEpisodeImagesResponse(
+    [property: JsonPropertyName("stills")] TmdbImageEntry[]? Stills);
 
 internal sealed record TmdbImageEntry(
     [property: JsonPropertyName("file_path")] string? FilePath,
