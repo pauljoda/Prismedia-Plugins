@@ -11,6 +11,7 @@ internal sealed class TmdbPlugin {
         _handlers = new Dictionary<string, Func<IdentifyPluginRequest, Task<IdentifyPluginResult>>>(StringComparer.OrdinalIgnoreCase) {
             ["video-series"] = IdentifySeriesAsync,
             ["video-season"] = IdentifySeasonAsync,
+            ["movie"] = IdentifyVideoAsync,
             ["video"] = IdentifyVideoAsync,
             ["video-episode"] = IdentifyVideoAsync,
             ["person"] = IdentifyPersonAsync,
@@ -39,7 +40,10 @@ internal sealed class TmdbPlugin {
 
         var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (ResolveTmdbReference(request, "movie") is { } reference) {
-            return Proposal(await _mapper.MovieToProposalAsync(await _client.GetMovieAsync(reference.Id), reference.MatchReason));
+            return Proposal(await _mapper.MovieToProposalAsync(
+                await _client.GetMovieAsync(reference.Id),
+                reference.MatchReason,
+                MovieTargetKind(request)));
         }
 
         return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(title));
@@ -92,6 +96,9 @@ internal sealed class TmdbPlugin {
 
     private static IdentifyPluginResult Proposal(EntityMetadataProposal? proposal) =>
         proposal is null ? IdentifyPluginResult.None() : IdentifyPluginResult.ForProposal(proposal);
+
+    private static string MovieTargetKind(IdentifyPluginRequest request) =>
+        request.Entity.Kind.Equals("movie", StringComparison.OrdinalIgnoreCase) ? "movie" : "video";
 
     private static TmdbReference? ResolveTmdbReference(IdentifyPluginRequest request, string mediaType) {
         if (TmdbMetadataHelpers.ExtractTmdbId(request.Query.ExternalIds) is { } queryId) {

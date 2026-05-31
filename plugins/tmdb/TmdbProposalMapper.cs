@@ -9,7 +9,8 @@ internal sealed class TmdbProposalMapper {
 
     public async Task<EntityMetadataProposal> MovieToProposalAsync(
         TmdbMovieDetail detail,
-        string matchReason) {
+        string matchReason,
+        string targetKind = "video") {
         var genres = detail.Genres?.Select(genre => genre.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToArray() ?? [];
         var studio = detail.ProductionCompanies?.FirstOrDefault()?.Name;
         var dates = new Dictionary<string, string>();
@@ -44,7 +45,7 @@ internal sealed class TmdbProposalMapper {
         return new EntityMetadataProposal(
             $"tmdb:movie:{detail.Id}",
             "tmdb",
-            "video",
+            targetKind,
             matchReason is "external-id" or "url" ? 1 : 0.8m,
             matchReason,
             patch,

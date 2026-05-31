@@ -5,6 +5,48 @@ namespace Prismedia.Plugin.Tmdb.Tests;
 
 public sealed class TmdbPluginTests {
     [Fact]
+    public async Task MovieLookupReturnsMovieProposalKind() {
+        using var http = new HttpClient(new StubHandler(request => {
+            Assert.Equal("/3/movie/1239655", request.RequestUri?.AbsolutePath);
+            Assert.Contains("append_to_response=credits%2Cimages", request.RequestUri?.Query);
+            return """
+                {
+                  "id": 1239655,
+                  "title": "Friendship",
+                  "original_title": "Friendship",
+                  "release_date": "2025-05-09",
+                  "overview": "A suburban dad falls hard for his charismatic new neighbor.",
+                  "poster_path": "/friendship-poster.jpg",
+                  "backdrop_path": "/friendship-backdrop.jpg",
+                  "genres": [{ "id": 35, "name": "Comedy" }],
+                  "runtime": 100,
+                  "production_companies": [],
+                  "credits": { "cast": [], "crew": [] },
+                  "images": { "posters": [], "backdrops": [], "logos": [] }
+                }
+                """;
+        }));
+        var plugin = new TmdbPlugin(new TmdbApiClient(http, "test-key"));
+
+        var result = await plugin.IdentifyAsync(new IdentifyPluginRequest(
+            "lookup-id",
+            new Dictionary<string, string>(),
+            new IdentifyEntitySnapshot(
+                Guid.NewGuid(),
+                "movie",
+                "Friendship"),
+            new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "1239655" }),
+            new IdentifyMatchHints(new Dictionary<string, string>(), [], "Friendship", null)));
+
+        Assert.NotNull(result.Proposal);
+        Assert.Equal("movie", result.Proposal.TargetKind);
+        Assert.Equal("Friendship", result.Proposal.Patch.Title);
+        Assert.Equal("1239655", result.Proposal.Patch.ExternalIds["tmdb"]);
+        Assert.Contains("Comedy", result.Proposal.Patch.Tags);
+        Assert.Equal("2025-05-09", result.Proposal.Patch.Dates["release"]);
+    }
+
+    [Fact]
     public async Task ExplicitSeriesTitleSearchIgnoresStaleEntityHints() {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/3/search/tv", request.RequestUri?.AbsolutePath);
