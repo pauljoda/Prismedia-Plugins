@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 var response = await PluginHost.RunAsync(args, MusicBrainzPlugin.IdentifyAsync);
@@ -10,6 +11,10 @@ internal static partial class MusicBrainzPlugin {
     private const string Provider = "musicbrainz";
     private const string MbBase = "https://musicbrainz.org/ws/2";
     private const string CoverBase = "https://coverartarchive.org";
+    private const string CoverThumb = "front-250";
+    // MusicBrainz asks for roughly one request per second; pace a little slower to be safe.
+    private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(1100);
+    private static readonly string RateLimitPath = Path.Combine(Path.GetTempPath(), "prismedia-musicbrainz.ratelimit");
 
     static MusicBrainzPlugin() => Http.DefaultRequestHeaders.UserAgent.ParseAdd("Prismedia-MusicBrainz-Plugin/1.0 (https://github.com/pauljoda/prismedia)");
 
@@ -52,6 +57,10 @@ internal static partial class MusicBrainzPlugin {
             if (relation.Url?.Resource is { Length: > 0 } resource && !urls.Contains(resource)) urls.Add(resource);
         }
 
+        var images = DirectImageUrls(artist?.Relations)
+            .Select((url, index) => new ImageCandidate("cover", url, "musicbrainz", 10 - index, null, null, null))
+            .ToArray();
+
         return Proposal("music-artist", $"musicbrainz:artist:{id}", reason, new EntityMetadataPatch(
             artist?.Name ?? id,
             ArtistOverview(artist),
@@ -63,7 +72,7 @@ internal static partial class MusicBrainzPlugin {
             new Dictionary<string, string>(),
             new Dictionary<string, int>(),
             new Dictionary<string, int>(),
-            artist?.Type), []);
+            artist?.Type), images);
     }
 
     private static async Task<IdentifyPluginResult> IdentifyReleaseAsync(IdentifyPluginRequest request) {
@@ -76,8 +85,8 @@ internal static partial class MusicBrainzPlugin {
             new Dictionary<string, string> { [Provider] = release.Id },
             release.Title ?? release.Id,
             Year(release.Date),
-            release.Disambiguation,
-            null,
+            ReleaseOverview(release),
+            CoverThumbUrl(release),
             Score(release.Score))).ToArray();
         return IdentifyPluginResult.ForCandidates(candidates);
     }
@@ -92,8 +101,8 @@ internal static partial class MusicBrainzPlugin {
             new Dictionary<string, string> { [Provider] = recording.Id },
             recording.Title ?? recording.Id,
             Year(recording.FirstReleaseDate),
-            ArtistCreditString(recording.ArtistCredit),
-            null,
+            RecordingOverview(recording),
+            PrimaryRelease(recording.Releases)?.Id is { Length: > 0 } releaseId ? $"{CoverBase}/release/{releaseId}/{CoverThumb}" : null,
             Score(recording.Score))).ToArray();
         return IdentifyPluginResult.ForCandidates(candidates);
     }
@@ -158,8 +167,49 @@ internal static partial class MusicBrainzPlugin {
         await GetJsonAsync<T>($"{MbBase}/{entity}/?query={Uri.EscapeDataString(query)}&fmt=json&limit={limit}");
 
     private static async Task<T?> GetJsonAsync<T>(string url) {
+        if (url.StartsWith(MbBase, StringComparison.OrdinalIgnoreCase)) {
+            await ThrottleAsync();
+        }
+
         using var res = await Http.GetAsync(url);
         return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<T>(PluginHost.JsonOptions) : default;
+    }
+
+    /// <summary>
+    /// Paces MusicBrainz requests to stay within the provider's rate limit. Identify cascades spawn
+    /// a separate plugin process per entity, so pacing is coordinated <em>across</em> processes via
+    /// an exclusively-locked timestamp file: each call reserves the next free time slot (at least
+    /// <see cref="MinRequestInterval"/> after the previous reservation), then waits for it. This
+    /// keeps a whole artist→albums→tracks cascade under the limit without any host-side coupling.
+    /// </summary>
+    private static async Task ThrottleAsync() {
+        long slotTicks = DateTime.UtcNow.Ticks;
+        for (var attempt = 0; ; attempt++) {
+            try {
+                using (var fs = new FileStream(RateLimitPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)) {
+                    using var reader = new StreamReader(fs, System.Text.Encoding.UTF8, false, 64, leaveOpen: true);
+                    var lastTicks = long.TryParse((await reader.ReadToEndAsync()).Trim(), out var parsed) ? parsed : 0L;
+                    slotTicks = Math.Max(DateTime.UtcNow.Ticks, lastTicks + MinRequestInterval.Ticks);
+                    fs.SetLength(0);
+                    fs.Position = 0;
+                    await fs.WriteAsync(System.Text.Encoding.UTF8.GetBytes(slotTicks.ToString()));
+                }
+
+                break;
+            } catch (IOException) {
+                if (attempt >= 300) {
+                    slotTicks = DateTime.UtcNow.Ticks;
+                    break;
+                }
+
+                await Task.Delay(20);
+            }
+        }
+
+        var wait = slotTicks - DateTime.UtcNow.Ticks;
+        if (wait > 0) {
+            await Task.Delay(TimeSpan.FromTicks(wait));
+        }
     }
 
     private static EntityMetadataProposal Proposal(string kind, string id, string reason, EntityMetadataPatch patch, IReadOnlyList<ImageCandidate> images) => new(id, Provider, kind, 0.9m, reason, patch, images, [], [], null, []);
@@ -180,6 +230,42 @@ internal static partial class MusicBrainzPlugin {
     private static Release? PrimaryRelease(Release[]? releases) => releases?.OrderByDescending(r => r.ReleaseGroup?.PrimaryType == "Album").ThenBy(r => r.Date ?? "9999").FirstOrDefault();
     private static string? AttributesLabel(string[]? attributes) => attributes is { Length: > 0 } ? string.Join(", ", attributes.Where(a => !string.IsNullOrWhiteSpace(a))) : null;
 
+    private static string? CoverThumbUrl(Release release) =>
+        release.ReleaseGroup?.Id is { Length: > 0 } releaseGroup
+            ? $"{CoverBase}/release-group/{releaseGroup}/{CoverThumb}"
+            : $"{CoverBase}/release/{release.Id}/{CoverThumb}";
+
+    private static string? ReleaseOverview(Release release) {
+        var parts = new List<string>();
+        if (ArtistCreditString(release.ArtistCredit) is { Length: > 0 } artist) parts.Add(artist);
+        var facets = new List<string>();
+        if (!string.IsNullOrWhiteSpace(release.ReleaseGroup?.PrimaryType)) facets.Add(release.ReleaseGroup!.PrimaryType!);
+        if (release.TrackCount is > 0 and var count) facets.Add($"{count} tracks");
+        if (!string.IsNullOrWhiteSpace(release.Country)) facets.Add(release.Country!);
+        if (!string.IsNullOrWhiteSpace(release.Disambiguation)) facets.Add(release.Disambiguation!);
+        if (facets.Count > 0) parts.Add(string.Join(" · ", facets));
+        return parts.Count > 0 ? string.Join(" — ", parts) : null;
+    }
+
+    private static string? RecordingOverview(Recording recording) {
+        var parts = new List<string>();
+        if (ArtistCreditString(recording.ArtistCredit) is { Length: > 0 } artist) parts.Add(artist);
+        if (PrimaryRelease(recording.Releases)?.Title is { Length: > 0 } album) parts.Add(album);
+        return parts.Count > 0 ? string.Join(" — ", parts) : null;
+    }
+
+    private static IEnumerable<string> DirectImageUrls(Relation[]? relations) =>
+        (relations ?? [])
+            .Where(relation => string.Equals(relation.Type, "image", StringComparison.OrdinalIgnoreCase) && IsDirectImageUrl(relation.Url?.Resource))
+            .Select(relation => relation.Url!.Resource!)
+            .Distinct();
+
+    private static bool IsDirectImageUrl(string? url) =>
+        !string.IsNullOrWhiteSpace(url) &&
+        // Exclude wiki "File:" pages, which end in an image extension but serve HTML, not the image.
+        url.IndexOf("/wiki/", StringComparison.OrdinalIgnoreCase) < 0 &&
+        new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Any(ext => url.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+
     private static string? ArtistOverview(MbArtist? artist) {
         if (artist is null) return null;
         var parts = new List<string>();
@@ -196,19 +282,34 @@ internal static partial class MusicBrainzPlugin {
     private sealed record SearchReleaseResponse(Release[]? Releases);
     private sealed record SearchRecordingResponse(Recording[]? Recordings);
     private sealed record SearchArtistResponse(MbArtist[]? Artists);
-    private sealed record MbArtist(string Id, string? Name, string? Disambiguation, string? Type, string? Country, int? Score, Area? Area, LifeSpan? LifeSpan, Relation[]? Relations, Tag[]? Tags, Tag[]? Genres);
+    private sealed record MbArtist(
+        string Id, string? Name, string? Disambiguation, string? Type, string? Country, int? Score, Area? Area,
+        [property: JsonPropertyName("life-span")] LifeSpan? LifeSpan,
+        Relation[]? Relations, Tag[]? Tags, Tag[]? Genres);
     private sealed record Area(string? Name);
     private sealed record LifeSpan(string? Begin, string? End);
     private sealed record Relation(string? Type, string? Direction, string[]? Attributes, Artist? Artist, RelationUrl? Url);
     private sealed record RelationUrl(string? Resource);
-    private sealed record Release(string Id, string? Title, string? Date, string? Disambiguation, int? Score, ArtistCredit[]? ArtistCredit, LabelInfo[]? LabelInfo, Tag[]? Tags, Tag[]? Genres, ReleaseGroup? ReleaseGroup, Medium[]? Media);
-    private sealed record Recording(string Id, string? Title, string? FirstReleaseDate, string? Disambiguation, int? Length, int? Score, ArtistCredit[]? ArtistCredit, Release[]? Releases);
+    private sealed record Release(
+        string Id, string? Title, string? Date, string? Disambiguation, int? Score,
+        [property: JsonPropertyName("artist-credit")] ArtistCredit[]? ArtistCredit,
+        [property: JsonPropertyName("label-info")] LabelInfo[]? LabelInfo,
+        Tag[]? Tags, Tag[]? Genres,
+        [property: JsonPropertyName("release-group")] ReleaseGroup? ReleaseGroup,
+        Medium[]? Media, string? Country,
+        [property: JsonPropertyName("track-count")] int? TrackCount);
+    private sealed record Recording(
+        string Id, string? Title,
+        [property: JsonPropertyName("first-release-date")] string? FirstReleaseDate,
+        string? Disambiguation, int? Length, int? Score,
+        [property: JsonPropertyName("artist-credit")] ArtistCredit[]? ArtistCredit,
+        Release[]? Releases);
     private sealed record ArtistCredit(string? Name, Artist? Artist);
     private sealed record Artist(string? Name);
     private sealed record LabelInfo(Label? Label);
     private sealed record Label(string? Name);
     private sealed record Tag(string? Name);
-    private sealed record ReleaseGroup(string? PrimaryType);
+    private sealed record ReleaseGroup([property: JsonPropertyName("primary-type")] string? PrimaryType, string? Id);
     private sealed record Medium(string? Format);
     private sealed record CoverArtResponse(CoverImage[]? Images);
     private sealed record CoverImage(string? Image, bool? Front);
