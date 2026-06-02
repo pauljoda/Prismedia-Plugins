@@ -31,15 +31,33 @@ internal static partial class MusicBrainzPlugin {
         if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(id, "external-id"));
         var query = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
-        var artists = await SearchAsync<SearchArtistResponse>("artist", $"artist:{Quote(query)}", 10);
-        var candidates = (artists?.Artists ?? []).Select(artist => new EntitySearchCandidate(
-            new Dictionary<string, string> { [Provider] = artist.Id },
-            artist.Name ?? artist.Id,
-            Year(artist.LifeSpan?.Begin),
-            ArtistOverview(artist),
-            null,
-            Score(artist.Score))).ToArray();
+        var artists = (await SearchAsync<SearchArtistResponse>("artist", $"artist:{Quote(query)}", 10))?.Artists ?? [];
+        // The artist search response carries no images, so enrich each candidate's thumbnail from its
+        // url-rels (the same direct-image source the full proposal uses). Bound to the top results so a
+        // broad search does not fan out into many extra rate-limited lookups.
+        var candidates = new EntitySearchCandidate[artists.Length];
+        for (var i = 0; i < artists.Length; i++) {
+            var artist = artists[i];
+            var thumb = i < ArtistThumbnailLimit ? await ArtistThumbnailAsync(artist.Id) : null;
+            candidates[i] = new EntitySearchCandidate(
+                new Dictionary<string, string> { [Provider] = artist.Id },
+                artist.Name ?? artist.Id,
+                Year(artist.LifeSpan?.Begin),
+                ArtistOverview(artist),
+                thumb,
+                Score(artist.Score));
+        }
+
         return IdentifyPluginResult.ForCandidates(candidates);
+    }
+
+    /// <summary>Number of top artist candidates enriched with a thumbnail (each costs one extra lookup).</summary>
+    private const int ArtistThumbnailLimit = 5;
+
+    /// <summary>Resolves a band/artist thumbnail by reading the artist's direct-image url-rels.</summary>
+    private static async Task<string?> ArtistThumbnailAsync(string id) {
+        var artist = await GetJsonAsync<MbArtist>($"{MbBase}/artist/{id}?inc=url-rels&fmt=json");
+        return DirectImageUrls(artist?.Relations).FirstOrDefault();
     }
 
     private static async Task<EntityMetadataProposal> ArtistProposalAsync(string id, string reason) {
