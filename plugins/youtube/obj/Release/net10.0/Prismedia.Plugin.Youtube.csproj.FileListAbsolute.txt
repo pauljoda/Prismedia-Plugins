@@ -11,3 +11,4 @@
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.pdb
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.genruntimeconfig.cache
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/ref/Prismedia.Plugin.Youtube.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/youtube/obj/Release/net10.0/Prismedia.Plugin.Youtube.sourcelink.json

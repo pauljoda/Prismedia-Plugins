@@ -6,7 +6,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/tvdb/tvdb.zip
-  sha256: 168ac2e4daf2aa97fc99a62696f0eaec4f3de05217cd4bf59fb43d8183ad7a14
+  sha256: 963042b817acebb5fd478ae7a5047ebcb73053cd0dca7841b8bc19b8622711dd
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -39,7 +39,7 @@
   version: 1.1.4
   date: '2026-05-31'
   path: plugins/tmdb/tmdb.zip
-  sha256: c5ce4e96515ec66b220225efa7837614b16b74f774cadab518404f3907cb0339
+  sha256: 1eafce6cb91a179accea9f2cf24cf767ae371c2e261d340245f0de90979c8c02
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -88,7 +88,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/youtube/youtube.zip
-  sha256: c88a1caddfa8ac58bd4306326b6be61d96b695104a50a41203482727fe4604c9
+  sha256: fc44b091b2736c8d31d01eb8251805f8ec6fbbe49eb89271e31634257858aa15
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -110,7 +110,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: dd1d351a6e19bfe47b4b53c85cf2e2c3aafe5e5b6a976d27544e37f9eab82e69
+  sha256: 7c95a56312c09fddad17e93594b87d0b53cb91d8fa8c2595baa0b15062c21fe4
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -122,6 +122,11 @@
     prismediaMin: 1.0.0
     prismediaMax: null
   supports:
+    - entityKind: music-artist
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
     - entityKind: audio-library
       actions:
         - lookup-id
@@ -137,7 +142,7 @@
   version: 1.0.1
   date: '2026-05-29'
   path: plugins/anilist/anilist.zip
-  sha256: 100e9140ffdbcddedc15fbe948084044646a4cb3f153cfaaf81255ab378833a2
+  sha256: 7d39f6bd0a5b2b19abac5a3ad03778acc823b8b74eee3c1af23bbddc853700d3
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -171,7 +176,7 @@
   version: 1.1.0
   date: '2026-05-11'
   path: plugins/mangadex/mangadex.zip
-  sha256: 68eb89b93e63e5a2eb36e4de8f1c0fb1fc73b15ac066ac28b9993dd01a275329
+  sha256: a7aeb1a26057f368cd6011e19ad4b72a57900714d9a19c755296555cb2859b54
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1

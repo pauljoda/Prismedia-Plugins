@@ -11,3 +11,4 @@
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.pdb
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.genruntimeconfig.cache
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/ref/Prismedia.Plugin.Tvdb.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/tvdb/obj/Release/net10.0/Prismedia.Plugin.Tvdb.sourcelink.json

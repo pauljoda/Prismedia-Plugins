@@ -11,3 +11,4 @@
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.pdb
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.genruntimeconfig.cache
 /Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/ref/Prismedia.Plugin.MangaDex.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/mangadex/obj/Release/net10.0/Prismedia.Plugin.MangaDex.sourcelink.json
