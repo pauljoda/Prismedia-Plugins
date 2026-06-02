@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prismedia.Plugin.AniList")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b6d40ad68d5a355c4a132f86d4ff0bca7e30d0c1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8fc1a988c5373ba992a8908e5a05e1a2e6662c57")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prismedia.Plugin.AniList")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prismedia.Plugin.AniList")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

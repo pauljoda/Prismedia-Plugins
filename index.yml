@@ -6,7 +6,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/tvdb/tvdb.zip
-  sha256: 47fa91fb23f93e24074e554ed8fa4ef43b62a9180dee25c864f8f7a56b1e3bd8
+  sha256: c339c52839bddc8bba47e695426f522f6812df6b40dabd848e259faa8ffaa1aa
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -39,7 +39,7 @@
   version: 1.1.4
   date: '2026-05-31'
   path: plugins/tmdb/tmdb.zip
-  sha256: 4410cc76202e0428012e6c5adb7e7fa6b0174ab0455ddee1137608c1bf39abbf
+  sha256: a034849132635aa3fd5e2f85fbb7799071874704fb3d8799c5a51e1f77a705f3
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -88,7 +88,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/youtube/youtube.zip
-  sha256: e3c60c25bf32b221f4714a1776704cffb69c7fcef1da30745d3390e322ec102a
+  sha256: f617d7d112251ad6e069c4d6fdd67657af01c799ee6a72fc7dc6c242a9dbadcf
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -110,7 +110,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: bca8dc7770e29187b36d2efa3edbd8b5fc81e4d4b5a41bd8e21f81ce23920392
+  sha256: 023594dde66a4b767b411ddabd2c7f77b6a9cd0bad5ecd9ea87e3bfddee8f2fb
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -142,7 +142,7 @@
   version: 1.0.1
   date: '2026-05-29'
   path: plugins/anilist/anilist.zip
-  sha256: 02b7846a2636e97357057e6b00cefc416b240c40f2d9a4e35f44afe59d7240cc
+  sha256: c034eacf927c79c5e906ced169730f26cbfe880b6f20f4855a3de166c6d080c1
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -176,7 +176,7 @@
   version: 1.1.0
   date: '2026-05-11'
   path: plugins/mangadex/mangadex.zip
-  sha256: 6a300c43574d232946e66953d47c47475e06f375144f7b95e935e700df3b71c2
+  sha256: 6152e8b748c95ccd2fe59296aee9fabeb338cae58e7fa052cdc4e146b397ce30
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1

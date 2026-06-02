@@ -80,6 +80,13 @@ internal static partial class MusicBrainzPlugin {
         if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await ReleaseProposalAsync(id, "external-id"));
         var query = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
+
+        // Parent-context auto-match: resolve the album within the identified artist's releases.
+        if (!IsExplicitSearch(request) && AncestorMusicBrainzId(request, "music-artist") is { } artistId) {
+            var scoped = await SearchAsync<SearchReleaseResponse>("release", $"arid:{artistId} AND release:{Quote(CleanTitle(query))}", 5);
+            if (scoped?.Releases?.FirstOrDefault() is { } match) return IdentifyPluginResult.ForProposal(await ReleaseProposalAsync(match.Id, "parent-context"));
+        }
+
         var releases = await SearchAsync<SearchReleaseResponse>("release", $"release:{Quote(query)}", 10);
         var candidates = (releases?.Releases ?? []).Select(release => new EntitySearchCandidate(
             new Dictionary<string, string> { [Provider] = release.Id },
@@ -96,6 +103,13 @@ internal static partial class MusicBrainzPlugin {
         if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await RecordingProposalAsync(id, "external-id"));
         var query = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
+
+        // Parent-context auto-match: resolve the track within the identified album's recordings.
+        if (!IsExplicitSearch(request) && AncestorMusicBrainzId(request, "audio-library") is { } releaseId) {
+            var scoped = await SearchAsync<SearchRecordingResponse>("recording", $"reid:{releaseId} AND recording:{Quote(CleanTitle(query))}", 5);
+            if (scoped?.Recordings?.FirstOrDefault() is { } match) return IdentifyPluginResult.ForProposal(await RecordingProposalAsync(match.Id, "parent-context"));
+        }
+
         var recordings = await SearchAsync<SearchRecordingResponse>("recording", $"recording:{Quote(query)}", 10);
         var candidates = (recordings?.Recordings ?? []).Select(recording => new EntitySearchCandidate(
             new Dictionary<string, string> { [Provider] = recording.Id },
@@ -222,6 +236,25 @@ internal static partial class MusicBrainzPlugin {
     private static string? UrlId(string? url, string kind) { if (string.IsNullOrWhiteSpace(url)) return null; var match = Regex.Match(url, $"musicbrainz\\.org/{kind}/([0-9a-f-]{{36}})", RegexOptions.IgnoreCase); return match.Success ? match.Groups[1].Value : null; }
     private static bool IsGuid(string value) => Guid.TryParse(value, out _);
     private static string Quote(string value) => $"\"{value.Replace("\"", string.Empty).Trim()}\"";
+
+    /// <summary>Finds the MusicBrainz id of the nearest ancestor of the given Prismedia kind, when one was supplied.</summary>
+    private static string? AncestorMusicBrainzId(IdentifyPluginRequest request, string kind) {
+        foreach (var ancestor in request.StructuralContext?.Ancestors ?? []) {
+            if (ancestor.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase) &&
+                ancestor.ExternalIds is not null &&
+                ancestor.ExternalIds.TryGetValue(Provider, out var value) && IsGuid(value)) {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Strips a trailing release year suffix (e.g. "Evolve (2017)") so the title matches MusicBrainz.</summary>
+    private static string CleanTitle(string title) {
+        var cleaned = Regex.Replace(title, @"\s*[\(\[]\s*\d{4}\s*[\)\]]\s*$", string.Empty).Trim();
+        return cleaned.Length > 0 ? cleaned : title.Trim();
+    }
     private static int? Year(string? date) => int.TryParse((date ?? string.Empty).Split('-')[0], out var year) ? year : null;
     private static decimal? Score(int? score) => score is null ? null : Math.Clamp(score.Value / 100m, 0m, 1m);
     private static string ArtistCreditString(ArtistCredit[]? credits) => credits is null ? string.Empty : string.Join(", ", credits.Select(c => c.Name ?? c.Artist?.Name).Where(s => !string.IsNullOrWhiteSpace(s)));
