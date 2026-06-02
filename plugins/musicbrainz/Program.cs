@@ -181,7 +181,7 @@ internal static partial class MusicBrainzPlugin {
     }
 
     private static async Task<EntityMetadataProposal> ReleaseProposalAsync(string id, string reason) {
-        var release = await GetJsonAsync<Release>($"{MbBase}/release/{id}?inc=artists+labels+tags+genres+release-groups&fmt=json");
+        var release = await GetJsonAsync<Release>($"{MbBase}/release/{id}?inc=artists+labels+tags+genres+release-groups+recordings&fmt=json");
         var images = await CoverImagesAsync(release?.ReleaseGroup?.Id, id);
         var tags = Tags(release?.Genres, release?.Tags);
         var dates = new Dictionary<string, string>();
@@ -199,7 +199,49 @@ internal static partial class MusicBrainzPlugin {
             dates,
             stats,
             new Dictionary<string, int>(),
-            release?.ReleaseGroup?.PrimaryType), images);
+            release?.ReleaseGroup?.PrimaryType), images, children: TrackChildren(release));
+    }
+
+    /// <summary>
+    /// Builds the album's track list as child proposals so the host can bind each local track to its
+    /// release track <em>by position</em> and adopt the canonical title — matching by track order
+    /// rather than the (often messy) on-disk filename. Tracks are ordered the same way the audio scan
+    /// orders them: media in disc order, then tracks in position order, with a single album-global
+    /// 0-based index that lines up with the local track's sort order. Tracks with no local file are
+    /// dropped by the host (this reason is not "provider-tree"), so no phantom tracks are invented.
+    /// </summary>
+    private static IReadOnlyList<EntityMetadataProposal> TrackChildren(Release? release) {
+        var children = new List<EntityMetadataProposal>();
+        var globalIndex = 0;
+        foreach (var medium in (release?.Media ?? []).OrderBy(medium => medium.Position ?? 0)) {
+            foreach (var track in (medium.Tracks ?? []).OrderBy(track => track.Position ?? 0)) {
+                var title = string.IsNullOrWhiteSpace(track.Title) ? track.Recording?.Title : track.Title;
+                if (string.IsNullOrWhiteSpace(title)) { globalIndex++; continue; }
+
+                var recordingId = track.Recording?.Id;
+                var externalIds = new Dictionary<string, string>();
+                var urls = new List<string>();
+                if (!string.IsNullOrWhiteSpace(recordingId)) {
+                    externalIds[Provider] = recordingId!;
+                    externalIds["musicbrainzRecording"] = recordingId!;
+                    urls.Add($"https://musicbrainz.org/recording/{recordingId}");
+                }
+
+                var runtime = track.Length is int ms
+                    ? new Dictionary<string, int> { ["runtimeSeconds"] = ms / 1000 }
+                    : new Dictionary<string, int>();
+                var patch = new EntityMetadataPatch(
+                    title, null, externalIds, urls, [], null, [],
+                    new Dictionary<string, string>(), runtime,
+                    new Dictionary<string, int> { ["sortOrder"] = globalIndex }, null);
+                children.Add(new EntityMetadataProposal(
+                    recordingId is { Length: > 0 } ? $"musicbrainz:recording:{recordingId}" : $"musicbrainz:track:{release!.Id}:{globalIndex}",
+                    Provider, "audio-track", 0.9m, "track-list", patch, [], [], [], null, []));
+                globalIndex++;
+            }
+        }
+
+        return children;
     }
 
     private static async Task<EntityMetadataProposal> RecordingProposalAsync(string id, string reason) {
@@ -326,7 +368,7 @@ internal static partial class MusicBrainzPlugin {
         }
     }
 
-    private static EntityMetadataProposal Proposal(string kind, string id, string reason, EntityMetadataPatch patch, IReadOnlyList<ImageCandidate> images, IReadOnlyList<EntityMetadataProposal>? relationships = null) => new(id, Provider, kind, 0.9m, reason, patch, images, [], [], null, relationships ?? []);
+    private static EntityMetadataProposal Proposal(string kind, string id, string reason, EntityMetadataPatch patch, IReadOnlyList<ImageCandidate> images, IReadOnlyList<EntityMetadataProposal>? relationships = null, IReadOnlyList<EntityMetadataProposal>? children = null) => new(id, Provider, kind, 0.9m, reason, patch, images, children ?? [], [], null, relationships ?? []);
     private static bool IsExplicitSearch(IdentifyPluginRequest request) => request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(request.Query.Title) && request.Query.ExternalIds is not { Count: > 0 } && string.IsNullOrWhiteSpace(request.Query.Url);
     private static string? ExternalId(IdentifyPluginRequest request) { foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) if (ids is not null && ids.TryGetValue(Provider, out var value) && IsGuid(value)) return value; return null; }
     private static string? FirstUrlId(IReadOnlyList<string> urls, Func<string?, string?> parser) => urls.Select(parser).FirstOrDefault(id => id is not null);
@@ -443,7 +485,8 @@ internal static partial class MusicBrainzPlugin {
     private sealed record Label(string? Name);
     private sealed record Tag(string? Name);
     private sealed record ReleaseGroup([property: JsonPropertyName("primary-type")] string? PrimaryType, string? Id);
-    private sealed record Medium(string? Format);
+    private sealed record Medium(string? Format, int? Position, Track[]? Tracks);
+    private sealed record Track(int? Position, string? Number, string? Title, int? Length, Recording? Recording);
     private sealed record CoverArtResponse(CoverImage[]? Images);
     private sealed record CoverImage(string? Image, bool? Front);
 }
