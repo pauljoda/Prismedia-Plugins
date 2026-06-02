@@ -123,7 +123,7 @@ internal static partial class MusicBrainzPlugin {
 
     private static async Task<EntityMetadataProposal> ReleaseProposalAsync(string id, string reason) {
         var release = await GetJsonAsync<Release>($"{MbBase}/release/{id}?inc=artists+labels+tags+genres+release-groups&fmt=json");
-        var images = await CoverImagesAsync(id);
+        var images = await CoverImagesAsync(release?.ReleaseGroup?.Id, id);
         var tags = Tags(release?.Genres, release?.Tags);
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(release?.Date)) dates["released"] = release!.Date!;
@@ -144,10 +144,10 @@ internal static partial class MusicBrainzPlugin {
     }
 
     private static async Task<EntityMetadataProposal> RecordingProposalAsync(string id, string reason) {
-        var recording = await GetJsonAsync<Recording>($"{MbBase}/recording/{id}?inc=artists+releases&fmt=json");
+        var recording = await GetJsonAsync<Recording>($"{MbBase}/recording/{id}?inc=artists+releases+release-groups&fmt=json");
         var release = PrimaryRelease(recording?.Releases);
         var releaseId = release?.Id;
-        var images = releaseId is null ? [] : await CoverImagesAsync(releaseId);
+        var images = releaseId is null ? [] : await CoverImagesAsync(release?.ReleaseGroup?.Id, releaseId);
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(recording?.FirstReleaseDate ?? release?.Date)) dates["released"] = recording?.FirstReleaseDate ?? release!.Date!;
         var stats = new Dictionary<string, int>();
@@ -170,9 +170,24 @@ internal static partial class MusicBrainzPlugin {
             null), images);
     }
 
-    private static async Task<IReadOnlyList<ImageCandidate>> CoverImagesAsync(string releaseId) {
+    /// <summary>
+    /// Resolves cover art for an album. The Cover Art Archive frequently stores art only at the
+    /// release-group level (or on a different release within the group), so a lookup keyed on a
+    /// specific release id can come back empty even when the album clearly has a cover. Prefer the
+    /// release group and fall back to the individual release.
+    /// </summary>
+    private static async Task<IReadOnlyList<ImageCandidate>> CoverImagesAsync(string? releaseGroupId, string releaseId) {
+        if (!string.IsNullOrWhiteSpace(releaseGroupId)) {
+            var groupImages = await CoverImagesFromAsync($"{CoverBase}/release-group/{releaseGroupId}");
+            if (groupImages.Count > 0) return groupImages;
+        }
+
+        return await CoverImagesFromAsync($"{CoverBase}/release/{releaseId}");
+    }
+
+    private static async Task<IReadOnlyList<ImageCandidate>> CoverImagesFromAsync(string url) {
         try {
-            var data = await GetJsonAsync<CoverArtResponse>($"{CoverBase}/release/{releaseId}");
+            var data = await GetJsonAsync<CoverArtResponse>(url);
             return (data?.Images ?? []).Where(i => !string.IsNullOrWhiteSpace(i.Image)).Select((i, index) => new ImageCandidate("cover", i.Image!, "coverartarchive", i.Front == true ? 10 : 4 - index, null, null, null)).ToArray();
         } catch { return []; }
     }
