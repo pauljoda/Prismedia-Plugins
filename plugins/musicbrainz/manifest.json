@@ -16,6 +16,7 @@
   "auth": [],
   "isNsfw": false,
   "supports": [
+    { "entityKind": "music-artist", "actions": ["lookup-id", "lookup-url", "search"] },
     { "entityKind": "audio-library", "actions": ["lookup-id", "lookup-url", "search"] },
     { "entityKind": "audio-track", "actions": ["lookup-id", "lookup-url", "search"] }
   ]

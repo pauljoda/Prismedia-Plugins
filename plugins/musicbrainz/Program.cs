@@ -15,9 +15,55 @@ internal static partial class MusicBrainzPlugin {
 
     public static async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
         var kind = request.Entity.Kind;
+        if (kind.Equals("music-artist", StringComparison.OrdinalIgnoreCase)) return await IdentifyArtistAsync(request);
         if (kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase)) return await IdentifyReleaseAsync(request);
         if (kind.Equals("audio-track", StringComparison.OrdinalIgnoreCase)) return await IdentifyRecordingAsync(request);
         return IdentifyPluginResult.None();
+    }
+
+    private static async Task<IdentifyPluginResult> IdentifyArtistAsync(IdentifyPluginRequest request) {
+        var id = ExternalId(request) ?? ArtistIdFromUrl(request.Query.Url) ?? FirstUrlId(request.Hints.Urls, ArtistIdFromUrl);
+        if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(id, "external-id"));
+        var query = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
+        if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
+        var artists = await SearchAsync<SearchArtistResponse>("artist", $"artist:{Quote(query)}", 10);
+        var candidates = (artists?.Artists ?? []).Select(artist => new EntitySearchCandidate(
+            new Dictionary<string, string> { [Provider] = artist.Id },
+            artist.Name ?? artist.Id,
+            Year(artist.LifeSpan?.Begin),
+            ArtistOverview(artist),
+            null,
+            Score(artist.Score))).ToArray();
+        return IdentifyPluginResult.ForCandidates(candidates);
+    }
+
+    private static async Task<EntityMetadataProposal> ArtistProposalAsync(string id, string reason) {
+        var artist = await GetJsonAsync<MbArtist>($"{MbBase}/artist/{id}?inc=artist-rels+genres+tags+url-rels&fmt=json");
+        var tags = Tags(artist?.Genres, artist?.Tags);
+        // "member of band" relations become person credits; the member's instruments/roles become
+        // the credit label so the artist page can list members with roles (e.g. "Drummer").
+        var members = (artist?.Relations ?? [])
+            .Where(relation => string.Equals(relation.Type, "member of band", StringComparison.OrdinalIgnoreCase) &&
+                               !string.IsNullOrWhiteSpace(relation.Artist?.Name))
+            .Select((relation, index) => new CreditPatch(relation.Artist!.Name!, "artist", AttributesLabel(relation.Attributes), index))
+            .ToArray();
+        var urls = new List<string> { $"https://musicbrainz.org/artist/{id}" };
+        foreach (var relation in artist?.Relations ?? []) {
+            if (relation.Url?.Resource is { Length: > 0 } resource && !urls.Contains(resource)) urls.Add(resource);
+        }
+
+        return Proposal("music-artist", $"musicbrainz:artist:{id}", reason, new EntityMetadataPatch(
+            artist?.Name ?? id,
+            ArtistOverview(artist),
+            new Dictionary<string, string> { [Provider] = id, ["musicbrainzArtist"] = id },
+            urls,
+            tags,
+            null,
+            members,
+            new Dictionary<string, string>(),
+            new Dictionary<string, int>(),
+            new Dictionary<string, int>(),
+            artist?.Type), []);
     }
 
     private static async Task<IdentifyPluginResult> IdentifyReleaseAsync(IdentifyPluginRequest request) {
@@ -122,6 +168,7 @@ internal static partial class MusicBrainzPlugin {
     private static string? FirstUrlId(IReadOnlyList<string> urls, Func<string?, string?> parser) => urls.Select(parser).FirstOrDefault(id => id is not null);
     private static string? ReleaseIdFromUrl(string? url) => UrlId(url, "release");
     private static string? RecordingIdFromUrl(string? url) => UrlId(url, "recording");
+    private static string? ArtistIdFromUrl(string? url) => UrlId(url, "artist");
     private static string? UrlId(string? url, string kind) { if (string.IsNullOrWhiteSpace(url)) return null; var match = Regex.Match(url, $"musicbrainz\\.org/{kind}/([0-9a-f-]{{36}})", RegexOptions.IgnoreCase); return match.Success ? match.Groups[1].Value : null; }
     private static bool IsGuid(string value) => Guid.TryParse(value, out _);
     private static string Quote(string value) => $"\"{value.Replace("\"", string.Empty).Trim()}\"";
@@ -131,9 +178,29 @@ internal static partial class MusicBrainzPlugin {
     private static string? LabelName(LabelInfo[]? infos) => infos?.Select(i => i.Label?.Name).FirstOrDefault(s => !string.IsNullOrWhiteSpace(s));
     private static IReadOnlyList<string> Tags(Tag[]? genres, Tag[]? tags) => [.. (genres ?? []).Concat(tags ?? []).Select(t => t.Name).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(20)!];
     private static Release? PrimaryRelease(Release[]? releases) => releases?.OrderByDescending(r => r.ReleaseGroup?.PrimaryType == "Album").ThenBy(r => r.Date ?? "9999").FirstOrDefault();
+    private static string? AttributesLabel(string[]? attributes) => attributes is { Length: > 0 } ? string.Join(", ", attributes.Where(a => !string.IsNullOrWhiteSpace(a))) : null;
+
+    private static string? ArtistOverview(MbArtist? artist) {
+        if (artist is null) return null;
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(artist.Disambiguation)) parts.Add(artist.Disambiguation!);
+        var facet = new List<string>();
+        if (!string.IsNullOrWhiteSpace(artist.Type)) facet.Add(artist.Type!);
+        if (artist.Area?.Name is { Length: > 0 } area) facet.Add(area);
+        else if (!string.IsNullOrWhiteSpace(artist.Country)) facet.Add(artist.Country!);
+        if (Year(artist.LifeSpan?.Begin) is { } begin) facet.Add(begin.ToString());
+        if (facet.Count > 0) parts.Add(string.Join(" · ", facet));
+        return parts.Count > 0 ? string.Join(" — ", parts) : null;
+    }
 
     private sealed record SearchReleaseResponse(Release[]? Releases);
     private sealed record SearchRecordingResponse(Recording[]? Recordings);
+    private sealed record SearchArtistResponse(MbArtist[]? Artists);
+    private sealed record MbArtist(string Id, string? Name, string? Disambiguation, string? Type, string? Country, int? Score, Area? Area, LifeSpan? LifeSpan, Relation[]? Relations, Tag[]? Tags, Tag[]? Genres);
+    private sealed record Area(string? Name);
+    private sealed record LifeSpan(string? Begin, string? End);
+    private sealed record Relation(string? Type, string? Direction, string[]? Attributes, Artist? Artist, RelationUrl? Url);
+    private sealed record RelationUrl(string? Resource);
     private sealed record Release(string Id, string? Title, string? Date, string? Disambiguation, int? Score, ArtistCredit[]? ArtistCredit, LabelInfo[]? LabelInfo, Tag[]? Tags, Tag[]? Genres, ReleaseGroup? ReleaseGroup, Medium[]? Media);
     private sealed record Recording(string Id, string? Title, string? FirstReleaseDate, string? Disambiguation, int? Length, int? Score, ArtistCredit[]? ArtistCredit, Release[]? Releases);
     private sealed record ArtistCredit(string? Name, Artist? Artist);

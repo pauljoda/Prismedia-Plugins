@@ -1,0 +1,15 @@
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/bin/Debug/net10.0/Prismedia.Plugin.MusicBrainz
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/bin/Debug/net10.0/Prismedia.Plugin.MusicBrainz.deps.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/bin/Debug/net10.0/Prismedia.Plugin.MusicBrainz.runtimeconfig.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/bin/Debug/net10.0/Prismedia.Plugin.MusicBrainz.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/bin/Debug/net10.0/Prismedia.Plugin.MusicBrainz.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.GeneratedMSBuildEditorConfig.editorconfig
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.AssemblyInfoInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.AssemblyInfo.cs
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.csproj.CoreCompileInputs.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.sourcelink.json
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/refint/Prismedia.Plugin.MusicBrainz.dll
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.pdb
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/Prismedia.Plugin.MusicBrainz.genruntimeconfig.cache
+/Users/pauldavis/Dev/Prismedia-Plugins/plugins/musicbrainz/obj/Debug/net10.0/ref/Prismedia.Plugin.MusicBrainz.dll
