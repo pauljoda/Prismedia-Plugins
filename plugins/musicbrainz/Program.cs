@@ -63,13 +63,25 @@ internal static partial class MusicBrainzPlugin {
     private static async Task<EntityMetadataProposal> ArtistProposalAsync(string id, string reason) {
         var artist = await GetJsonAsync<MbArtist>($"{MbBase}/artist/{id}?inc=artist-rels+genres+tags+url-rels&fmt=json");
         var tags = Tags(artist?.Genres, artist?.Tags);
-        // "member of band" relations become person credits; the member's instruments/roles become
-        // the credit label so the artist page can list members with roles (e.g. "Drummer").
-        var members = (artist?.Relations ?? [])
+        // "member of band" relations describe the band's people. Each becomes both a credit on the
+        // band patch (so apply links the person with their instruments/role as the relationship role)
+        // and a reviewable person relationship proposal (so the review page shows a Performers section
+        // with photos, exactly like a series lists its cast). One entry per distinct member.
+        var memberRelations = (artist?.Relations ?? [])
             .Where(relation => string.Equals(relation.Type, "member of band", StringComparison.OrdinalIgnoreCase) &&
                                !string.IsNullOrWhiteSpace(relation.Artist?.Name))
-            .Select((relation, index) => new CreditPatch(relation.Artist!.Name!, "artist", AttributesLabel(relation.Attributes), index))
+            .GroupBy(relation => relation.Artist!.Name!, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
             .ToArray();
+        var members = memberRelations
+            .Select((relation, index) => new CreditPatch(relation.Artist!.Name!, MemberRole(relation.Attributes), null, index))
+            .ToArray();
+        var memberProposals = memberRelations
+            .Select(MemberRelationship)
+            .Where(member => member is not null)
+            .Select(member => member!)
+            .ToArray();
+
         var urls = new List<string> { $"https://musicbrainz.org/artist/{id}" };
         foreach (var relation in artist?.Relations ?? []) {
             if (relation.Url?.Resource is { Length: > 0 } resource && !urls.Contains(resource)) urls.Add(resource);
@@ -90,7 +102,36 @@ internal static partial class MusicBrainzPlugin {
             new Dictionary<string, string>(),
             new Dictionary<string, int>(),
             new Dictionary<string, int>(),
-            artist?.Type), images);
+            artist?.Type), images, memberProposals);
+    }
+
+    /// <summary>The member's instruments/roles form the relationship role label (e.g. "lead vocals, guitar").</summary>
+    private static string MemberRole(string[]? attributes) => AttributesLabel(attributes) ?? "member";
+
+    /// <summary>
+    /// Builds a reviewable person relationship proposal for one band member, mirroring how the TMDB
+    /// plugin surfaces cast (name + provider id/url). No portrait lookup is performed: MusicBrainz
+    /// almost never carries a person image, so a per-member lookup would add a rate-limited request
+    /// each for no payoff. A member's photo is filled in if the user later identifies that person.
+    /// </summary>
+    private static EntityMetadataProposal? MemberRelationship(Relation relation) {
+        var name = relation.Artist?.Name;
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        var memberId = relation.Artist?.Id;
+        var externalIds = new Dictionary<string, string>();
+        var urls = new List<string>();
+        if (!string.IsNullOrWhiteSpace(memberId) && IsGuid(memberId!)) {
+            externalIds[Provider] = memberId!;
+            externalIds["musicbrainzArtist"] = memberId!;
+            urls.Add($"https://musicbrainz.org/artist/{memberId}");
+        }
+
+        var patch = new EntityMetadataPatch(
+            name, null, externalIds, urls, [], null, [],
+            new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null);
+        return new EntityMetadataProposal(
+            $"musicbrainz:artist:{memberId ?? name}", Provider, "person", null, "cascade", patch, [], [], [], null, []);
     }
 
     private static async Task<IdentifyPluginResult> IdentifyReleaseAsync(IdentifyPluginRequest request) {
@@ -259,7 +300,7 @@ internal static partial class MusicBrainzPlugin {
         }
     }
 
-    private static EntityMetadataProposal Proposal(string kind, string id, string reason, EntityMetadataPatch patch, IReadOnlyList<ImageCandidate> images) => new(id, Provider, kind, 0.9m, reason, patch, images, [], [], null, []);
+    private static EntityMetadataProposal Proposal(string kind, string id, string reason, EntityMetadataPatch patch, IReadOnlyList<ImageCandidate> images, IReadOnlyList<EntityMetadataProposal>? relationships = null) => new(id, Provider, kind, 0.9m, reason, patch, images, [], [], null, relationships ?? []);
     private static bool IsExplicitSearch(IdentifyPluginRequest request) => request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(request.Query.Title) && request.Query.ExternalIds is not { Count: > 0 } && string.IsNullOrWhiteSpace(request.Query.Url);
     private static string? ExternalId(IdentifyPluginRequest request) { foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) if (ids is not null && ids.TryGetValue(Provider, out var value) && IsGuid(value)) return value; return null; }
     private static string? FirstUrlId(IReadOnlyList<string> urls, Func<string?, string?> parser) => urls.Select(parser).FirstOrDefault(id => id is not null);
@@ -371,7 +412,7 @@ internal static partial class MusicBrainzPlugin {
         [property: JsonPropertyName("artist-credit")] ArtistCredit[]? ArtistCredit,
         Release[]? Releases);
     private sealed record ArtistCredit(string? Name, Artist? Artist);
-    private sealed record Artist(string? Name);
+    private sealed record Artist(string? Name, string? Id = null);
     private sealed record LabelInfo(Label? Label);
     private sealed record Label(string? Name);
     private sealed record Tag(string? Name);

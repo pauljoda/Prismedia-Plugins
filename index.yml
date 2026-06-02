@@ -110,7 +110,7 @@
   version: 1.0.0
   date: '2026-04-17'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: c3105f0256ebfdc04f0844136aa37a338672085927cc47ad2988521e9c0d45e5
+  sha256: 45260a9c4b27cae0962fdc5d1159c280def62249e3b0377f9d64b24aa04f3de9
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
