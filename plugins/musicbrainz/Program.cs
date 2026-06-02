@@ -255,13 +255,39 @@ internal static partial class MusicBrainzPlugin {
         await GetJsonAsync<T>($"{MbBase}/{entity}/?query={Uri.EscapeDataString(query)}&fmt=json&limit={limit}");
 
     private static async Task<T?> GetJsonAsync<T>(string url) {
-        if (url.StartsWith(MbBase, StringComparison.OrdinalIgnoreCase)) {
-            await ThrottleAsync();
-        }
+        var isMusicBrainz = url.StartsWith(MbBase, StringComparison.OrdinalIgnoreCase);
+        // MusicBrainz answers with 503 (and occasionally 429) when its rate limit is brushed, and the
+        // network itself can hiccup. Retry transient failures rather than degrading the lookup to an
+        // empty result — an empty release/recording would otherwise fall back to the raw id for the
+        // title and drop the rest of the metadata. Each attempt re-throttles, so retries are paced.
+        for (var attempt = 0; ; attempt++) {
+            if (isMusicBrainz) {
+                await ThrottleAsync();
+            }
 
-        using var res = await Http.GetAsync(url);
-        return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<T>(PluginHost.JsonOptions) : default;
+            try {
+                using var res = await Http.GetAsync(url);
+                if (res.IsSuccessStatusCode) {
+                    return await res.Content.ReadFromJsonAsync<T>(PluginHost.JsonOptions);
+                }
+
+                if (!IsTransientStatus(res.StatusCode) || attempt >= MaxRetries) {
+                    return default;
+                }
+            } catch (HttpRequestException) when (attempt < MaxRetries) {
+            } catch (TaskCanceledException) when (attempt < MaxRetries) {
+            }
+        }
     }
+
+    private const int MaxRetries = 3;
+
+    private static bool IsTransientStatus(System.Net.HttpStatusCode status) =>
+        status is System.Net.HttpStatusCode.ServiceUnavailable
+            or System.Net.HttpStatusCode.TooManyRequests
+            or System.Net.HttpStatusCode.BadGateway
+            or System.Net.HttpStatusCode.GatewayTimeout
+            or System.Net.HttpStatusCode.RequestTimeout;
 
     /// <summary>
     /// Paces MusicBrainz requests to stay within the provider's rate limit. Identify cascades spawn
