@@ -16,7 +16,6 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 
 | Plugin | Version | Runtime | Capabilities | NSFW | Description |
 |---|---|---|---|---|---|
-| [TVDB](./plugins/tvdb) | 1.0.0 | .NET process | `video-series`, `video-season`, `video` lookup/search/cascade | No | TV series, seasons, and episode identification via the TVDB v4 API |
 | [TMDB](./plugins/tmdb) | 1.1.0 | .NET process | `video`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |
 | [YouTube Metadata](./plugins/youtube) | 1.1.0 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
 | [MusicBrainz](./plugins/musicbrainz) | 1.0.0 | .NET process | `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
@@ -51,7 +50,7 @@ Each plugin directory is self-contained — plugins do not import from one anoth
 
 Open Prismedia → **Settings → Plugins → Browse community registry**, then enable any plugin from the list. The client fetches `index.yml` from this repository, verifies the SHA-256 of the downloaded `.zip` against the registry, and runs the plugin in its sandboxed runtime.
 
-Some plugins (TVDB, TMDB) require an API key from the upstream service. Prismedia prompts for these on first use; the keys are stored in your local Prismedia keychain and passed to the plugin request as `auth` values.
+Some plugins (TMDB) require an API key from the upstream service. Prismedia prompts for these on first use; the keys are stored in your local Prismedia keychain and passed to the plugin request as `auth` values.
 
 For step-by-step screenshots and troubleshooting, see the [Prismedia plugin docs](https://pauljoda.github.io/Prismedia/docs/plugins/overview).
 

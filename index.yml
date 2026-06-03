@@ -1,39 +1,6 @@
 # Prismedia Community Plugins Index
 # This file is fetched by Prismedia to discover available plugins.
 
-- id: tvdb
-  name: The TVDB
-  version: 1.0.0
-  date: '2026-04-17'
-  path: plugins/tvdb/tvdb.zip
-  sha256: c339c52839bddc8bba47e695426f522f6812df6b40dabd848e259faa8ffaa1aa
-  runtime: dotnet-process
-  isNsfw: false
-  manifestVersion: 1
-  apiTags:
-    - prismedia
-  compat:
-    pluginApiMin: 1.0.0
-    pluginApiMax: null
-    prismediaMin: 1.0.0
-    prismediaMax: null
-  supports:
-    - entityKind: video-series
-      actions:
-        - lookup-id
-        - lookup-url
-        - search
-        - cascade
-    - entityKind: video-season
-      actions:
-        - lookup-id
-        - search
-        - cascade
-    - entityKind: video
-      actions:
-        - lookup-id
-        - lookup-url
-        - search
 - id: tmdb
   name: The Movie Database
   version: 1.1.5
