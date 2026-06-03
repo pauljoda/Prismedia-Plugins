@@ -107,10 +107,10 @@
         - search
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.0.0
-  date: '2026-04-17'
+  version: 1.1.0
+  date: '2026-06-02'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: 6270daf2a10ea143c0f0c72e97ecf121234a71fd68bb3dc3e4b6a61c74933326
+  sha256: 4723c19334c9e069c589aecc49db53245e949822e580186db691e0d5d55ddcc7
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
