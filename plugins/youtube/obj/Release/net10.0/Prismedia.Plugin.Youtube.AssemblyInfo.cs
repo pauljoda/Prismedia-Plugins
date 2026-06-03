@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prismedia.Plugin.Youtube")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8fc1a988c5373ba992a8908e5a05e1a2e6662c57")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b9a10391d619fa13b975f5984de622deff33f977")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prismedia.Plugin.Youtube")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prismedia.Plugin.Youtube")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

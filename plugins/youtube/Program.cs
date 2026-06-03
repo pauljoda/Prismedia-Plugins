@@ -14,7 +14,11 @@ internal static partial class YoutubePlugin {
     private const string ClientVersion = "2.20240726.00.00";
 
     public static async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
-        if (!request.Entity.Kind.Equals("video", StringComparison.OrdinalIgnoreCase)) {
+        var kind = request.Entity.Kind;
+        if (kind.Equals("music-artist", StringComparison.OrdinalIgnoreCase)) return await IdentifyMusicArtistAsync(request);
+        if (kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase)) return await IdentifyAlbumAsync(request);
+        if (kind.Equals("audio-track", StringComparison.OrdinalIgnoreCase)) return await IdentifyTrackAsync(request);
+        if (!kind.Equals("video", StringComparison.OrdinalIgnoreCase)) {
             return IdentifyPluginResult.None();
         }
 
@@ -36,6 +40,367 @@ internal static partial class YoutubePlugin {
         !string.IsNullOrWhiteSpace(request.Query.Title) &&
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
+
+    // ===== YouTube Music (WEB_REMIX) audio identification =====
+    // YouTube Music exposes a separate InnerTube surface (music.youtube.com) under the WEB_REMIX
+    // client. Unlike the standard video player it returns square album-art for songs/art-tracks plus
+    // canonical title/artist/album/year — the metadata MusicBrainz provides, but sourced from YouTube
+    // (where YouTube-native artists like Divide Music actually live). The files we identify carry no
+    // YouTube id, so matching is title + ancestor-artist driven and every accepted row is verified to
+    // belong to the requested artist before it is proposed.
+
+    private const string MusicBase = "https://music.youtube.com/youtubei/v1";
+    private const string MusicClientVersion = "1.20240724.00.00";
+    // Stable InnerTube search filter params: songs, albums, artists.
+    private const string SongParams = "EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D";
+    private const string AlbumParams = "EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D";
+    private const string ArtistParams = "EgWKAQIgAWoKEAkQBRAKEAMQBA%3D%3D";
+
+    private static object MusicContext() => new { client = new { clientName = "WEB_REMIX", clientVersion = MusicClientVersion } };
+
+    /// <summary>Posts an InnerTube payload to a YouTube Music endpoint and returns the parsed root, or null on failure.</summary>
+    private static async Task<JsonElement?> MusicPostAsync(string endpoint, object payload) {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{MusicBase}/{endpoint}?key={InnerTubeKey}");
+        request.Headers.TryAddWithoutValidation("Origin", "https://music.youtube.com");
+        request.Content = JsonContent.Create(payload, options: PluginHost.JsonOptions);
+        using var res = await Http.SendAsync(request);
+        return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<JsonElement>(PluginHost.JsonOptions) : null;
+    }
+
+    /// <summary>Runs a filtered YouTube Music search and returns the flat list of result-row renderers.</summary>
+    private static async Task<IReadOnlyList<JsonElement>> MusicSearchAsync(string query, string filterParams) {
+        var root = await MusicPostAsync("search", new { context = MusicContext(), query, @params = filterParams });
+        if (root is null) return [];
+        var rows = new List<JsonElement>();
+        CollectObjects(root.Value, "musicResponsiveListItemRenderer", rows);
+        return rows;
+    }
+
+    /// <summary>Depth-first collects every object that carries the given property key.</summary>
+    private static void CollectObjects(JsonElement node, string key, List<JsonElement> sink) {
+        if (node.ValueKind == JsonValueKind.Object) {
+            if (node.TryGetProperty(key, out var found)) sink.Add(found);
+            foreach (var prop in node.EnumerateObject()) CollectObjects(prop.Value, key, sink);
+        } else if (node.ValueKind == JsonValueKind.Array) {
+            foreach (var item in node.EnumerateArray()) CollectObjects(item, key, sink);
+        }
+    }
+
+    private static string? RowVideoId(JsonElement row) {
+        var endpoints = new List<JsonElement>();
+        CollectObjects(row, "watchEndpoint", endpoints);
+        foreach (var endpoint in endpoints) {
+            if (endpoint.TryGetProperty("videoId", out var value) && value.ValueKind == JsonValueKind.String && IsValidId(value.GetString())) {
+                return value.GetString();
+            }
+        }
+        return null;
+    }
+
+    private static string? RowBrowseId(JsonElement row, string prefix) {
+        var endpoints = new List<JsonElement>();
+        CollectObjects(row, "browseEndpoint", endpoints);
+        foreach (var endpoint in endpoints) {
+            if (endpoint.TryGetProperty("browseId", out var value) && value.ValueKind == JsonValueKind.String &&
+                value.GetString() is { } id && id.StartsWith(prefix, StringComparison.Ordinal)) {
+                return id;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>The concatenated text of each flex column (column 0 is the title; column 1 is the bullet-separated byline).</summary>
+    private static IReadOnlyList<string> RowTexts(JsonElement row) {
+        var result = new List<string>();
+        if (!row.TryGetProperty("flexColumns", out var cols) || cols.ValueKind != JsonValueKind.Array) return result;
+        foreach (var col in cols.EnumerateArray()) {
+            if (col.TryGetProperty("musicResponsiveListItemFlexColumnRenderer", out var renderer) &&
+                renderer.TryGetProperty("text", out var text) &&
+                text.TryGetProperty("runs", out var runs) && runs.ValueKind == JsonValueKind.Array) {
+                result.Add(string.Concat(runs.EnumerateArray().Select(run => run.TryGetProperty("text", out var t) ? t.GetString() : null)));
+            }
+        }
+        return result;
+    }
+
+    private static string[] BylineParts(JsonElement row) {
+        var texts = RowTexts(row);
+        var byline = texts.Count > 1 ? texts[1] : null;
+        return string.IsNullOrWhiteSpace(byline)
+            ? []
+            : byline.Split('•', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    /// <summary>Square cover art for a row, taking the largest thumbnail and adding an upsized variant on top.</summary>
+    private static IReadOnlyList<ImageCandidate> RowCoverImages(JsonElement row) {
+        var thumbnailArrays = new List<JsonElement>();
+        CollectObjects(row, "thumbnails", thumbnailArrays);
+        YoutubeThumbnail? biggest = null;
+        foreach (var array in thumbnailArrays) {
+            if (array.ValueKind != JsonValueKind.Array) continue;
+            foreach (var thumb in array.EnumerateArray()) {
+                var url = StringAt(thumb, "url");
+                if (url is null) continue;
+                var width = IntAt(thumb, "width");
+                if (biggest is null || (width ?? 0) > (biggest.Width ?? 0)) {
+                    biggest = new YoutubeThumbnail(NormalizeUrl(url), width, IntAt(thumb, "height"));
+                }
+            }
+        }
+        if (biggest?.Url is null) return [];
+        return [
+            new ImageCandidate("cover", Upsize(biggest.Url, 1000), Provider, 10, null, 1000, 1000),
+            new ImageCandidate("cover", biggest.Url, Provider, 8, null, biggest.Width, biggest.Height)
+        ];
+    }
+
+    /// <summary>Rewrites a googleusercontent size suffix (=wW-hH or =sN) to request a larger square.</summary>
+    private static string Upsize(string url, int size) {
+        if (WidthHeightRegex().IsMatch(url)) return WidthHeightRegex().Replace(url, $"=w{size}-h{size}");
+        if (SquareSizeRegex().IsMatch(url)) return SquareSizeRegex().Replace(url, $"=s{size}");
+        return url;
+    }
+
+    private static MusicArtistRow? ParseArtistRow(JsonElement row) {
+        var channelId = RowBrowseId(row, "UC");
+        if (channelId is null) return null;
+        var texts = RowTexts(row);
+        var name = texts.Count > 0 ? texts[0] : null;
+        return string.IsNullOrWhiteSpace(name)
+            ? null
+            : new MusicArtistRow(channelId, name!, texts.Count > 1 ? texts[1] : null, RowCoverImages(row));
+    }
+
+    private static MusicSongRow? ParseSongRow(JsonElement row) {
+        var texts = RowTexts(row);
+        var title = texts.Count > 0 ? texts[0] : null;
+        if (string.IsNullOrWhiteSpace(title)) return null;
+        var parts = BylineParts(row); // [artist, album, duration]
+        return new MusicSongRow(
+            RowVideoId(row),
+            title!,
+            parts.Length > 0 ? parts[0] : null,
+            parts.Length > 1 ? parts[1] : null,
+            parts.Length > 0 ? ParseDuration(parts[^1]) : null,
+            RowCoverImages(row));
+    }
+
+    private static MusicAlbumRow? ParseAlbumRow(JsonElement row) {
+        var browseId = RowBrowseId(row, "MPRE");
+        if (browseId is null) return null;
+        var texts = RowTexts(row);
+        var title = texts.Count > 0 ? texts[0] : null;
+        if (string.IsNullOrWhiteSpace(title)) return null;
+        var parts = BylineParts(row); // [type, artist, year]
+        return new MusicAlbumRow(
+            browseId,
+            title!,
+            parts.Length > 1 ? parts[1] : null,
+            parts.Length > 0 ? ParseYear(parts[^1]) : null,
+            RowCoverImages(row));
+    }
+
+    private static async Task<IdentifyPluginResult> IdentifyMusicArtistAsync(IdentifyPluginRequest request) {
+        var query = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        if (query is null) return IdentifyPluginResult.None();
+        var artists = (await MusicSearchAsync(query, ArtistParams)).Select(ParseArtistRow).OfType<MusicArtistRow>().ToList();
+        if (artists.Count == 0) return IdentifyPluginResult.None();
+        if (IsExplicitSearch(request)) {
+            return IdentifyPluginResult.ForCandidates(artists.Select(artist => new EntitySearchCandidate(
+                new Dictionary<string, string> { [Provider] = artist.ChannelId, ["youtubeChannel"] = artist.ChannelId },
+                artist.Name, null, artist.Subtitle, artist.Images.Count > 0 ? artist.Images[0].Url : null, null)).ToList());
+        }
+        var best = artists.FirstOrDefault(artist => ArtistMatches(artist.Name, query)) ?? artists[0];
+        return IdentifyPluginResult.ForProposal(ArtistProposal(best));
+    }
+
+    private static EntityMetadataProposal ArtistProposal(MusicArtistRow artist) {
+        var external = new Dictionary<string, string> { [Provider] = artist.ChannelId, ["youtubeChannel"] = artist.ChannelId };
+        var urls = new[] { $"https://music.youtube.com/channel/{artist.ChannelId}", ChannelUrl(artist.ChannelId) };
+        return new EntityMetadataProposal(
+            $"youtube:music:artist:{artist.ChannelId}", Provider, "music-artist", 0.9m, "yt-music-artist",
+            new EntityMetadataPatch(artist.Name, null, external, urls, [], null, [],
+                new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null),
+            artist.Images, [], [], null, []);
+    }
+
+    private static async Task<IdentifyPluginResult> IdentifyTrackAsync(IdentifyPluginRequest request) {
+        var artist = AncestorTitle(request, "music-artist");
+        var album = AncestorTitle(request, "audio-library");
+        var title = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        if (title is null) return IdentifyPluginResult.None();
+        var songs = (await MusicSearchAsync(ScopedQuery(artist, title), SongParams)).Select(ParseSongRow).OfType<MusicSongRow>().ToList();
+        if (songs.Count == 0) return IdentifyPluginResult.None();
+        if (IsExplicitSearch(request)) {
+            return IdentifyPluginResult.ForCandidates(songs.Where(song => song.VideoId is not null).Select(song => new EntitySearchCandidate(
+                new Dictionary<string, string> { [Provider] = song.VideoId! },
+                song.Title, null, SongOverview(song), song.Images.Count > 0 ? song.Images[0].Url : null, null)).ToList());
+        }
+        var pool = artist is null ? songs : songs.Where(song => ArtistMatches(song.Artist, artist)).ToList();
+        if (pool.Count == 0) return IdentifyPluginResult.None();
+        var best = (album is null ? null : pool.FirstOrDefault(song => ArtistMatches(song.Album, album)))
+            ?? pool.FirstOrDefault(song => NormalizeName(song.Title) == NormalizeName(title))
+            ?? pool[0];
+        return IdentifyPluginResult.ForProposal(TrackProposal(best));
+    }
+
+    private static EntityMetadataProposal TrackProposal(MusicSongRow song) {
+        var external = new Dictionary<string, string>();
+        var urls = new List<string>();
+        if (song.VideoId is not null) {
+            external[Provider] = song.VideoId;
+            urls.Add(MusicWatchUrl(song.VideoId));
+            urls.Add(VideoUrl(song.VideoId));
+        }
+        var stats = new Dictionary<string, int>();
+        if (song.Seconds is int seconds) stats["runtimeSeconds"] = seconds;
+        var credits = new List<CreditPatch>();
+        if (!string.IsNullOrWhiteSpace(song.Artist)) credits.Add(new CreditPatch(song.Artist!, "artist", null, 0));
+        return new EntityMetadataProposal(
+            song.VideoId is not null ? $"youtube:music:song:{song.VideoId}" : $"youtube:music:song:{Slug(song.Title)}",
+            Provider, "audio-track", 0.9m, "yt-music-song",
+            new EntityMetadataPatch(song.Title, null, external, urls, [], EmptyToNull(song.Album), credits,
+                new Dictionary<string, string>(), stats, new Dictionary<string, int>(), null),
+            song.Images, [], [], null, []);
+    }
+
+    private static async Task<IdentifyPluginResult> IdentifyAlbumAsync(IdentifyPluginRequest request) {
+        var artist = AncestorTitle(request, "music-artist");
+        var title = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        if (title is null) return IdentifyPluginResult.None();
+        var scoped = ScopedQuery(artist, title);
+
+        var albums = (await MusicSearchAsync(scoped, AlbumParams)).Select(ParseAlbumRow).OfType<MusicAlbumRow>().ToList();
+        if (IsExplicitSearch(request)) {
+            return IdentifyPluginResult.ForCandidates(albums.Select(album => new EntitySearchCandidate(
+                new Dictionary<string, string> { [Provider] = album.BrowseId, ["youtubeAlbum"] = album.BrowseId },
+                album.Title, album.Year, album.Artist, album.Images.Count > 0 ? album.Images[0].Url : null, null)).ToList());
+        }
+
+        var albumPool = artist is null ? albums : albums.Where(album => ArtistMatches(album.Artist, artist)).ToList();
+        var bestAlbum = albumPool.FirstOrDefault(album => NormalizeName(album.Title) == NormalizeName(title))
+            ?? (artist is null ? null : albumPool.FirstOrDefault());
+        if (bestAlbum is not null) return IdentifyPluginResult.ForProposal(await AlbumProposalAsync(bestAlbum));
+
+        // Singles fallback: YouTube-native artists have no album entry, only the song/art-track. Adopt
+        // the matching song's square cover so the on-disk "album" folder still gets its art.
+        var songs = (await MusicSearchAsync(scoped, SongParams)).Select(ParseSongRow).OfType<MusicSongRow>().ToList();
+        var songPool = artist is null ? songs : songs.Where(song => ArtistMatches(song.Artist, artist)).ToList();
+        var bestSong = songPool.FirstOrDefault(song => NormalizeName(song.Title) == NormalizeName(title)) ?? songPool.FirstOrDefault();
+        return bestSong is null ? IdentifyPluginResult.None() : IdentifyPluginResult.ForProposal(SingleAlbumProposal(bestSong));
+    }
+
+    private static async Task<EntityMetadataProposal> AlbumProposalAsync(MusicAlbumRow album) {
+        var external = new Dictionary<string, string> { [Provider] = album.BrowseId, ["youtubeAlbum"] = album.BrowseId };
+        var urls = new[] { $"https://music.youtube.com/browse/{album.BrowseId}" };
+        var dates = new Dictionary<string, string>();
+        if (album.Year is int year) dates["released"] = year.ToString();
+        var children = await AlbumTrackChildrenAsync(album.BrowseId);
+        return new EntityMetadataProposal(
+            $"youtube:music:album:{album.BrowseId}", Provider, "audio-library", 0.9m, "yt-music-album",
+            new EntityMetadataPatch(album.Title, null, external, urls, [], EmptyToNull(album.Artist), [],
+                dates, new Dictionary<string, int>(), new Dictionary<string, int>(), null),
+            album.Images, children, [], null, []);
+    }
+
+    private static EntityMetadataProposal SingleAlbumProposal(MusicSongRow song) {
+        var external = new Dictionary<string, string>();
+        var urls = new List<string>();
+        if (song.VideoId is not null) {
+            external[Provider] = song.VideoId;
+            urls.Add(MusicWatchUrl(song.VideoId));
+        }
+        return new EntityMetadataProposal(
+            song.VideoId is not null ? $"youtube:music:single:{song.VideoId}" : $"youtube:music:single:{Slug(song.Title)}",
+            Provider, "audio-library", 0.9m, "yt-music-single",
+            new EntityMetadataPatch(EmptyToNull(song.Album) ?? song.Title, null, external, urls, [], EmptyToNull(song.Artist), [],
+                new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null),
+            song.Images, [], [], null, []);
+    }
+
+    /// <summary>The album's track list as positioned child proposals (mirrors the MusicBrainz cascade), each carrying the album art.</summary>
+    private static async Task<IReadOnlyList<EntityMetadataProposal>> AlbumTrackChildrenAsync(string browseId) {
+        var root = await MusicPostAsync("browse", new { context = MusicContext(), browseId });
+        if (root is null) return [];
+        var rows = new List<JsonElement>();
+        CollectObjects(root.Value, "musicResponsiveListItemRenderer", rows);
+        var children = new List<EntityMetadataProposal>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var index = 0;
+        foreach (var row in rows) {
+            var texts = RowTexts(row);
+            var title = texts.Count > 0 ? texts[0] : null;
+            if (string.IsNullOrWhiteSpace(title)) continue;
+            var videoId = RowVideoId(row);
+            if (videoId is not null && !seen.Add(videoId)) continue;
+            var external = new Dictionary<string, string>();
+            var urls = new List<string>();
+            if (videoId is not null) {
+                external[Provider] = videoId;
+                urls.Add(MusicWatchUrl(videoId));
+            }
+            var patch = new EntityMetadataPatch(title!, null, external, urls, [], null, [],
+                new Dictionary<string, string>(), new Dictionary<string, int>(),
+                new Dictionary<string, int> { ["sortOrder"] = index }, null);
+            children.Add(new EntityMetadataProposal(
+                videoId is not null ? $"youtube:music:song:{videoId}" : $"youtube:music:song:{browseId}:{index}",
+                Provider, "audio-track", 0.85m, "track-list", patch, RowCoverImages(row), [], [], null, []));
+            index++;
+        }
+        return children;
+    }
+
+    private static string ScopedQuery(string? artist, string title) => string.IsNullOrWhiteSpace(artist) ? title : $"{artist} {title}";
+    private static string MusicWatchUrl(string id) => $"https://music.youtube.com/watch?v={id}";
+    private static string? CleanAudioQuery(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Title of the nearest ancestor of the given kind (e.g. the album's artist), used to scope and verify a match.</summary>
+    private static string? AncestorTitle(IdentifyPluginRequest request, string kind) {
+        foreach (var ancestor in request.StructuralContext?.Ancestors ?? []) {
+            if (ancestor.Kind.Equals(kind, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(ancestor.Title)) {
+                return ancestor.Title;
+            }
+        }
+        return null;
+    }
+
+    private static string NormalizeName(string? value) => value is null ? string.Empty : NameNormRegex().Replace(value.ToLowerInvariant(), string.Empty);
+
+    /// <summary>True when a result's byline artist plausibly equals the expected artist (loose, punctuation-insensitive containment).</summary>
+    private static bool ArtistMatches(string? candidate, string expected) {
+        var normalizedCandidate = NormalizeName(candidate);
+        var normalizedExpected = NormalizeName(expected);
+        return normalizedExpected.Length > 0 && normalizedCandidate.Length > 0 &&
+            (normalizedCandidate.Contains(normalizedExpected) || normalizedExpected.Contains(normalizedCandidate));
+    }
+
+    private static int? ParseDuration(string? value) {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var parts = value.Split(':');
+        if (parts.Length is < 2 or > 3) return null;
+        var total = 0;
+        foreach (var part in parts) {
+            if (!int.TryParse(part.Trim(), out var component)) return null;
+            total = total * 60 + component;
+        }
+        return total;
+    }
+
+    private static int? ParseYear(string? value) {
+        value = value?.Trim();
+        return value is { Length: 4 } && int.TryParse(value, out var year) && year is > 1900 and < 2200 ? year : null;
+    }
+
+    private static string? SongOverview(MusicSongRow song) {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(song.Artist)) parts.Add(song.Artist!);
+        if (!string.IsNullOrWhiteSpace(song.Album)) parts.Add(song.Album!);
+        return parts.Count > 0 ? string.Join(" — ", parts) : null;
+    }
+
+    private sealed record MusicArtistRow(string ChannelId, string Name, string? Subtitle, IReadOnlyList<ImageCandidate> Images);
+    private sealed record MusicSongRow(string? VideoId, string Title, string? Artist, string? Album, int? Seconds, IReadOnlyList<ImageCandidate> Images);
+    private sealed record MusicAlbumRow(string BrowseId, string Title, string? Artist, int? Year, IReadOnlyList<ImageCandidate> Images);
 
     private static async Task<EntityMetadataProposal> ProposalForIdAsync(string id, string targetKind, string reason) {
         var details = await FetchPlayerAsync(id);
@@ -375,6 +740,9 @@ internal static partial class YoutubePlugin {
     [GeneratedRegex("/(embed|shorts|live|v)/([a-zA-Z0-9_-]{11})", RegexOptions.IgnoreCase)] private static partial Regex YoutubePathRegex();
     [GeneratedRegex("\\s*\\[[^\\]]+\\]\\s*$")] private static partial Regex BracketSuffixRegex();
     [GeneratedRegex("[^a-z0-9]+")] private static partial Regex SlugRegex();
+    [GeneratedRegex("[^a-z0-9]+")] private static partial Regex NameNormRegex();
+    [GeneratedRegex("=w\\d+-h\\d+")] private static partial Regex WidthHeightRegex();
+    [GeneratedRegex("=s\\d+")] private static partial Regex SquareSizeRegex();
 
     private sealed record ChannelMetadata(string? Title, string? Description, string ExternalId, IReadOnlyList<string> Urls, IReadOnlyList<ImageCandidate> Images);
     private sealed record PlayerResponse(VideoDetails? VideoDetails, Microformat? Microformat);

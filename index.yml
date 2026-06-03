@@ -85,10 +85,10 @@
         - search
 - id: youtube
   name: YouTube Metadata
-  version: 1.0.0
-  date: '2026-04-17'
+  version: 1.1.0
+  date: '2026-06-03'
   path: plugins/youtube/youtube.zip
-  sha256: f617d7d112251ad6e069c4d6fdd67657af01c799ee6a72fc7dc6c242a9dbadcf
+  sha256: 0c5a62bae37f9815e2f30fcc925835f63bd7b653bc4258bff54453d444adf4c7
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
@@ -101,6 +101,21 @@
     prismediaMax: null
   supports:
     - entityKind: video
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+    - entityKind: music-artist
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+    - entityKind: audio-library
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+    - entityKind: audio-track
       actions:
         - lookup-id
         - lookup-url
