@@ -186,6 +186,64 @@ public sealed class TmdbPluginTests {
         Assert.Equal("https://image.tmdb.org/t/p/original/episode-one.jpg", episodeOneImage.Url);
     }
 
+    [Fact]
+    public async Task SfwMovieSearchRequestsNoAdultAndDropsAdultResults() {
+        using var http = new HttpClient(new StubHandler(request => {
+            Assert.Equal("/3/search/movie", request.RequestUri?.AbsolutePath);
+            Assert.Contains("include_adult=false", request.RequestUri?.Query);
+            return """
+                {
+                  "results": [
+                    { "id": 1, "title": "The Grinch", "media_type": "movie", "adult": false },
+                    { "id": 2, "title": "The Grinch XXX Parody", "media_type": "movie", "adult": true }
+                  ]
+                }
+                """;
+        }));
+        var plugin = new TmdbPlugin(new TmdbApiClient(http, "test-key"));
+
+        var result = await plugin.IdentifyAsync(new IdentifyPluginRequest(
+            "search",
+            new Dictionary<string, string>(),
+            new IdentifyEntitySnapshot(Guid.NewGuid(), "movie", "The Grinch"),
+            new IdentifyQuery("The Grinch", null, null),
+            new IdentifyMatchHints(new Dictionary<string, string>(), [], "The Grinch", null),
+            null,
+            IncludeNsfw: false));
+
+        var candidate = Assert.Single(result.Candidates);
+        Assert.Equal("1", candidate.ExternalIds["tmdb"]);
+    }
+
+    [Fact]
+    public async Task NsfwMovieSearchRequestsAdultAndKeepsAdultResults() {
+        using var http = new HttpClient(new StubHandler(request => {
+            Assert.Equal("/3/search/movie", request.RequestUri?.AbsolutePath);
+            Assert.Contains("include_adult=true", request.RequestUri?.Query);
+            return """
+                {
+                  "results": [
+                    { "id": 1, "title": "The Grinch", "media_type": "movie", "adult": false },
+                    { "id": 2, "title": "The Grinch XXX Parody", "media_type": "movie", "adult": true }
+                  ]
+                }
+                """;
+        }));
+        var plugin = new TmdbPlugin(new TmdbApiClient(http, "test-key"));
+
+        var result = await plugin.IdentifyAsync(new IdentifyPluginRequest(
+            "search",
+            new Dictionary<string, string>(),
+            new IdentifyEntitySnapshot(Guid.NewGuid(), "movie", "The Grinch"),
+            new IdentifyQuery("The Grinch", null, null),
+            new IdentifyMatchHints(new Dictionary<string, string>(), [], "The Grinch", null),
+            null,
+            IncludeNsfw: true));
+
+        Assert.Equal(2, result.Candidates.Count);
+        Assert.Contains(result.Candidates, candidate => candidate.ExternalIds["tmdb"] == "2");
+    }
+
     private sealed class StubHandler(Func<HttpRequestMessage, string> respond) : HttpMessageHandler {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) {

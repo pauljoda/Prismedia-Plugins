@@ -30,7 +30,7 @@ internal sealed class TmdbPlugin {
             return Proposal(await _mapper.TvToProposalAsync(await _client.GetTvAsync(reference.Id), reference.MatchReason));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchSeriesCandidatesAsync(title));
+        return IdentifyPluginResult.ForCandidates(await SearchSeriesCandidatesAsync(title, request.IncludeNsfw));
     }
 
     private async Task<IdentifyPluginResult> IdentifyVideoAsync(IdentifyPluginRequest request) {
@@ -46,7 +46,7 @@ internal sealed class TmdbPlugin {
                 MovieTargetKind(request)));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(title));
+        return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(title, request.IncludeNsfw));
     }
 
     private async Task<IdentifyPluginResult> IdentifySeasonAsync(IdentifyPluginRequest request) {
@@ -56,7 +56,7 @@ internal sealed class TmdbPlugin {
             var parentTitle = request.StructuralContext?.Ancestors
                 .FirstOrDefault(ancestor => ancestor.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase))
                 ?.Title;
-            seriesId = (await SearchSeriesResultsAsync(parentTitle)).FirstOrDefault()?.Result.Id;
+            seriesId = (await SearchSeriesResultsAsync(parentTitle, request.IncludeNsfw)).FirstOrDefault()?.Result.Id;
         }
 
         if (seriesId is null || seasonNumber is null) {
@@ -82,7 +82,7 @@ internal sealed class TmdbPlugin {
             return Proposal(await _mapper.PersonToProposalAsync(reference.Id, reference.MatchReason));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchPersonCandidatesAsync(title));
+        return IdentifyPluginResult.ForCandidates(await SearchPersonCandidatesAsync(title, request.IncludeNsfw));
     }
 
     private async Task<IdentifyPluginResult> IdentifyStudioAsync(IdentifyPluginRequest request) {
@@ -143,13 +143,21 @@ internal sealed class TmdbPlugin {
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchMovieCandidatesAsync(string? rawTitle) =>
-        (await SearchMovieResultsAsync(rawTitle))
+    // TMDB returns explicit adult titles whenever include_adult is set. Honor the request's
+    // NSFW gate: only ask for adult results in NSFW mode, and defensively drop any result the
+    // provider still flags as adult when in SFW mode (multi-search can surface them regardless).
+    private static string IncludeAdultParam(bool includeNsfw) => includeNsfw ? "true" : "false";
+
+    private static IReadOnlyList<TmdbSearchResult> FilterAdult(TmdbSearchResult[]? results, bool includeNsfw) =>
+        (results ?? []).Where(result => includeNsfw || result.Adult != true).ToArray();
+
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchMovieCandidatesAsync(string? rawTitle, bool includeNsfw) =>
+        (await SearchMovieResultsAsync(rawTitle, includeNsfw))
         .Take(10)
         .Select(row => TmdbMetadataHelpers.ToCandidate(row, "movie"))
         .ToArray();
 
-    private async Task<List<ScoredResult>> SearchMovieResultsAsync(string? rawTitle) {
+    private async Task<List<ScoredResult>> SearchMovieResultsAsync(string? rawTitle, bool includeNsfw) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
@@ -157,49 +165,50 @@ internal sealed class TmdbPlugin {
         var clean = TmdbMetadataHelpers.Normalize(rawTitle);
         var data = await _client.FetchAsync<TmdbSearchResponse>("/search/movie", new Dictionary<string, string> {
             ["query"] = clean.Length == 0 ? rawTitle : clean,
-            ["include_adult"] = "true"
+            ["include_adult"] = IncludeAdultParam(includeNsfw)
         });
-        return TmdbMetadataHelpers.Score(rawTitle, data.Results ?? [], result => result.Title ?? result.Name ?? string.Empty);
+        return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(data.Results, includeNsfw), result => result.Title ?? result.Name ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchSeriesCandidatesAsync(string? rawTitle) =>
-        (await SearchSeriesResultsAsync(rawTitle))
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchSeriesCandidatesAsync(string? rawTitle, bool includeNsfw) =>
+        (await SearchSeriesResultsAsync(rawTitle, includeNsfw))
         .Take(10)
         .Select(row => TmdbMetadataHelpers.ToCandidate(row, "tv"))
         .ToArray();
 
-    private async Task<List<ScoredResult>> SearchSeriesResultsAsync(string? rawTitle) {
+    private async Task<List<ScoredResult>> SearchSeriesResultsAsync(string? rawTitle, bool includeNsfw) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
 
         var clean = TmdbMetadataHelpers.Normalize(rawTitle);
+        var includeAdult = IncludeAdultParam(includeNsfw);
         var data = await _client.FetchAsync<TmdbSearchResponse>("/search/tv", new Dictionary<string, string> {
             ["query"] = clean.Length == 0 ? rawTitle : clean,
-            ["include_adult"] = "true"
+            ["include_adult"] = includeAdult
         });
         var results = data.Results ?? [];
         if (results.Length == 0) {
             var multi = await _client.FetchAsync<TmdbSearchResponse>("/search/multi", new Dictionary<string, string> {
                 ["query"] = clean.Length == 0 ? rawTitle : clean,
-                ["include_adult"] = "true"
+                ["include_adult"] = includeAdult
             });
             results = (multi.Results ?? []).Where(result => result.MediaType == "tv").ToArray();
         }
 
-        return TmdbMetadataHelpers.Score(rawTitle, results, result => result.Name ?? result.Title ?? string.Empty);
+        return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(results, includeNsfw), result => result.Name ?? result.Title ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchPersonCandidatesAsync(string? rawTitle) {
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchPersonCandidatesAsync(string? rawTitle, bool includeNsfw) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
 
         var data = await _client.FetchAsync<TmdbSearchResponse>("/search/person", new Dictionary<string, string> {
             ["query"] = TmdbMetadataHelpers.Normalize(rawTitle),
-            ["include_adult"] = "true"
+            ["include_adult"] = IncludeAdultParam(includeNsfw)
         });
-        return TmdbMetadataHelpers.Score(rawTitle, data.Results ?? [], result => result.Name ?? string.Empty)
+        return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(data.Results, includeNsfw), result => result.Name ?? string.Empty)
             .Take(10)
             .Select(row => TmdbMetadataHelpers.ToCandidate(row, "person"))
             .ToArray();

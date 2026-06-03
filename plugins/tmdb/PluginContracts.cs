@@ -6,7 +6,8 @@ internal sealed record IdentifyPluginRequest(
     IdentifyEntitySnapshot Entity,
     IdentifyQuery Query,
     IdentifyMatchHints Hints,
-    IdentifyStructuralContext? StructuralContext = null);
+    IdentifyStructuralContext? StructuralContext = null,
+    bool IncludeNsfw = false);
 
 internal sealed record IdentifyStructuralContext(
     IReadOnlyList<IdentifyEntitySnapshot> Ancestors,

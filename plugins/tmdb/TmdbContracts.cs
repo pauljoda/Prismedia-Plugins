@@ -20,7 +20,8 @@ internal sealed record TmdbSearchResult(
     [property: JsonPropertyName("poster_path")] string? PosterPath,
     [property: JsonPropertyName("profile_path")] string? ProfilePath,
     [property: JsonPropertyName("logo_path")] string? LogoPath,
-    [property: JsonPropertyName("vote_average")] decimal? VoteAverage);
+    [property: JsonPropertyName("vote_average")] decimal? VoteAverage,
+    [property: JsonPropertyName("adult")] bool? Adult);
 
 internal sealed record TmdbMovieDetail(
     [property: JsonPropertyName("id")] int Id,

@@ -3,8 +3,8 @@
   "apiTags": ["prismedia"],
   "id": "tmdb",
   "name": "The Movie Database",
-  "version": "1.1.4",
-  "date": "2026-05-31",
+  "version": "1.1.5",
+  "date": "2026-06-03",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Tmdb.dll",
   "compat": {
