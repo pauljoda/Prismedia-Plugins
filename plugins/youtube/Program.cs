@@ -7,6 +7,8 @@ Console.Write(JsonSerializer.Serialize(response, PluginHost.JsonOptions));
 
 internal static partial class YoutubePlugin {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    private static readonly Random Jitter = new();
+    private const int MaxAttempts = 4;
     private const string Provider = "youtube";
     private const string OEmbed = "https://www.youtube.com/oembed";
     private const string InnerTube = "https://www.youtube.com/youtubei/v1";
@@ -58,13 +60,62 @@ internal static partial class YoutubePlugin {
 
     private static object MusicContext() => new { client = new { clientName = "WEB_REMIX", clientVersion = MusicClientVersion } };
 
+    /// <summary>
+    /// Sends an HTTP request, retrying transient throttling (HTTP 429) and server (5xx) responses with
+    /// capped exponential backoff plus jitter, honoring a <c>Retry-After</c> header when present. A bulk
+    /// artist saturation fires the artist search plus every album browse and track search back-to-back
+    /// against InnerTube on a shared anonymous key, which YouTube rate-limits aggressively; without this,
+    /// the first throttled response silently became "no results" and the child was dropped. Each attempt
+    /// builds a fresh request via the factory (a sent request cannot be replayed). Returns the final
+    /// response for the caller to dispose, or null if every attempt threw (e.g. a timeout).
+    /// </summary>
+    private static async Task<HttpResponseMessage?> SendWithRetryAsync(Func<HttpRequestMessage> requestFactory) {
+        for (var attempt = 1; ; attempt++) {
+            HttpResponseMessage response;
+            try {
+                using var request = requestFactory();
+                response = await Http.SendAsync(request);
+            } catch when (attempt < MaxAttempts) {
+                await Task.Delay(Backoff(attempt));
+                continue;
+            } catch {
+                return null;
+            }
+
+            var status = (int)response.StatusCode;
+            if ((status == 429 || status >= 500) && attempt < MaxAttempts) {
+                var delay = RetryAfter(response) ?? Backoff(attempt);
+                response.Dispose();
+                await Task.Delay(delay);
+                continue;
+            }
+
+            return response;
+        }
+    }
+
+    private static TimeSpan Backoff(int attempt) =>
+        TimeSpan.FromMilliseconds(500 * Math.Pow(2, attempt - 1) + Jitter.Next(0, 250));
+
+    private static TimeSpan? RetryAfter(HttpResponseMessage response) {
+        var retryAfter = response.Headers.RetryAfter;
+        if (retryAfter?.Delta is { } delta) return delta;
+        if (retryAfter?.Date is { } date) {
+            var wait = date - DateTimeOffset.UtcNow;
+            return wait > TimeSpan.Zero ? wait : TimeSpan.Zero;
+        }
+        return null;
+    }
+
     /// <summary>Posts an InnerTube payload to a YouTube Music endpoint and returns the parsed root, or null on failure.</summary>
     private static async Task<JsonElement?> MusicPostAsync(string endpoint, object payload) {
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"{MusicBase}/{endpoint}?key={InnerTubeKey}");
-        request.Headers.TryAddWithoutValidation("Origin", "https://music.youtube.com");
-        request.Content = JsonContent.Create(payload, options: PluginHost.JsonOptions);
-        using var res = await Http.SendAsync(request);
-        return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<JsonElement>(PluginHost.JsonOptions) : null;
+        using var res = await SendWithRetryAsync(() => {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{MusicBase}/{endpoint}?key={InnerTubeKey}");
+            request.Headers.TryAddWithoutValidation("Origin", "https://music.youtube.com");
+            request.Content = JsonContent.Create(payload, options: PluginHost.JsonOptions);
+            return request;
+        });
+        return res is { IsSuccessStatusCode: true } ? await res.Content.ReadFromJsonAsync<JsonElement>(PluginHost.JsonOptions) : null;
     }
 
     /// <summary>Runs a filtered YouTube Music search and returns the flat list of result-row renderers.</summary>
@@ -467,8 +518,11 @@ internal static partial class YoutubePlugin {
             context = new { client = new { clientName = "WEB", clientVersion = ClientVersion } },
             query
         };
-        using var res = await Http.PostAsJsonAsync($"{InnerTube}/search?key={InnerTubeKey}", payload, PluginHost.JsonOptions);
-        if (!res.IsSuccessStatusCode) return [];
+        using var res = await SendWithRetryAsync(() =>
+            new HttpRequestMessage(HttpMethod.Post, $"{InnerTube}/search?key={InnerTubeKey}") {
+                Content = JsonContent.Create(payload, options: PluginHost.JsonOptions)
+            });
+        if (res is not { IsSuccessStatusCode: true }) return [];
         var json = await res.Content.ReadFromJsonAsync<JsonElement>(PluginHost.JsonOptions);
         var candidates = new List<EntitySearchCandidate>();
         Walk(json, renderer => {
@@ -509,13 +563,17 @@ internal static partial class YoutubePlugin {
 
     private static async Task<PlayerResponse?> FetchPlayerAsync(string id) {
         var payload = new { context = new { client = new { clientName = "WEB", clientVersion = ClientVersion } }, videoId = id };
-        using var res = await Http.PostAsJsonAsync($"{InnerTube}/player?key={InnerTubeKey}", payload, PluginHost.JsonOptions);
-        return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<PlayerResponse>(PluginHost.JsonOptions) : null;
+        using var res = await SendWithRetryAsync(() =>
+            new HttpRequestMessage(HttpMethod.Post, $"{InnerTube}/player?key={InnerTubeKey}") {
+                Content = JsonContent.Create(payload, options: PluginHost.JsonOptions)
+            });
+        return res is { IsSuccessStatusCode: true } ? await res.Content.ReadFromJsonAsync<PlayerResponse>(PluginHost.JsonOptions) : null;
     }
 
     private static async Task<OEmbedResponse?> FetchOEmbedAsync(string id) {
-        using var res = await Http.GetAsync($"{OEmbed}?url={Uri.EscapeDataString(VideoUrl(id))}&format=json");
-        return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<OEmbedResponse>(PluginHost.JsonOptions) : null;
+        using var res = await SendWithRetryAsync(() =>
+            new HttpRequestMessage(HttpMethod.Get, $"{OEmbed}?url={Uri.EscapeDataString(VideoUrl(id))}&format=json"));
+        return res is { IsSuccessStatusCode: true } ? await res.Content.ReadFromJsonAsync<OEmbedResponse>(PluginHost.JsonOptions) : null;
     }
 
     private static async Task<ChannelMetadata?> FetchChannelAsync(string? channelId) {
@@ -525,8 +583,11 @@ internal static partial class YoutubePlugin {
             context = new { client = new { clientName = "WEB", clientVersion = ClientVersion } },
             browseId = channelId
         };
-        using var res = await Http.PostAsJsonAsync($"{InnerTube}/browse?key={InnerTubeKey}", payload, PluginHost.JsonOptions);
-        if (!res.IsSuccessStatusCode) return null;
+        using var res = await SendWithRetryAsync(() =>
+            new HttpRequestMessage(HttpMethod.Post, $"{InnerTube}/browse?key={InnerTubeKey}") {
+                Content = JsonContent.Create(payload, options: PluginHost.JsonOptions)
+            });
+        if (res is not { IsSuccessStatusCode: true }) return null;
         var root = await res.Content.ReadFromJsonAsync<JsonElement>(PluginHost.JsonOptions);
         var metadata = TryGet(root, "metadata", "channelMetadataRenderer");
 
