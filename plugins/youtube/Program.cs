@@ -307,10 +307,14 @@ internal static partial class YoutubePlugin {
         if (song.Seconds is int seconds) stats["runtimeSeconds"] = seconds;
         var credits = new List<CreditPatch>();
         if (!string.IsNullOrWhiteSpace(song.Artist)) credits.Add(new CreditPatch(song.Artist!, "artist", null, 0));
+        // A track has no studio. Its album is a structural parent (the audio-library entity), not a
+        // relationship on the track, so the byline album must NOT be written into the Studio field —
+        // doing so fabricated a bogus studio named after the album (e.g. "Believe It (Naruto)").
+        // song.Album is still used for match scoring (IdentifyTrackAsync) and the search overview.
         return new EntityMetadataProposal(
             song.VideoId is not null ? $"youtube:music:song:{song.VideoId}" : $"youtube:music:song:{Slug(song.Title)}",
             Provider, "audio-track", 0.9m, "yt-music-song",
-            new EntityMetadataPatch(song.Title, null, external, urls, [], EmptyToNull(song.Album), credits,
+            new EntityMetadataPatch(song.Title, null, external, urls, [], null, credits,
                 new Dictionary<string, string>(), stats, new Dictionary<string, int>(), null),
             song.Images, [], [], null, []);
     }
@@ -347,9 +351,11 @@ internal static partial class YoutubePlugin {
         var dates = new Dictionary<string, string>();
         if (album.Year is int year) dates["released"] = year.ToString();
         var children = await AlbumTrackChildrenAsync(album.BrowseId);
+        // An album's artist is its structural parent (the music-artist grouping), not a studio. Writing
+        // the byline artist into the Studio field fabricated a redundant studio duplicating the artist.
         return new EntityMetadataProposal(
             $"youtube:music:album:{album.BrowseId}", Provider, "audio-library", 0.9m, "yt-music-album",
-            new EntityMetadataPatch(album.Title, null, external, urls, [], EmptyToNull(album.Artist), [],
+            new EntityMetadataPatch(album.Title, null, external, urls, [], null, [],
                 dates, new Dictionary<string, int>(), new Dictionary<string, int>(), null),
             album.Images, children, [], null, []);
     }
@@ -361,10 +367,11 @@ internal static partial class YoutubePlugin {
             external[Provider] = song.VideoId;
             urls.Add(MusicWatchUrl(song.VideoId));
         }
+        // Same as albums: the artist is the structural parent, not a studio (see AlbumProposalAsync).
         return new EntityMetadataProposal(
             song.VideoId is not null ? $"youtube:music:single:{song.VideoId}" : $"youtube:music:single:{Slug(song.Title)}",
             Provider, "audio-library", 0.9m, "yt-music-single",
-            new EntityMetadataPatch(EmptyToNull(song.Album) ?? song.Title, null, external, urls, [], EmptyToNull(song.Artist), [],
+            new EntityMetadataPatch(EmptyToNull(song.Album) ?? song.Title, null, external, urls, [], null, [],
                 new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null),
             song.Images, [], [], null, []);
     }

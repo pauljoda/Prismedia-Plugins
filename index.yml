@@ -52,10 +52,10 @@
         - search
 - id: youtube
   name: YouTube Metadata
-  version: 1.2.0
-  date: '2026-06-03'
+  version: 1.2.1
+  date: '2026-06-04'
   path: plugins/youtube/youtube.zip
-  sha256: a4d6e21351ec07fb294ca896126e1e34b60d54610963c4b9a3425e9dc53f552a
+  sha256: 014ea1a5d496b5bd020ff53fc3a6074b80bb1e92d21d56cf3962c1a36995b4c5
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
