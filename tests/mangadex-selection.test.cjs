@@ -53,3 +53,46 @@ test("MangaDex process returns a Prismedia none result for empty book input", ()
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+const liveTest = process.env.PRISMEDIA_LIVE_PLUGIN_TESTS === "1" ? test : test.skip;
+
+liveTest("MangaDex process accepts Bad Ending Party when aggregate volumes is empty", { timeout: 30_000 }, () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prismedia-mangadex-live-test-"));
+  const requestPath = path.join(tempDir, "request.json");
+
+  fs.writeFileSync(
+    requestPath,
+    JSON.stringify({
+      protocolVersion: 1,
+      action: "lookup-id",
+      auth: {},
+      entity: {
+        id: "00000000-0000-0000-0000-000000000001",
+        kind: "book",
+        title: "Bad Ending Party",
+      },
+      query: {
+        title: "Bad Ending Party",
+        url: null,
+        externalIds: { mangadex: "a95830f3-a5a4-47b7-8163-9c3c0ba0b14b" },
+      },
+      hints: { externalIds: {}, urls: [], title: null, filePath: null },
+      includeNsfw: true,
+    }),
+  );
+
+  try {
+    const dll = path.join(repoRoot, "plugins", "mangadex", manifest.entry);
+    const stdout = execFileSync("dotnet", [dll, requestPath], { encoding: "utf8" });
+    const response = JSON.parse(stdout);
+
+    assert.equal(response.ok, true);
+    assert.equal(response.error, null);
+    assert.equal(response.result.type, "proposal");
+    assert.equal(response.result.proposal.patch.title, "Bad Ending Party");
+    assert.equal(response.result.proposal.patch.flags.isNsfw, true);
+    assert.ok(response.result.proposal.images.length > 0);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});

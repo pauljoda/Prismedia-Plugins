@@ -3,8 +3,8 @@
   "apiTags": ["prismedia"],
   "id": "mangadex",
   "name": "MangaDex",
-  "version": "1.1.0",
-  "date": "2026-05-11",
+  "version": "1.1.1",
+  "date": "2026-06-05",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MangaDex.dll",
   "compat": {

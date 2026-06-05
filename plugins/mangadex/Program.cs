@@ -455,15 +455,36 @@ internal static partial class MangaDexPlugin {
 
     private static IReadOnlyDictionary<string, string> VolumeByChapter(AggregateEnvelope? aggregate) {
         var output = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (volumeKey, volume) in aggregate?.Volumes ?? new Dictionary<string, AggregateVolume>()) {
+        foreach (var (volumeKey, volume) in AggregateVolumes(aggregate)) {
             var volumeNumber = string.IsNullOrWhiteSpace(volume.Volume) ? volumeKey : volume.Volume;
             if (string.IsNullOrWhiteSpace(volumeNumber)) continue;
-            foreach (var (chapterKey, chapter) in volume.Chapters ?? new Dictionary<string, AggregateChapter>()) {
+            foreach (var (chapterKey, chapter) in AggregateChapters(volume)) {
                 var chapterNumber = NormalizeChapterNumber(chapter.Chapter ?? chapterKey);
                 if (chapterNumber is not null && !output.ContainsKey(chapterNumber)) {
                     output[chapterNumber] = volumeNumber.Trim();
                 }
             }
+        }
+
+        return output;
+    }
+
+    private static IReadOnlyDictionary<string, AggregateVolume> AggregateVolumes(AggregateEnvelope? aggregate) =>
+        JsonObjectDictionary<AggregateVolume>(aggregate?.Volumes);
+
+    private static IReadOnlyDictionary<string, AggregateChapter> AggregateChapters(AggregateVolume volume) =>
+        JsonObjectDictionary<AggregateChapter>(volume.Chapters);
+
+    private static IReadOnlyDictionary<string, T> JsonObjectDictionary<T>(JsonElement? value) where T : class {
+        if (value is not JsonElement element || element.ValueKind != JsonValueKind.Object) {
+            return new Dictionary<string, T>();
+        }
+
+        var output = new Dictionary<string, T>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in element.EnumerateObject()) {
+            if (property.Value.ValueKind != JsonValueKind.Object) continue;
+            var parsed = property.Value.Deserialize<T>(PluginHost.JsonOptions);
+            if (parsed is not null) output[property.Name] = parsed;
         }
 
         return output;
@@ -655,8 +676,8 @@ internal static partial class MangaDexPlugin {
     private sealed record CoverAttributes(string? FileName, string? Volume, string? Locale);
     private sealed record ChapterResource(string Id, ChapterAttributes? Attributes, Relationship[]? Relationships);
     private sealed record ChapterAttributes(string? Title, string? Volume, string? Chapter, string? TranslatedLanguage, string? PublishAt, string? ReadableAt);
-    private sealed record AggregateEnvelope(Dictionary<string, AggregateVolume>? Volumes);
-    private sealed record AggregateVolume(string? Volume, Dictionary<string, AggregateChapter>? Chapters);
+    private sealed record AggregateEnvelope(JsonElement? Volumes);
+    private sealed record AggregateVolume(string? Volume, JsonElement? Chapters);
     private sealed record AggregateChapter(string? Chapter);
     private sealed record ParsedDescription(string[] Artists, string[] Tags);
 }
