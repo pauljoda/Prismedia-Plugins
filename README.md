@@ -20,7 +20,7 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 | [YouTube Metadata](./plugins/youtube) | 1.1.0 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
 | [MusicBrainz](./plugins/musicbrainz) | 1.0.0 | .NET process | `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
 | [AniList](./plugins/anilist) | 1.0.0 | .NET process | `video-series`, `video` lookup/search/cascade | No | Anime identification (TV, movies, OVAs) via the AniList GraphQL API |
-| [MangaDex](./plugins/mangadex) | 1.1.2 | .NET process | `book` lookup/search/cascade | No | Manga and comic book identification via MangaDex |
+| [MangaDex](./plugins/mangadex) | 1.1.3 | .NET process | `book` lookup/search/cascade | No | Manga and comic book identification via MangaDex |
 
 `index.yml` is the source of truth. The table above is for humans.
 

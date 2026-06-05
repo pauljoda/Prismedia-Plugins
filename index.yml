@@ -155,10 +155,10 @@
         - search
 - id: mangadex
   name: MangaDex
-  version: 1.1.2
+  version: 1.1.3
   date: '2026-06-05'
   path: plugins/mangadex/mangadex.zip
-  sha256: a804421c1201af9f2aa1815f93d517c10f8cad962e7127cd6b686b8b07287337
+  sha256: 76501aee0b01bd324b6a71c7fd27125bb94c30bc266750c7e2db38c39f093049
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
