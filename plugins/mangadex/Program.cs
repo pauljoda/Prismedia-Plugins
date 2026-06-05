@@ -204,9 +204,12 @@ internal static partial class MangaDexPlugin {
         }
 
         var positions = request.StructuralContext?.Positions ?? new Dictionary<string, int>();
-        var requestPosition = PositionValue(positions, "chapter", "chapterNumber", "sort", "sortOrder");
-        var proposalPosition = PositionValue(chapter.Patch.Positions, "chapter", "chapterNumber", "sort", "sortOrder");
-        if (requestPosition is not null && proposalPosition == requestPosition) return true;
+        var requestChapterPosition = PositionValue(positions, "chapter", "chapterNumber");
+        var proposalChapterPosition = ProposalChapterNumber(chapter);
+        if (requestChapterPosition is not null) return proposalChapterPosition == requestChapterPosition;
+
+        var requestSort = PositionValue(positions, "sort", "sortOrder");
+        if (requestSort is not null && proposalChapterPosition == requestSort + 1) return true;
 
         return !string.IsNullOrWhiteSpace(request.Entity.Title) &&
             chapter.Patch.Title?.Equals(request.Entity.Title, StringComparison.OrdinalIgnoreCase) == true;
@@ -218,6 +221,14 @@ internal static partial class MangaDexPlugin {
         }
 
         return null;
+    }
+
+    private static int? ProposalChapterNumber(EntityMetadataProposal chapter) {
+        if (chapter.Patch.ExternalIds.TryGetValue("chapterNumber", out var value)) {
+            return PositionNumber(value);
+        }
+
+        return PositionValue(chapter.Patch.Positions, "chapter", "chapterNumber");
     }
 
     private static IReadOnlyList<EntityMetadataProposal> BuildChildren(
@@ -304,7 +315,7 @@ internal static partial class MangaDexPlugin {
         string? selectedChapterId,
         IReadOnlyList<ImageCandidate> images) {
         var chapterText = chapter.Attributes?.Chapter;
-        var chapterNumber = PositionNumber(chapterText);
+        var sortPosition = ZeroBasedSortPosition(chapterText);
         var title = string.IsNullOrWhiteSpace(chapter.Attributes?.Title)
             ? $"Chapter {chapterText ?? chapter.Id}"
             : $"Chapter {chapterText}: {chapter.Attributes!.Title}";
@@ -314,8 +325,7 @@ internal static partial class MangaDexPlugin {
         }
 
         var positions = new Dictionary<string, int>();
-        if (chapterNumber is int position) {
-            positions["chapterNumber"] = position;
+        if (sortPosition is int position) {
             positions["sortOrder"] = position;
         }
 
@@ -749,6 +759,12 @@ internal static partial class MangaDexPlugin {
         return decimal.Remainder(number, 1) == 0
             ? (int)number
             : (int)Math.Round(number * 1000);
+    }
+
+    private static int? ZeroBasedSortPosition(string? value) {
+        if (!decimal.TryParse(value, out var number)) return null;
+        if (number < 0 || decimal.Remainder(number, 1) != 0) return null;
+        return Math.Max(0, (int)number - 1);
     }
     private static string? NumberFromTitle(string? value) {
         if (string.IsNullOrWhiteSpace(value)) return null;
