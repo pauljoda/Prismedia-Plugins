@@ -226,11 +226,14 @@ internal static partial class MangaDexPlugin {
         AggregateEnvelope? aggregate,
         IReadOnlyList<CoverResource> covers,
         string? selectedChapterId) {
-        var volumeByChapter = VolumeByChapter(aggregate);
         var uniqueChapters = UniqueChapters(chapters);
+        var volumeByChapter = VolumeByChapter(aggregate)
+            .Concat(CoverVolumeByChapter(uniqueChapters, covers))
+            .GroupBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
         var volumeNumbers = uniqueChapters
             .Select(chapter => EffectiveVolume(chapter, volumeByChapter))
-            .Concat(covers.Select(cover => cover.Attributes?.Volume))
+            .Concat(covers.Select(cover => NormalizeVolumeValue(cover.Attributes?.Volume)))
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Select(value => value!.Trim())
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -248,7 +251,7 @@ internal static partial class MangaDexPlugin {
         }
 
         foreach (var chapter in uniqueChapters.Where(chapter => EffectiveVolume(chapter, volumeByChapter) is null).OrderBy(chapter => ChapterSortKey(chapter.Attributes?.Chapter))) {
-            children.Add(ChapterProposal(manga, chapter, selectedChapterId));
+            children.Add(ChapterProposal(manga, chapter, selectedChapterId, []));
         }
 
         return children;
@@ -268,6 +271,8 @@ internal static partial class MangaDexPlugin {
             positions["sortOrder"] = position;
         }
 
+        var stats = VolumeStats(chapters);
+        var dates = VolumeDates(chapters);
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:volume:{volume}",
             Provider,
@@ -276,24 +281,28 @@ internal static partial class MangaDexPlugin {
             "volume-map",
             new EntityMetadataPatch(
                 $"Volume {volume}",
-                null,
+                VolumeDescription(chapters),
                 new Dictionary<string, string> { [Provider] = manga.Id, ["volume"] = volume },
                 [$"{Web}/title/{manga.Id}"],
                 [],
                 null,
                 [],
-                new Dictionary<string, string>(),
-                new Dictionary<string, int>(),
+                dates,
+                stats,
                 positions,
                 null) {
                 Flags = AdultFlags(manga)
             },
             coverImages,
-            chapters.Select(chapter => ChapterProposal(manga, chapter, selectedChapterId)).ToArray(),
+            chapters.Select(chapter => ChapterProposal(manga, chapter, selectedChapterId, ChapterCoverImages(coverImages))).ToArray(),
             []);
     }
 
-    private static EntityMetadataProposal ChapterProposal(MangaResource manga, ChapterResource chapter, string? selectedChapterId) {
+    private static EntityMetadataProposal ChapterProposal(
+        MangaResource manga,
+        ChapterResource chapter,
+        string? selectedChapterId,
+        IReadOnlyList<ImageCandidate> images) {
         var chapterText = chapter.Attributes?.Chapter;
         var chapterNumber = PositionNumber(chapterText);
         var title = string.IsNullOrWhiteSpace(chapter.Attributes?.Title)
@@ -310,12 +319,17 @@ internal static partial class MangaDexPlugin {
             positions["sortOrder"] = position;
         }
 
+        var stats = new Dictionary<string, int>();
+        if (chapter.Attributes?.Pages is int pages && pages > 0) {
+            stats["pageCount"] = pages;
+        }
+
         var external = new Dictionary<string, string> {
             [Provider] = manga.Id,
             ["mangadexChapter"] = chapter.Id
         };
         if (!string.IsNullOrWhiteSpace(chapterText)) external["chapterNumber"] = chapterText!;
-        if (!string.IsNullOrWhiteSpace(chapter.Attributes?.Volume)) external["volume"] = chapter.Attributes!.Volume!;
+        if (NormalizeVolumeValue(chapter.Attributes?.Volume) is string chapterVolume) external["volume"] = chapterVolume;
 
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:chapter:{chapter.Id}",
@@ -325,19 +339,19 @@ internal static partial class MangaDexPlugin {
             "chapter-feed",
             new EntityMetadataPatch(
                 title,
-                null,
+                ChapterDescription(chapter),
                 external,
                 [$"{Web}/chapter/{chapter.Id}"],
                 [],
                 ScanlationGroup(chapter),
                 [],
                 dates,
-                new Dictionary<string, int>(),
+                stats,
                 positions,
                 null) {
                 Flags = AdultFlags(manga)
             },
-            [],
+            images,
             [],
             []);
     }
@@ -456,17 +470,52 @@ internal static partial class MangaDexPlugin {
     private static IReadOnlyDictionary<string, string> VolumeByChapter(AggregateEnvelope? aggregate) {
         var output = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (volumeKey, volume) in AggregateVolumes(aggregate)) {
-            var volumeNumber = string.IsNullOrWhiteSpace(volume.Volume) ? volumeKey : volume.Volume;
-            if (string.IsNullOrWhiteSpace(volumeNumber)) continue;
+            var volumeNumber = NormalizeVolumeValue(volume.Volume) ?? NormalizeVolumeValue(volumeKey);
+            if (volumeNumber is null) continue;
             foreach (var (chapterKey, chapter) in AggregateChapters(volume)) {
                 var chapterNumber = NormalizeChapterNumber(chapter.Chapter ?? chapterKey);
                 if (chapterNumber is not null && !output.ContainsKey(chapterNumber)) {
-                    output[chapterNumber] = volumeNumber.Trim();
+                    output[chapterNumber] = volumeNumber;
                 }
             }
         }
 
         return output;
+    }
+
+    private static IReadOnlyDictionary<string, string> CoverVolumeByChapter(
+        IReadOnlyList<ChapterResource> chapters,
+        IReadOnlyList<CoverResource> covers) {
+        var unvolumedChapterNumbers = chapters
+            .Where(chapter => NormalizeVolumeValue(chapter.Attributes?.Volume) is null)
+            .Select(chapter => NormalizeChapterNumber(chapter.Attributes?.Chapter))
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var coverVolumesByNumber = covers
+            .Select(cover => NormalizeVolumeValue(cover.Attributes?.Volume))
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .GroupBy(value => NormalizeNumber(value) ?? value, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        if (unvolumedChapterNumbers.Length == 0 || coverVolumesByNumber.Count == 0) {
+            return new Dictionary<string, string>();
+        }
+
+        if (coverVolumesByNumber.Count == 1) {
+            var onlyVolume = coverVolumesByNumber.Values.Single();
+            return unvolumedChapterNumbers.ToDictionary(chapter => chapter, _ => onlyVolume, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (unvolumedChapterNumbers.Length == coverVolumesByNumber.Count &&
+            unvolumedChapterNumbers.All(chapter => coverVolumesByNumber.ContainsKey(chapter))) {
+            return unvolumedChapterNumbers.ToDictionary(chapter => chapter, chapter => coverVolumesByNumber[chapter], StringComparer.OrdinalIgnoreCase);
+        }
+
+        return new Dictionary<string, string>();
     }
 
     private static IReadOnlyDictionary<string, AggregateVolume> AggregateVolumes(AggregateEnvelope? aggregate) =>
@@ -502,10 +551,87 @@ internal static partial class MangaDexPlugin {
     }
 
     private static string? EffectiveVolume(ChapterResource chapter, IReadOnlyDictionary<string, string> volumeByChapter) {
-        if (!string.IsNullOrWhiteSpace(chapter.Attributes?.Volume)) return chapter.Attributes!.Volume!.Trim();
+        if (NormalizeVolumeValue(chapter.Attributes?.Volume) is string explicitVolume) return explicitVolume;
         var chapterNumber = NormalizeChapterNumber(chapter.Attributes?.Chapter);
-        return chapterNumber is not null && volumeByChapter.TryGetValue(chapterNumber, out var volume) ? volume : null;
+        return chapterNumber is not null && volumeByChapter.TryGetValue(chapterNumber, out var volume)
+            ? NormalizeVolumeValue(volume)
+            : null;
     }
+
+    private static string? VolumeDescription(IReadOnlyList<ChapterResource> chapters) {
+        if (chapters.Count == 0) return null;
+        var parts = new List<string> { $"Includes {ChapterRange(chapters)}." };
+        var pageCount = chapters
+            .Select(chapter => chapter.Attributes?.Pages)
+            .Where(pages => pages is > 0)
+            .Sum(pages => pages!.Value);
+        if (pageCount > 0) parts.Add($"{pageCount} pages.");
+        return string.Join(' ', parts);
+    }
+
+    private static string ChapterRange(IReadOnlyList<ChapterResource> chapters) {
+        var ordered = chapters
+            .OrderBy(chapter => ChapterSortKey(chapter.Attributes?.Chapter))
+            .Select(chapter => chapter.Attributes?.Chapter)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .ToArray();
+        if (ordered.Length == 0) return $"{chapters.Count} chapter{(chapters.Count == 1 ? "" : "s")}";
+        if (ordered.Length == 1) return $"Chapter {ordered[0]}";
+        return $"Chapters {ordered[0]}-{ordered[^1]}";
+    }
+
+    private static IReadOnlyDictionary<string, int> VolumeStats(IReadOnlyList<ChapterResource> chapters) {
+        var stats = new Dictionary<string, int>();
+        if (chapters.Count > 0) stats["chapterCount"] = chapters.Count;
+        var pages = chapters
+            .Select(chapter => chapter.Attributes?.Pages)
+            .Where(pageCount => pageCount is > 0)
+            .Sum(pageCount => pageCount!.Value);
+        if (pages > 0) stats["pageCount"] = pages;
+        return stats;
+    }
+
+    private static IReadOnlyDictionary<string, string> VolumeDates(IReadOnlyList<ChapterResource> chapters) {
+        var dates = chapters
+            .Select(chapter => PublishedDate(chapter))
+            .Where(value => value is not null)
+            .Select(value => value!)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        if (dates.Length == 0) return new Dictionary<string, string>();
+        var output = new Dictionary<string, string> { ["published"] = dates[0] };
+        if (!dates[^1].Equals(dates[0], StringComparison.Ordinal)) output["completed"] = dates[^1];
+        return output;
+    }
+
+    private static string? ChapterDescription(ChapterResource chapter) {
+        var parts = new List<string>();
+        if (chapter.Attributes?.Pages is int pages && pages > 0) parts.Add($"{pages} pages");
+        var language = LanguageName(chapter.Attributes?.TranslatedLanguage);
+        if (language is not null) parts.Add($"{language} translation");
+        return parts.Count == 0 ? null : string.Join(" - ", parts);
+    }
+
+    private static string? PublishedDate(ChapterResource chapter) {
+        if (string.IsNullOrWhiteSpace(chapter.Attributes?.PublishAt)) return null;
+        var value = chapter.Attributes!.PublishAt!;
+        return value[..Math.Min(10, value.Length)];
+    }
+
+    private static IReadOnlyList<ImageCandidate> ChapterCoverImages(IReadOnlyList<ImageCandidate> volumeImages) =>
+        volumeImages
+            .Take(1)
+            .Select(image => image with {
+                Source = image.Source.Contains("cover", StringComparison.OrdinalIgnoreCase) ? image.Source : $"{image.Source} cover",
+                Rank = image.Rank is decimal rank ? Math.Max(1, rank - 3) : 5
+            })
+            .ToArray();
+
+    private static string? LanguageName(string? language) =>
+        language?.Equals(DefaultLanguage, StringComparison.OrdinalIgnoreCase) == true
+            ? "English"
+            : string.IsNullOrWhiteSpace(language) ? null : language;
 
     private static string[] Tags(MangaResource manga) {
         var attrs = manga.Attributes;
@@ -631,6 +757,11 @@ internal static partial class MangaDexPlugin {
     }
     private static string? NormalizeNumber(string? value) => decimal.TryParse(value, out var number) ? number.ToString("0.###") : null;
     private static string? NormalizeChapterNumber(string? value) => decimal.TryParse(value, out var number) ? number.ToString("0.###") : null;
+    private static string? NormalizeVolumeValue(string? value) {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var trimmed = value.Trim();
+        return trimmed.Equals("none", StringComparison.OrdinalIgnoreCase) ? null : trimmed;
+    }
 
     private static string? ExternalId(IdentifyPluginRequest request, string key) {
         foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
@@ -675,7 +806,7 @@ internal static partial class MangaDexPlugin {
     private sealed record CoverResource(string Id, string Type, CoverAttributes? Attributes);
     private sealed record CoverAttributes(string? FileName, string? Volume, string? Locale);
     private sealed record ChapterResource(string Id, ChapterAttributes? Attributes, Relationship[]? Relationships);
-    private sealed record ChapterAttributes(string? Title, string? Volume, string? Chapter, string? TranslatedLanguage, string? PublishAt, string? ReadableAt);
+    private sealed record ChapterAttributes(string? Title, string? Volume, string? Chapter, string? TranslatedLanguage, string? PublishAt, string? ReadableAt, int? Pages);
     private sealed record AggregateEnvelope(JsonElement? Volumes);
     private sealed record AggregateVolume(string? Volume, JsonElement? Chapters);
     private sealed record AggregateChapter(string? Chapter);

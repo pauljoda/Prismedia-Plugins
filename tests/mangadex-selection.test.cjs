@@ -96,3 +96,58 @@ liveTest("MangaDex process accepts Bad Ending Party when aggregate volumes is em
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
 });
+
+liveTest("MangaDex process hydrates cover-only volumes with matching feed chapters", { timeout: 30_000 }, () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prismedia-mangadex-live-test-"));
+  const requestPath = path.join(tempDir, "request.json");
+
+  fs.writeFileSync(
+    requestPath,
+    JSON.stringify({
+      protocolVersion: 1,
+      action: "lookup-id",
+      auth: {},
+      entity: {
+        id: "00000000-0000-0000-0000-000000000001",
+        kind: "book",
+        title: "Blonde Gal with Huge Tits Treats Me Like a Manslut",
+      },
+      query: {
+        title: "Blonde Gal with Huge Tits Treats Me Like a Manslut",
+        url: null,
+        externalIds: { mangadex: "a27a0cc2-5cc8-4247-b305-3019f493a40f" },
+      },
+      hints: { externalIds: {}, urls: [], title: null, filePath: null },
+      includeNsfw: true,
+    }),
+  );
+
+  try {
+    const dll = path.join(repoRoot, "plugins", "mangadex", manifest.entry);
+    const stdout = execFileSync("dotnet", [dll, requestPath], { encoding: "utf8" });
+    const response = JSON.parse(stdout);
+
+    assert.equal(response.ok, true);
+    assert.equal(response.error, null);
+    assert.equal(response.result.type, "proposal");
+
+    const proposal = response.result.proposal;
+    assert.deepEqual(proposal.children.map((child) => child.patch.title), ["Volume 1", "Volume 2"]);
+    assert.equal(proposal.children.some((child) => child.patch.title === "Volume none"), false);
+
+    for (const [index, volume] of proposal.children.entries()) {
+      assert.equal(volume.images.length, 1);
+      assert.equal(volume.patch.stats.chapterCount, 1);
+      assert.equal(volume.patch.stats.pageCount, 33);
+      assert.match(volume.patch.description, new RegExp(`Chapter ${index + 1}`));
+
+      const chapter = volume.children[0];
+      assert.ok(chapter);
+      assert.equal(chapter.images.length, 1);
+      assert.equal(chapter.patch.stats.pageCount, 33);
+      assert.match(chapter.patch.description, /English translation/);
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
