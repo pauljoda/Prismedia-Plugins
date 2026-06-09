@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Prismedia.Plugin.MusicBrainz</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prismedia.Plugin.MusicBrainz.Tests" />
+  </ItemGroup>
 </Project>

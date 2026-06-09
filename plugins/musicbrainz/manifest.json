@@ -3,8 +3,8 @@
   "apiTags": ["prismedia"],
   "id": "musicbrainz",
   "name": "MusicBrainz",
-  "version": "1.1.0",
-  "date": "2026-06-02",
+  "version": "1.1.1",
+  "date": "2026-06-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MusicBrainz.dll",
   "compat": {
