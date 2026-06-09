@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prismedia.Plugin.MangaDex")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f4f6b773b6e75bd020b4b3e2b8837a3203ec801f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+248c5283231a336c84245836d4b1614b999018f3")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prismedia.Plugin.MangaDex")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prismedia.Plugin.MangaDex")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

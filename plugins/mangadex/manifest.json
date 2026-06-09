@@ -1,10 +1,12 @@
 {
   "manifestVersion": 1,
-  "apiTags": ["prismedia"],
+  "apiTags": [
+    "prismedia"
+  ],
   "id": "mangadex",
   "name": "MangaDex",
-  "version": "1.1.3",
-  "date": "2026-06-05",
+  "version": "1.1.4",
+  "date": "2026-06-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MangaDex.dll",
   "compat": {
@@ -16,8 +18,30 @@
   "auth": [],
   "isNsfw": false,
   "supports": [
-    { "entityKind": "book", "actions": ["lookup-id", "lookup-url", "search", "cascade"] },
-    { "entityKind": "book-volume", "actions": ["lookup-id", "lookup-url", "search"] },
-    { "entityKind": "book-chapter", "actions": ["lookup-id", "lookup-url", "search"] }
+    {
+      "entityKind": "book",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search",
+        "cascade"
+      ]
+    },
+    {
+      "entityKind": "book-volume",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    },
+    {
+      "entityKind": "book-chapter",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    }
   ]
 }

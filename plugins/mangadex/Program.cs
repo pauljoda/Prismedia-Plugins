@@ -10,6 +10,8 @@ internal static partial class MangaDexPlugin {
     private static readonly string[] SfwContentRatings = ["safe", "suggestive"];
     private static readonly string[] AllContentRatings = ["safe", "suggestive", "erotica", "pornographic"];
     private const string Provider = "mangadex";
+    private static readonly string RateLimitPath = Path.Combine(Path.GetTempPath(), "prismedia-mangadex.ratelimit");
+    private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(250);
     private const string Api = "https://api.mangadex.org";
     private const string Web = "https://mangadex.org";
     private const string Uploads = "https://uploads.mangadex.org";
@@ -74,7 +76,7 @@ internal static partial class MangaDexPlugin {
         var covers = await GetCoversAsync(manga.Id);
         var chapters = await GetChaptersAsync(manga.Id, request.IncludeNsfw, PreferredLanguage(request));
         var aggregate = await GetAggregateAsync(manga.Id, PreferredLanguage(request));
-        var children = BuildChildren(manga, chapters, aggregate, covers, selectedChapterId).ToArray();
+        var children = BuildChildren(manga, chapters, aggregate, covers, selectedChapterId, PreferredLanguage(request)).ToArray();
         var images = BookImages(manga, covers).ToArray();
         var attrs = manga.Attributes;
         var external = new Dictionary<string, string> { [Provider] = manga.Id };
@@ -123,8 +125,15 @@ internal static partial class MangaDexPlugin {
         }
 
         if (request.Entity.Kind.Equals("book-chapter", StringComparison.OrdinalIgnoreCase)) {
-            var chapter = StructuralDescendants(bookProposal)
-                .FirstOrDefault(child => child.TargetKind.Equals("book-chapter", StringComparison.OrdinalIgnoreCase) && MatchesChapterRequest(child, request));
+            // Chapters are matched inside their parent volume whenever the ancestors identify
+            // one; chapter numbers restart per volume on many titles, so a global search would
+            // bind "the volume's first chapter" to the series-wide chapter 1.
+            var volumeScope = VolumeNodeForChapterRequest(bookProposal, request);
+            var candidates = (volumeScope?.Children ?? StructuralDescendants(bookProposal).ToArray())
+                .Where(child => child.TargetKind.Equals("book-chapter", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            var chapter = candidates.FirstOrDefault(child => MatchesChapterRequest(child, request))
+                ?? (volumeScope is null ? null : RelativeChapterInVolume(candidates, request));
             return chapter is null
                 ? ScopedFallback(bookProposal, request, "book-chapter")
                 : chapter with { TargetEntityId = request.Entity.Id };
@@ -133,16 +142,46 @@ internal static partial class MangaDexPlugin {
         return bookProposal;
     }
 
+    private static EntityMetadataProposal? VolumeNodeForChapterRequest(EntityMetadataProposal bookProposal, IdentifyPluginRequest request) {
+        var ancestor = request.StructuralContext?.Ancestors
+            .FirstOrDefault(snapshot => snapshot.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase));
+        if (ancestor is null) return null;
+        var volumeNumber = NormalizeNumber(ancestor.ExternalIds?.GetValueOrDefault("volume")) ?? NumberFromTitle(ancestor.Title);
+        if (volumeNumber is null) return null;
+        return bookProposal.Children.FirstOrDefault(child =>
+            child.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase) &&
+            child.Patch.ExternalIds.TryGetValue("volume", out var volume) &&
+            NormalizeNumber(volume) == volumeNumber);
+    }
+
+    // Last resort inside a known volume: line the volume's ordered chapters up against the
+    // local zero-based sort position. Only valid within a volume scope — applied globally it
+    // would bind every volume's first chapter to the same upstream chapter.
+    private static EntityMetadataProposal? RelativeChapterInVolume(IReadOnlyList<EntityMetadataProposal> chapters, IdentifyPluginRequest request) {
+        var positions = request.StructuralContext?.Positions ?? new Dictionary<string, int>();
+        var sort = PositionValue(positions, "sort", "sortOrder");
+        return sort is int index && index >= 0 && index < chapters.Count ? chapters[index] : null;
+    }
+
+    // No upstream node matched this volume/chapter, so the proposal only identifies the
+    // container title: it keeps the local entity's own name and the manga id, but none of the
+    // book's dates, urls, or text — those describe the title, not this child — and a low
+    // confidence so review surfaces it and auto-identify never applies it.
     private static EntityMetadataProposal ScopedFallback(EntityMetadataProposal bookProposal, IdentifyPluginRequest request, string targetKind) =>
         bookProposal with {
             ProposalId = $"{bookProposal.ProposalId}:{targetKind}:{request.Entity.Id}",
             TargetKind = targetKind,
             TargetEntityId = request.Entity.Id,
+            Confidence = 0.3m,
+            MatchReason = "scoped-fallback",
             Patch = bookProposal.Patch with {
                 Title = request.Entity.Title,
                 Description = null,
+                ExternalIds = MangaOnlyExternalIds(bookProposal.Patch.ExternalIds),
+                Urls = [],
                 Tags = [],
                 Credits = [],
+                Dates = new Dictionary<string, string>(),
                 Stats = new Dictionary<string, int>(),
                 Positions = request.StructuralContext?.Positions ?? new Dictionary<string, int>()
             },
@@ -151,6 +190,11 @@ internal static partial class MangaDexPlugin {
             Candidates = [],
             Relationships = []
         };
+
+    private static IReadOnlyDictionary<string, string> MangaOnlyExternalIds(IReadOnlyDictionary<string, string> externalIds) =>
+        externalIds.TryGetValue(Provider, out var mangaId)
+            ? new Dictionary<string, string> { [Provider] = mangaId }
+            : new Dictionary<string, string>();
 
     private static IEnumerable<EntityMetadataProposal> StructuralDescendants(EntityMetadataProposal proposal) {
         foreach (var child in proposal.Children) {
@@ -203,13 +247,20 @@ internal static partial class MangaDexPlugin {
             return true;
         }
 
+        // Local chapter files usually carry their feed-global chapter number in the name
+        // ("... Ch.39"); an explicit number in the title is a stronger signal than any
+        // positional alignment.
+        var titleChapterNumber = ChapterNumberFromTitle(request.Entity.Title);
+        if (titleChapterNumber is not null &&
+            chapter.Patch.ExternalIds.TryGetValue("chapterNumber", out var candidateNumber) &&
+            NormalizeChapterNumber(candidateNumber) == titleChapterNumber) {
+            return true;
+        }
+
         var positions = request.StructuralContext?.Positions ?? new Dictionary<string, int>();
         var requestChapterPosition = PositionValue(positions, "chapter", "chapterNumber");
         var proposalChapterPosition = ProposalChapterNumber(chapter);
         if (requestChapterPosition is not null) return proposalChapterPosition == requestChapterPosition;
-
-        var requestSort = PositionValue(positions, "sort", "sortOrder");
-        if (requestSort is not null && proposalChapterPosition == requestSort + 1) return true;
 
         return !string.IsNullOrWhiteSpace(request.Entity.Title) &&
             chapter.Patch.Title?.Equals(request.Entity.Title, StringComparison.OrdinalIgnoreCase) == true;
@@ -236,7 +287,8 @@ internal static partial class MangaDexPlugin {
         IReadOnlyList<ChapterResource> chapters,
         AggregateEnvelope? aggregate,
         IReadOnlyList<CoverResource> covers,
-        string? selectedChapterId) {
+        string? selectedChapterId,
+        string preferredLanguage) {
         var uniqueChapters = UniqueChapters(chapters);
         var volumeByChapter = VolumeByChapter(aggregate)
             .Concat(CoverVolumeByChapter(uniqueChapters, covers))
@@ -258,11 +310,11 @@ internal static partial class MangaDexPlugin {
                 .Where(chapter => EffectiveVolume(chapter, volumeByChapter)?.Equals(volume, StringComparison.OrdinalIgnoreCase) == true)
                 .OrderBy(chapter => ChapterSortKey(chapter.Attributes?.Chapter))
                 .ToArray();
-            children.Add(VolumeProposal(manga, volume, covers, volumeChapters, selectedChapterId));
+            children.Add(VolumeProposal(manga, volume, covers, volumeChapters, selectedChapterId, preferredLanguage));
         }
 
         foreach (var chapter in uniqueChapters.Where(chapter => EffectiveVolume(chapter, volumeByChapter) is null).OrderBy(chapter => ChapterSortKey(chapter.Attributes?.Chapter))) {
-            children.Add(ChapterProposal(manga, chapter, selectedChapterId, []));
+            children.Add(ChapterProposal(manga, chapter, selectedChapterId, [], preferredLanguage));
         }
 
         return children;
@@ -273,7 +325,8 @@ internal static partial class MangaDexPlugin {
         string volume,
         IReadOnlyList<CoverResource> covers,
         IReadOnlyList<ChapterResource> chapters,
-        string? selectedChapterId) {
+        string? selectedChapterId,
+        string preferredLanguage) {
         var coverImages = VolumeImages(manga, covers, volume).ToArray();
         var volumePosition = PositionNumber(volume);
         var positions = new Dictionary<string, int>();
@@ -305,7 +358,7 @@ internal static partial class MangaDexPlugin {
                 Flags = AdultFlags(manga)
             },
             coverImages,
-            chapters.Select(chapter => ChapterProposal(manga, chapter, selectedChapterId, ChapterCoverImages(coverImages))).ToArray(),
+            chapters.Select(chapter => ChapterProposal(manga, chapter, selectedChapterId, ChapterCoverImages(coverImages), preferredLanguage)).ToArray(),
             []);
     }
 
@@ -313,10 +366,16 @@ internal static partial class MangaDexPlugin {
         MangaResource manga,
         ChapterResource chapter,
         string? selectedChapterId,
-        IReadOnlyList<ImageCandidate> images) {
+        IReadOnlyList<ImageCandidate> images,
+        string preferredLanguage) {
         var chapterText = chapter.Attributes?.Chapter;
         var sortPosition = ZeroBasedSortPosition(chapterText);
-        var title = string.IsNullOrWhiteSpace(chapter.Attributes?.Title)
+        // The chapter list can come from a fallback translation when the preferred language
+        // has no hosted chapters; keep the structural data but do not put another language's
+        // chapter title onto the user's library entries.
+        var matchesPreferredLanguage = string.IsNullOrWhiteSpace(chapter.Attributes?.TranslatedLanguage) ||
+            chapter.Attributes!.TranslatedLanguage!.Equals(preferredLanguage, StringComparison.OrdinalIgnoreCase);
+        var title = string.IsNullOrWhiteSpace(chapter.Attributes?.Title) || !matchesPreferredLanguage
             ? $"Chapter {chapterText ?? chapter.Id}"
             : $"Chapter {chapterText}: {chapter.Attributes!.Title}";
         var dates = new Dictionary<string, string>();
@@ -403,19 +462,30 @@ internal static partial class MangaDexPlugin {
 
     private static async Task<IReadOnlyList<ChapterResource>> GetChaptersPageSetAsync(string mangaId, bool includeNsfw, string language) {
         var output = new List<ChapterResource>();
+        var fetched = 0;
         var offset = 0;
         while (true) {
             var languageQuery = string.IsNullOrWhiteSpace(language) ? "" : $"&translatedLanguage[]={Uri.EscapeDataString(language)}";
             var url = $"{Api}/manga/{mangaId}/feed?limit=100&offset={offset}&order[volume]=asc&order[chapter]=asc&includes[]=scanlation_group{languageQuery}{ContentRatingQuery(includeNsfw)}";
             var page = await GetJsonAsync<ListEnvelope<ChapterResource>>(url);
             var rows = page?.Data ?? [];
-            output.AddRange(rows);
-            if (rows.Length == 0 || output.Count >= (page?.Total ?? output.Count)) break;
+            fetched += rows.Length;
+            output.AddRange(rows.Where(IsHostedChapter));
+            if (rows.Length == 0 || fetched >= (page?.Total ?? fetched)) break;
             offset += rows.Length;
         }
 
         return output;
     }
+
+    // Licensed titles keep placeholder chapters in the feed (external-reader stubs with no
+    // hosted pages) and removed chapters stay flagged unavailable. Both carry real chapter
+    // numbers, so letting them through binds local files to chapters that have no content —
+    // for fully licensed titles the stubs are the ONLY feed entries and would rename real
+    // chapters on every identify.
+    private static bool IsHostedChapter(ChapterResource chapter) =>
+        chapter.Attributes?.IsUnavailable != true &&
+        (string.IsNullOrWhiteSpace(chapter.Attributes?.ExternalUrl) || (chapter.Attributes?.Pages ?? 0) > 0);
 
     private static async Task<AggregateEnvelope?> GetAggregateAsync(string mangaId, string language) {
         var languageQuery = string.IsNullOrWhiteSpace(language) ? "" : $"?translatedLanguage[]={Uri.EscapeDataString(language)}";
@@ -426,8 +496,64 @@ internal static partial class MangaDexPlugin {
         string.Concat((includeNsfw ? AllContentRatings : SfwContentRatings).Select(rating => $"&contentRating[]={rating}"));
 
     private static async Task<T?> GetJsonAsync<T>(string url) {
-        using var res = await Http.GetAsync(url);
-        return res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<T>(PluginHost.JsonOptions) : default;
+        for (var attempt = 0; ; attempt++) {
+            await ThrottleAsync();
+            try {
+                using var res = await Http.GetAsync(url);
+                if (res.IsSuccessStatusCode) return await res.Content.ReadFromJsonAsync<T>(PluginHost.JsonOptions);
+                if (attempt >= MaxRetries || !IsTransientStatus(res.StatusCode)) return default;
+            } catch (TaskCanceledException) when (attempt < MaxRetries) {
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1 + attempt));
+        }
+    }
+
+    private const int MaxRetries = 3;
+
+    private static bool IsTransientStatus(System.Net.HttpStatusCode status) =>
+        status is System.Net.HttpStatusCode.ServiceUnavailable
+            or System.Net.HttpStatusCode.TooManyRequests
+            or System.Net.HttpStatusCode.BadGateway
+            or System.Net.HttpStatusCode.GatewayTimeout
+            or System.Net.HttpStatusCode.RequestTimeout;
+
+    /// <summary>
+    /// Paces MangaDex requests to stay within the provider's 5-requests-per-second limit.
+    /// Identify cascades spawn a separate plugin process per entity, so pacing is coordinated
+    /// across processes via an exclusively-locked timestamp file: each call reserves the next
+    /// free time slot (at least <see cref="MinRequestInterval"/> after the previous
+    /// reservation), then waits for it. Unpaced cascades trip MangaDex's edge protection,
+    /// which blocks the IP outright.
+    /// </summary>
+    private static async Task ThrottleAsync() {
+        long slotTicks = DateTime.UtcNow.Ticks;
+        for (var attempt = 0; ; attempt++) {
+            try {
+                using (var fs = new FileStream(RateLimitPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)) {
+                    using var reader = new StreamReader(fs, System.Text.Encoding.UTF8, false, 64, leaveOpen: true);
+                    var lastTicks = long.TryParse((await reader.ReadToEndAsync()).Trim(), out var parsed) ? parsed : 0L;
+                    slotTicks = Math.Max(DateTime.UtcNow.Ticks, lastTicks + MinRequestInterval.Ticks);
+                    fs.SetLength(0);
+                    fs.Position = 0;
+                    await fs.WriteAsync(System.Text.Encoding.UTF8.GetBytes(slotTicks.ToString()));
+                }
+
+                break;
+            } catch (IOException) {
+                if (attempt >= 300) {
+                    slotTicks = DateTime.UtcNow.Ticks;
+                    break;
+                }
+
+                await Task.Delay(20);
+            }
+        }
+
+        var wait = slotTicks - DateTime.UtcNow.Ticks;
+        if (wait > 0) {
+            await Task.Delay(TimeSpan.FromTicks(wait));
+        }
     }
 
     private static IEnumerable<ImageCandidate> BookImages(MangaResource manga, IReadOnlyList<CoverResource> covers) {
@@ -771,6 +897,12 @@ internal static partial class MangaDexPlugin {
         var match = Regex.Match(value, @"(?:^|\b)(?:volume|vol\.?|v)?\s*0*(\d+(?:\.\d+)?)(?:\b|$)", RegexOptions.IgnoreCase);
         return match.Success ? NormalizeNumber(match.Groups[1].Value) : null;
     }
+
+    private static string? ChapterNumberFromTitle(string? value) {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var match = Regex.Match(value, @"\bch(?:apter)?\.?\s*0*(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
+        return match.Success ? NormalizeChapterNumber(match.Groups[1].Value) : null;
+    }
     private static string? NormalizeNumber(string? value) => decimal.TryParse(value, out var number) ? number.ToString("0.###") : null;
     private static string? NormalizeChapterNumber(string? value) => decimal.TryParse(value, out var number) ? number.ToString("0.###") : null;
     private static string? NormalizeVolumeValue(string? value) {
@@ -822,7 +954,7 @@ internal static partial class MangaDexPlugin {
     private sealed record CoverResource(string Id, string Type, CoverAttributes? Attributes);
     private sealed record CoverAttributes(string? FileName, string? Volume, string? Locale);
     private sealed record ChapterResource(string Id, ChapterAttributes? Attributes, Relationship[]? Relationships);
-    private sealed record ChapterAttributes(string? Title, string? Volume, string? Chapter, string? TranslatedLanguage, string? PublishAt, string? ReadableAt, int? Pages);
+    private sealed record ChapterAttributes(string? Title, string? Volume, string? Chapter, string? TranslatedLanguage, string? PublishAt, string? ReadableAt, int? Pages, string? ExternalUrl, bool? IsUnavailable);
     private sealed record AggregateEnvelope(JsonElement? Volumes);
     private sealed record AggregateVolume(string? Volume, JsonElement? Chapters);
     private sealed record AggregateChapter(string? Chapter);
