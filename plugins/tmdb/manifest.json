@@ -1,10 +1,12 @@
 {
   "manifestVersion": 1,
-  "apiTags": ["prismedia"],
+  "apiTags": [
+    "prismedia"
+  ],
   "id": "tmdb",
   "name": "The Movie Database",
-  "version": "1.1.5",
-  "date": "2026-06-03",
+  "version": "1.1.6",
+  "date": "2026-06-10",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Tmdb.dll",
   "compat": {
@@ -24,27 +26,53 @@
   "supports": [
     {
       "entityKind": "movie",
-      "actions": ["lookup-id", "lookup-url", "search"]
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
     },
     {
       "entityKind": "video",
-      "actions": ["lookup-id", "lookup-url", "search"]
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
     },
     {
       "entityKind": "video-series",
-      "actions": ["lookup-id", "lookup-url", "search", "cascade"]
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search",
+        "cascade"
+      ]
     },
     {
       "entityKind": "video-season",
-      "actions": ["lookup-id", "lookup-url", "search", "cascade"]
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search",
+        "cascade"
+      ]
     },
     {
       "entityKind": "person",
-      "actions": ["lookup-id", "lookup-url", "search"]
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
     },
     {
       "entityKind": "studio",
-      "actions": ["lookup-id", "lookup-url", "search"]
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
     }
   ]
 }

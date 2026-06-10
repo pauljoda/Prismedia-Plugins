@@ -251,10 +251,9 @@ internal sealed class TmdbProposalMapper {
             dates["death"] = detail.Deathday;
         }
 
+        // TMDB popularity is a trending score, not person metadata; Prismedia ignores the
+        // stat on persistence, so emitting it only clutters the review proposal.
         var stats = new Dictionary<string, int>();
-        if (detail.Popularity is { } popularity) {
-            stats["popularity"] = (int)Math.Round(popularity);
-        }
 
         var externalIds = new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() };
         if (!string.IsNullOrWhiteSpace(detail.ImdbId)) {
