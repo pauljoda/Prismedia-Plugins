@@ -429,17 +429,39 @@ internal static partial class MusicBrainzPlugin {
         return parts.Count > 0 ? string.Join(" — ", parts) : null;
     }
 
-    private static IEnumerable<string> DirectImageUrls(Relation[]? relations) =>
+    internal static IEnumerable<string> DirectImageUrls(Relation[]? relations) =>
         (relations ?? [])
-            .Where(relation => string.Equals(relation.Type, "image", StringComparison.OrdinalIgnoreCase) && IsDirectImageUrl(relation.Url?.Resource))
-            .Select(relation => relation.Url!.Resource!)
+            .Where(relation => string.Equals(relation.Type, "image", StringComparison.OrdinalIgnoreCase))
+            .Select(relation => ImageDownloadUrl(relation.Url?.Resource))
+            .Where(url => url is not null)
+            .Select(url => url!)
             .Distinct();
 
-    private static bool IsDirectImageUrl(string? url) =>
-        !string.IsNullOrWhiteSpace(url) &&
-        // Exclude wiki "File:" pages, which end in an image extension but serve HTML, not the image.
+    private static string? ImageDownloadUrl(string? url) {
+        if (string.IsNullOrWhiteSpace(url)) return null;
+
+        if (IsDirectImageUrl(url)) return url;
+
+        var commonsFileMatch = Regex.Match(
+            url,
+            @"^https?://commons\.wikimedia\.org/wiki/File:(?<file>[^#?]+)",
+            RegexOptions.IgnoreCase);
+        if (commonsFileMatch.Success) {
+            var file = commonsFileMatch.Groups["file"].Value;
+            if (IsImagePath(file)) {
+                return $"https://commons.wikimedia.org/wiki/Special:Redirect/file/{file}";
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsDirectImageUrl(string url) =>
         url.IndexOf("/wiki/", StringComparison.OrdinalIgnoreCase) < 0 &&
-        new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Any(ext => url.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+        IsImagePath(url);
+
+    private static bool IsImagePath(string value) =>
+        new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Any(ext => value.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
 
     private static string? ArtistOverview(MbArtist? artist) {
         if (artist is null) return null;
@@ -463,8 +485,8 @@ internal static partial class MusicBrainzPlugin {
         Relation[]? Relations, Tag[]? Tags, Tag[]? Genres);
     private sealed record Area(string? Name);
     private sealed record LifeSpan(string? Begin, string? End);
-    private sealed record Relation(string? Type, string? Direction, string[]? Attributes, Artist? Artist, RelationUrl? Url);
-    private sealed record RelationUrl(string? Resource);
+    internal sealed record Relation(string? Type, string? Direction, string[]? Attributes, Artist? Artist, RelationUrl? Url);
+    internal sealed record RelationUrl(string? Resource);
     private sealed record Release(
         string Id, string? Title, string? Date, string? Disambiguation, int? Score,
         [property: JsonPropertyName("artist-credit")] ArtistCredit[]? ArtistCredit,
@@ -480,7 +502,7 @@ internal static partial class MusicBrainzPlugin {
         [property: JsonPropertyName("artist-credit")] ArtistCredit[]? ArtistCredit,
         Release[]? Releases);
     private sealed record ArtistCredit(string? Name, Artist? Artist);
-    private sealed record Artist(string? Name, string? Id = null);
+    internal sealed record Artist(string? Name, string? Id = null);
     private sealed record LabelInfo(Label? Label);
     private sealed record Label(string? Name);
     private sealed record Tag(string? Name);
