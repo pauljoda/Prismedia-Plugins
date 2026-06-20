@@ -10,7 +10,8 @@ internal sealed class TmdbProposalMapper {
     public async Task<EntityMetadataProposal> MovieToProposalAsync(
         TmdbMovieDetail detail,
         string matchReason,
-        string targetKind = "video") {
+        string targetKind = "video",
+        bool includeRelationshipDetails = true) {
         var genres = detail.Genres?.Select(genre => genre.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToArray() ?? [];
         var studio = detail.ProductionCompanies?.FirstOrDefault()?.Name;
         var dates = new Dictionary<string, string>();
@@ -36,8 +37,8 @@ internal sealed class TmdbProposalMapper {
             new Dictionary<string, int>(),
             null);
 
-        var relationships = (await BuildPersonRelationshipsAsync(detail.Credits)).ToList();
-        var studioChild = await BuildStudioChildAsync(detail.ProductionCompanies?.FirstOrDefault());
+        var relationships = (await BuildPersonRelationshipsAsync(detail.Credits, includeRelationshipDetails)).ToList();
+        var studioChild = await BuildStudioChildAsync(detail.ProductionCompanies?.FirstOrDefault(), includeRelationshipDetails);
         if (studioChild is not null) {
             relationships.Add(studioChild);
         }
@@ -56,7 +57,8 @@ internal sealed class TmdbProposalMapper {
 
     public async Task<EntityMetadataProposal> TvToProposalAsync(
         TmdbTvDetail detail,
-        string matchReason) {
+        string matchReason,
+        bool includeRelationshipDetails = true) {
         var genres = detail.Genres?.Select(genre => genre.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToArray() ?? [];
         var studio = detail.Networks?.FirstOrDefault()?.Name ?? detail.ProductionCompanies?.FirstOrDefault()?.Name;
         var dates = new Dictionary<string, string>();
@@ -95,10 +97,10 @@ internal sealed class TmdbProposalMapper {
             .Select(summary => SeasonShellProposal(detail.Id, summary, "cascade"))
             .ToArray();
 
-        var relationships = (await BuildPersonRelationshipsAsync(detail.Credits)).ToList();
+        var relationships = (await BuildPersonRelationshipsAsync(detail.Credits, includeRelationshipDetails)).ToList();
         var studioChild = detail.Networks?.FirstOrDefault() is { } network
             ? NetworkStudioChild(network)
-            : await BuildStudioChildAsync(detail.ProductionCompanies?.FirstOrDefault());
+            : await BuildStudioChildAsync(detail.ProductionCompanies?.FirstOrDefault(), includeRelationshipDetails);
         if (studioChild is not null) {
             relationships.Add(studioChild);
         }
@@ -119,7 +121,8 @@ internal sealed class TmdbProposalMapper {
         int seriesId,
         TmdbSeasonSummary season,
         TmdbEpisode[]? episodes,
-        string matchReason) {
+        string matchReason,
+        bool includeRelationshipDetails = true) {
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(season.AirDate)) {
             dates["air"] = season.AirDate;
@@ -143,7 +146,7 @@ internal sealed class TmdbProposalMapper {
             null);
 
         var episodeChildren = await Task.WhenAll((episodes ?? [])
-            .Select(ep => EpisodeToProposalAsync(seriesId, season.SeasonNumber, ep, "cascade")));
+            .Select(ep => EpisodeToProposalAsync(seriesId, season.SeasonNumber, ep, "cascade", includeRelationshipDetails)));
 
         return new EntityMetadataProposal(
             $"tmdb:tv:{seriesId}:season:{season.SeasonNumber}",
@@ -160,7 +163,8 @@ internal sealed class TmdbProposalMapper {
         int seriesId,
         int seasonNumber,
         TmdbEpisode episode,
-        string matchReason) {
+        string matchReason,
+        bool includeRelationshipDetails = true) {
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(episode.AirDate)) {
             dates["air"] = episode.AirDate;
@@ -198,7 +202,7 @@ internal sealed class TmdbProposalMapper {
             patch,
             BuildEpisodeImages(episode),
             [],
-            Relationships: await BuildEpisodePersonRelationshipsAsync(episode));
+            Relationships: await BuildEpisodePersonRelationshipsAsync(episode, includeRelationshipDetails));
     }
 
     private static EntityMetadataProposal SeasonShellProposal(
@@ -349,19 +353,21 @@ internal sealed class TmdbProposalMapper {
         return credits;
     }
 
-    private async Task<IReadOnlyList<EntityMetadataProposal>> BuildPersonRelationshipsAsync(TmdbCredits? credits) {
+    private async Task<IReadOnlyList<EntityMetadataProposal>> BuildPersonRelationshipsAsync(
+        TmdbCredits? credits,
+        bool includeRelationshipDetails) {
         var seen = new HashSet<int>();
         var children = new List<EntityMetadataProposal>();
 
         foreach (var member in (credits?.Cast ?? []).OrderBy(m => m.Order ?? 0)) {
-            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen);
+            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen, includeRelationshipDetails);
             if (child is not null) {
                 children.Add(child);
             }
         }
 
         foreach (var member in (credits?.Crew ?? []).Where(m => m.Job is "Director" or "Creator" or "Writer")) {
-            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen);
+            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen, includeRelationshipDetails);
             if (child is not null) {
                 children.Add(child);
             }
@@ -370,19 +376,21 @@ internal sealed class TmdbProposalMapper {
         return children;
     }
 
-    private async Task<IReadOnlyList<EntityMetadataProposal>> BuildEpisodePersonRelationshipsAsync(TmdbEpisode episode) {
+    private async Task<IReadOnlyList<EntityMetadataProposal>> BuildEpisodePersonRelationshipsAsync(
+        TmdbEpisode episode,
+        bool includeRelationshipDetails) {
         var seen = new HashSet<int>();
         var children = new List<EntityMetadataProposal>();
 
         foreach (var member in (episode.GuestStars ?? []).OrderBy(m => m.Order ?? 0)) {
-            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen);
+            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen, includeRelationshipDetails);
             if (child is not null) {
                 children.Add(child);
             }
         }
 
         foreach (var member in (episode.Crew ?? []).Where(m => m.Job is "Director" or "Writer")) {
-            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen);
+            var child = await PersonChildAsync(member.Id, member.Name, member.ProfilePath, seen, includeRelationshipDetails);
             if (child is not null) {
                 children.Add(child);
             }
@@ -391,8 +399,17 @@ internal sealed class TmdbProposalMapper {
         return children;
     }
 
-    private async Task<EntityMetadataProposal?> PersonChildAsync(int id, string name, string? profilePath, HashSet<int> seen) {
+    private async Task<EntityMetadataProposal?> PersonChildAsync(
+        int id,
+        string name,
+        string? profilePath,
+        HashSet<int> seen,
+        bool includeRelationshipDetails) {
         if (id > 0 && seen.Add(id)) {
+            if (!includeRelationshipDetails) {
+                return PersonFallback(id, name, profilePath);
+            }
+
             try {
                 return await PersonToProposalAsync(id, "cascade");
             } catch {
@@ -437,9 +454,13 @@ internal sealed class TmdbProposalMapper {
             []);
     }
 
-    private async Task<EntityMetadataProposal?> BuildStudioChildAsync(TmdbNamed? company) {
+    private async Task<EntityMetadataProposal?> BuildStudioChildAsync(TmdbNamed? company, bool includeRelationshipDetails) {
         if (company is null) {
             return null;
+        }
+
+        if (!includeRelationshipDetails) {
+            return StudioFallback(company);
         }
 
         if (company.Id > 0) {

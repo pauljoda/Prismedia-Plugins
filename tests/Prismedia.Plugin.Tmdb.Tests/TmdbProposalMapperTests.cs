@@ -64,7 +64,7 @@ public sealed class TmdbProposalMapperTests {
         Assert.Equal("nm6421259", person.Patch.ExternalIds["imdb"]);
         Assert.Contains("https://example.test/quinta", person.Patch.Urls);
         Assert.Equal("1989-12-21", person.Patch.Dates["birth"]);
-        Assert.Equal(13, person.Patch.Stats["popularity"]);
+        Assert.DoesNotContain("popularity", person.Patch.Stats.Keys);
         Assert.Equal("Acting", person.Patch.Classification);
     }
 
@@ -113,6 +113,41 @@ public sealed class TmdbProposalMapperTests {
         Assert.Equal("HBO", studio.Patch.Title);
         Assert.Contains(studio.Patch.Urls, url => url == "https://www.themoviedb.org/network/49");
         Assert.Contains(studio.Images, image => image.Kind == "logo" && image.Url.EndsWith("/hbo.png", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task TvProposalCanReturnRelationshipShellsWithoutHydratingCreditDetails() {
+        using var http = new HttpClient(new StubHandler(request =>
+            throw new InvalidOperationException($"Unexpected TMDB request {request.RequestUri}")));
+        var mapper = new TmdbProposalMapper(new TmdbApiClient(http, "test-key"));
+        var detail = new TmdbTvDetail(
+            Id: 271267,
+            Name: "Abbott Elementary",
+            FirstAirDate: "2021-12-07",
+            LastAirDate: "2026-05-06",
+            Overview: "A workplace comedy.",
+            PosterPath: null,
+            BackdropPath: null,
+            Genres: [],
+            NumberOfSeasons: 5,
+            NumberOfEpisodes: 72,
+            Status: "Returning Series",
+            Networks: [],
+            ProductionCompanies: [],
+            Seasons: [],
+            Credits: new TmdbCredits(
+                [new TmdbCast(2140873, "Quinta Brunson", "Janine Teagues", 0, "/quinta.jpg")],
+                []),
+            Images: null);
+
+        var proposal = await mapper.TvToProposalAsync(detail, "external-id", includeRelationshipDetails: false);
+
+        var person = Assert.Single(proposal.Relationships ?? [], row => row.TargetKind == "person");
+        Assert.Equal("Quinta Brunson", person.Patch.Title);
+        Assert.Null(person.Patch.Description);
+        Assert.Equal("2140873", person.Patch.ExternalIds["tmdb"]);
+        Assert.DoesNotContain("imdb", person.Patch.ExternalIds.Keys);
+        Assert.DoesNotContain(person.Patch.Urls, url => url.Contains("example.test", StringComparison.OrdinalIgnoreCase));
     }
 
     private sealed class StubHandler(Func<HttpRequestMessage, string> respond) : HttpMessageHandler {

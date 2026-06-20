@@ -7,7 +7,8 @@ internal sealed record IdentifyPluginRequest(
     IdentifyQuery Query,
     IdentifyMatchHints Hints,
     IdentifyStructuralContext? StructuralContext = null,
-    bool IncludeNsfw = false);
+    bool IncludeNsfw = false,
+    bool IncludeRelationshipDetails = true);
 
 internal sealed record IdentifyStructuralContext(
     IReadOnlyList<IdentifyEntitySnapshot> Ancestors,

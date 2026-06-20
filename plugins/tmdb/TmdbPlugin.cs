@@ -27,7 +27,10 @@ internal sealed class TmdbPlugin {
     private async Task<IdentifyPluginResult> IdentifySeriesAsync(IdentifyPluginRequest request) {
         var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (ResolveTmdbReference(request, "tv") is { } reference) {
-            return Proposal(await _mapper.TvToProposalAsync(await _client.GetTvAsync(reference.Id), reference.MatchReason));
+            return Proposal(await _mapper.TvToProposalAsync(
+                await _client.GetTvAsync(reference.Id),
+                reference.MatchReason,
+                request.IncludeRelationshipDetails));
         }
 
         return IdentifyPluginResult.ForCandidates(await SearchSeriesCandidatesAsync(title, request.IncludeNsfw));
@@ -43,7 +46,8 @@ internal sealed class TmdbPlugin {
             return Proposal(await _mapper.MovieToProposalAsync(
                 await _client.GetMovieAsync(reference.Id),
                 reference.MatchReason,
-                MovieTargetKind(request)));
+                MovieTargetKind(request),
+                request.IncludeRelationshipDetails));
         }
 
         return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(title, request.IncludeNsfw));
@@ -73,7 +77,12 @@ internal sealed class TmdbPlugin {
             detail.Overview,
             detail.AirDate,
             detail.PosterPath);
-        return Proposal(await _mapper.SeasonToProposalAsync(seriesId.Value, summary, episodes, "context"));
+        return Proposal(await _mapper.SeasonToProposalAsync(
+            seriesId.Value,
+            summary,
+            episodes,
+            "context",
+            request.IncludeRelationshipDetails));
     }
 
     private async Task<IdentifyPluginResult> IdentifyPersonAsync(IdentifyPluginRequest request) {
