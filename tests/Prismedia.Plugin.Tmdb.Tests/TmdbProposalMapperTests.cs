@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Text;
 
@@ -148,6 +149,37 @@ public sealed class TmdbProposalMapperTests {
         Assert.Equal("2140873", person.Patch.ExternalIds["tmdb"]);
         Assert.DoesNotContain("imdb", person.Patch.ExternalIds.Keys);
         Assert.DoesNotContain(person.Patch.Urls, url => url.Contains("example.test", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void PublishedBundleContainsDeferredRelationshipHydrationContract() {
+        var repoRoot = FindRepoRoot();
+        var bundlePath = Path.Combine(repoRoot.FullName, "plugins", "tmdb", "tmdb.zip");
+        using var archive = ZipFile.OpenRead(bundlePath);
+        var assembly = archive.GetEntry("dist/Prismedia.Plugin.Tmdb.dll");
+
+        Assert.NotNull(assembly);
+        using var stream = assembly.Open();
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        var bytes = memory.ToArray();
+
+        Assert.Contains(Encoding.UTF8.GetBytes("IncludeRelationshipDetails"), bytes);
+        Assert.Contains(Encoding.UTF8.GetBytes("includeRelationshipDetails"), bytes);
+    }
+
+    private static DirectoryInfo FindRepoRoot() {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null) {
+            if (File.Exists(Path.Combine(current.FullName, "index.yml")) &&
+                File.Exists(Path.Combine(current.FullName, "plugins", "tmdb", "tmdb.zip"))) {
+                return current;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate Prismedia-Plugins repository root.");
     }
 
     private sealed class StubHandler(Func<HttpRequestMessage, string> respond) : HttpMessageHandler {

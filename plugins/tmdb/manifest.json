@@ -5,8 +5,8 @@
   ],
   "id": "tmdb",
   "name": "The Movie Database",
-  "version": "1.1.6",
-  "date": "2026-06-10",
+  "version": "1.1.7",
+  "date": "2026-06-20",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Tmdb.dll",
   "compat": {
