@@ -1,0 +1,49 @@
+{
+  "manifestVersion": 1,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "openlibrary",
+  "name": "Open Library",
+  "version": "0.1.0",
+  "date": "2026-06-25",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.OpenLibrary.dll",
+  "compat": {
+    "pluginApiMin": "1.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "1.0.0",
+    "prismediaMax": null
+  },
+  "auth": [],
+  "isNsfw": false,
+  "description": "Book, book-series, edition, and author metadata from Open Library",
+  "author": "Prismedia Community",
+  "supports": [
+    {
+      "entityKind": "book",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search",
+        "cascade"
+      ]
+    },
+    {
+      "entityKind": "book-volume",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    },
+    {
+      "entityKind": "person",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    }
+  ]
+}

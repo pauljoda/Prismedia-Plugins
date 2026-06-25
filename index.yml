@@ -186,3 +186,38 @@
         - lookup-id
         - lookup-url
         - search
+- id: openlibrary
+  name: Open Library
+  version: 0.1.0
+  date: '2026-06-25'
+  path: plugins/openlibrary/openlibrary.zip
+  sha256: 2eecd32ed0340f19709e10f33fd35ea56bfda19e801918935ff71931165faef6
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 1
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 1.0.0
+    pluginApiMax: null
+    prismediaMin: 1.0.0
+    prismediaMax: null
+  supports:
+    - entityKind: book
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+        - cascade
+    - entityKind: book-volume
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+    - entityKind: person
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+  description: Book, book-series, edition, and author metadata from Open Library
+  author: Prismedia Community

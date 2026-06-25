@@ -21,6 +21,7 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 | [MusicBrainz](./plugins/musicbrainz) | 1.1.1 | .NET process | `music-artist`, `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
 | [AniList](./plugins/anilist) | 1.0.0 | .NET process | `video-series`, `video` lookup/search/cascade | No | Anime identification (TV, movies, OVAs) via the AniList GraphQL API |
 | [MangaDex](./plugins/mangadex) | 1.1.3 | .NET process | `book` lookup/search/cascade | No | Manga and comic book identification via MangaDex |
+| [Open Library](./plugins/openlibrary) | 0.1.0 | .NET process | `book` lookup/search/cascade, `book-volume` and `person` lookup/search | No | Prose book, book-series, edition, cover, and author metadata via Open Library |
 
 `index.yml` is the source of truth. The table above is for humans.
 
