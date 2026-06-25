@@ -156,6 +156,31 @@ public sealed class OpenLibraryPluginTests {
     }
 
     [Fact]
+    public async Task SeriesLookupCanReturnRootOnlyWithoutEnumeratingChildren() {
+        using var http = new HttpClient(new StubHandler(request =>
+            throw new InvalidOperationException($"Unexpected Open Library request {request.RequestUri}")));
+        var plugin = new OpenLibraryPlugin(new OpenLibraryApiClient(http, TimeSpan.Zero));
+
+        var result = await plugin.IdentifyAsync(BookRequest(
+            "lookup-id",
+            "book",
+            "Game of Thrones",
+            new IdentifyQuery(null, null, new Dictionary<string, string> {
+                [OpenLibraryMetadata.Provider] = "series:A Song of Ice and Fire"
+            }),
+            includeStructuralChildren: false));
+
+        Assert.Equal("proposal", result.Type);
+        Assert.NotNull(result.Proposal);
+        var proposal = result.Proposal!;
+        Assert.Equal("book", proposal.TargetKind);
+        Assert.Equal("A Song of Ice and Fire", proposal.Patch.Title);
+        Assert.Equal("Book series", proposal.Patch.Classification);
+        Assert.Empty(proposal.Children);
+        Assert.Empty(proposal.Relationships ?? []);
+    }
+
+    [Fact]
     public async Task BookChildUsesAncestorSeriesContextToHydrateProposal() {
         using var http = new HttpClient(new StubHandler(request => request.RequestUri?.AbsolutePath switch {
             "/search.json" when request.RequestUri.Query.Contains("subject=series%3AA%20Song%20of%20Ice%20and%20Fire") => """
@@ -349,7 +374,9 @@ public sealed class OpenLibraryPluginTests {
         string title,
         IdentifyQuery query,
         string? filePath = null,
-        IdentifyStructuralContext? structuralContext = null) =>
+        IdentifyStructuralContext? structuralContext = null,
+        bool includeRelationshipDetails = true,
+        bool includeStructuralChildren = true) =>
         new(
             1,
             action,
@@ -357,7 +384,9 @@ public sealed class OpenLibraryPluginTests {
             new IdentifyEntitySnapshot(Guid.NewGuid(), kind, title),
             query,
             new IdentifyMatchHints(new Dictionary<string, string>(), [], title, filePath),
-            structuralContext);
+            structuralContext,
+            IncludeRelationshipDetails: includeRelationshipDetails,
+            IncludeStructuralChildren: includeStructuralChildren);
 
     private sealed class StubHandler(Func<HttpRequestMessage, string> respond) : HttpMessageHandler {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>

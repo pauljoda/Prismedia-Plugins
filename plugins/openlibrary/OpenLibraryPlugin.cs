@@ -25,7 +25,12 @@ internal sealed class OpenLibraryPlugin {
 
     private async Task<IdentifyPluginResult> IdentifyBookAsync(IdentifyPluginRequest request, string targetKind) {
         if (ResolveSeriesName(request) is { } seriesName && !IsExplicitSearch(request)) {
-            return IdentifyPluginResult.ForProposal(await SeriesProposalAsync(seriesName, request.Entity.Id, "series-id"));
+            return IdentifyPluginResult.ForProposal(await SeriesProposalAsync(
+                seriesName,
+                request.Entity.Id,
+                "series-id",
+                request.IncludeStructuralChildren,
+                request.IncludeRelationshipDetails));
         }
 
         if (await ResolveWorkLookupAsync(request) is { } lookup && !IsExplicitSearch(request)) {
@@ -34,7 +39,9 @@ internal sealed class OpenLibraryPlugin {
                 targetKind,
                 request.Entity.Id,
                 lookup.MatchReason,
-                lookup.Edition));
+                lookup.Edition,
+                request.IncludeRelationshipDetails,
+                request.IncludeStructuralChildren));
         }
 
         if (await SeriesChildProposalAsync(request, targetKind) is { } seriesChildProposal) {
@@ -66,7 +73,9 @@ internal sealed class OpenLibraryPlugin {
                 "book-volume",
                 request.Entity.Id,
                 lookup.MatchReason,
-                lookup.Edition));
+                lookup.Edition,
+                request.IncludeRelationshipDetails,
+                request.IncludeStructuralChildren));
         }
 
         if (await SeriesChildProposalAsync(request, "book-volume") is { } seriesChildProposal) {
@@ -96,7 +105,42 @@ internal sealed class OpenLibraryPlugin {
         return candidates.Length == 0 ? IdentifyPluginResult.None() : IdentifyPluginResult.ForCandidates(candidates);
     }
 
-    private async Task<EntityMetadataProposal> SeriesProposalAsync(string seriesName, Guid? targetId, string reason) {
+    private async Task<EntityMetadataProposal> SeriesProposalAsync(
+        string seriesName,
+        Guid? targetId,
+        string reason,
+        bool includeStructuralChildren,
+        bool includeRelationshipDetails) {
+        if (!includeStructuralChildren) {
+            var shellPatch = new EntityMetadataPatch(
+                seriesName,
+                null,
+                new Dictionary<string, string> {
+                    [OpenLibraryMetadata.Provider] = $"series:{seriesName}",
+                    [OpenLibraryMetadata.SeriesKey] = seriesName
+                },
+                [OpenLibraryMetadata.SearchUrl($"subject:\"series:{seriesName}\"")],
+                [],
+                null,
+                [],
+                new Dictionary<string, string>(),
+                new Dictionary<string, int>(),
+                new Dictionary<string, int>(),
+                "Book series");
+            return new EntityMetadataProposal(
+                $"openlibrary:series:{OpenLibraryMetadata.Normalize(seriesName).Replace(' ', '-')}",
+                OpenLibraryMetadata.Provider,
+                "book",
+                0.9m,
+                reason,
+                shellPatch,
+                [],
+                [],
+                [],
+                targetId,
+                []);
+        }
+
         var docs = ((await _client.SearchSeriesAsync(seriesName, 50))?.Docs ?? [])
             .Where(doc => OpenLibraryMetadata.WorkIdFromKey(doc.Key) is not null)
             .OrderBy(doc => doc.FirstPublishYear ?? int.MaxValue)
@@ -114,7 +158,7 @@ internal sealed class OpenLibraryPlugin {
         var relationships = new List<EntityMetadataProposal>();
         foreach (var author in authors.Take(5)) {
             if (OpenLibraryMetadata.AuthorIdFromKey(author.key) is { } id) {
-                relationships.Add(await AuthorRelationshipAsync(id, author.name, includeDetails: true));
+                relationships.Add(await AuthorRelationshipAsync(id, author.name, includeRelationshipDetails));
             }
         }
 
@@ -164,20 +208,22 @@ internal sealed class OpenLibraryPlugin {
         string targetKind,
         Guid? targetId,
         string reason,
-        OpenLibraryEdition? preferredEdition = null) {
+        OpenLibraryEdition? preferredEdition = null,
+        bool includeRelationshipDetails = true,
+        bool includeStructuralChildren = true) {
         var work = await _client.GetWorkAsync(workId) ?? throw new InvalidOperationException($"Open Library work '{workId}' was not found.");
         var searchDoc = await _client.SearchWorkByIdAsync(workId);
         var editions = (await _client.GetEditionsAsync(workId))?.Entries ?? [];
         var edition = SelectEdition(work, searchDoc, editions, preferredEdition);
         var subjects = (work.Subjects ?? []).Concat(searchDoc?.Subjects ?? []).ToArray();
         var seriesName = OpenLibraryMetadata.SeriesName(subjects.Concat(edition?.Series ?? []));
-        var seriesDocs = seriesName is null ? [] : (await _client.SearchSeriesAsync(seriesName, 50))?.Docs ?? [];
+        var seriesDocs = seriesName is null || !includeStructuralChildren ? [] : (await _client.SearchSeriesAsync(seriesName, 50))?.Docs ?? [];
         var position = OpenLibraryMetadata.SeriesPosition(workId, seriesDocs);
         var title = OpenLibraryMetadata.FirstNonEmpty(work.Title, searchDoc?.Title, edition?.Title, workId)!;
         var authorRefs = AuthorRefs(work, searchDoc).Take(8).ToArray();
         var relationships = new List<EntityMetadataProposal>();
         foreach (var author in authorRefs) {
-            relationships.Add(await AuthorRelationshipAsync(author.Id, author.Name, includeDetails: true));
+            relationships.Add(await AuthorRelationshipAsync(author.Id, author.Name, includeRelationshipDetails));
         }
 
         var patch = new EntityMetadataPatch(
@@ -466,7 +512,9 @@ internal sealed class OpenLibraryPlugin {
             workId,
             targetKind,
             request.Entity.Id,
-            "series-context");
+            "series-context",
+            includeRelationshipDetails: request.IncludeRelationshipDetails,
+            includeStructuralChildren: request.IncludeStructuralChildren);
     }
 
     private static EntityMetadataProposal SeriesBookShell(OpenLibrarySearchDoc doc, string seriesName, int position) {

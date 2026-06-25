@@ -9,7 +9,8 @@ internal sealed record IdentifyPluginRequest(
     IdentifyMatchHints Hints,
     IdentifyStructuralContext? StructuralContext = null,
     bool IncludeNsfw = false,
-    bool IncludeRelationshipDetails = true);
+    bool IncludeRelationshipDetails = true,
+    bool IncludeStructuralChildren = true);
 
 internal sealed record IdentifyStructuralContext(
     IReadOnlyList<IdentifyEntitySnapshot> Ancestors,

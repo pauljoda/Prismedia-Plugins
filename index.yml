@@ -191,7 +191,7 @@
   version: 0.1.0
   date: '2026-06-25'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: 2eecd32ed0340f19709e10f33fd35ea56bfda19e801918935ff71931165faef6
+  sha256: 88b664c0d0d4a506a44cc1cc2059b253552d881766347ea61cf72c6b457dc3f9
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
