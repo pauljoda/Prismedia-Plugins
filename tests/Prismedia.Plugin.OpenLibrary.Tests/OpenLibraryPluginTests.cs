@@ -355,6 +355,35 @@ public sealed class OpenLibraryPluginTests {
     }
 
     [Fact]
+    public async Task AuthorLookupPagesPastTheFirstHundredWorks() {
+        // 150 works total forces a second page (offset 0 then 100), proving the old 50-item cap is gone.
+        static string WorksPage(int offset) {
+            const int total = 150;
+            var docs = Enumerable.Range(offset, Math.Min(100, total - offset))
+                .Select(i => $$"""{ "key": "/works/OL{{i}}W", "title": "Work {{i}}", "first_publish_year": {{2000 + (i % 25)}} }""");
+            return $$"""{ "numFound": {{total}}, "docs": [ {{string.Join(",", docs)}} ] }""";
+        }
+
+        using var http = new HttpClient(new StubHandler(request => request.RequestUri?.AbsolutePath switch {
+            "/authors/OL9A.json" => """{ "name": "Prolific Author", "key": "/authors/OL9A" }""",
+            "/search.json" => WorksPage((request.RequestUri?.Query ?? "").Contains("offset=100") ? 100 : 0),
+            _ => throw new InvalidOperationException($"Unexpected Open Library request {request.RequestUri}")
+        }));
+        var plugin = new OpenLibraryPlugin(new OpenLibraryApiClient(http, TimeSpan.Zero));
+
+        var result = await plugin.IdentifyAsync(BookRequest(
+            "lookup-id",
+            "person",
+            "",
+            new IdentifyQuery(null, null, new Dictionary<string, string> { [OpenLibraryMetadata.Provider] = "OL9A" }),
+            includeStructuralChildren: true));
+
+        Assert.Equal("proposal", result.Type);
+        Assert.Equal("person", result.Proposal!.TargetKind);
+        Assert.Equal(150, result.Proposal!.Children.Count);
+    }
+
+    [Fact]
     public async Task EmptyBookSearchReturnsNone() {
         using var http = new HttpClient(new StubHandler(_ => throw new InvalidOperationException("No request expected.")));
         var plugin = new OpenLibraryPlugin(new OpenLibraryApiClient(http, TimeSpan.Zero));
