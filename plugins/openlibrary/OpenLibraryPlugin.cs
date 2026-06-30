@@ -266,8 +266,24 @@ internal sealed class OpenLibraryPlugin {
     /// cover/year/rating fields, results are de-duplicated by title (preferring an edition with a cover) and
     /// ordered newest-first.
     /// </summary>
+    // Prolific authors have hundreds of works; page through them (100 at a time) up to a sane ceiling rather
+    // than capping at one page, so a request surfaces the full bibliography.
+    private const int AuthorWorksPageSize = 100;
+    private const int AuthorWorksMax = 500;
+
     private async Task<IReadOnlyList<EntityMetadataProposal>> AuthorWorkChildrenAsync(string authorId) {
-        var docs = ((await _client.SearchWorksByAuthorAsync(authorId, 50))?.Docs ?? [])
+        var collected = new List<OpenLibrarySearchDoc>();
+        for (var offset = 0; offset < AuthorWorksMax; offset += AuthorWorksPageSize) {
+            var page = await _client.SearchWorksByAuthorAsync(authorId, AuthorWorksPageSize, offset);
+            var pageDocs = page?.Docs ?? [];
+            collected.AddRange(pageDocs);
+            // Stop once this page didn't fill (last page) or we've reached the reported total.
+            if (pageDocs.Length < AuthorWorksPageSize || offset + pageDocs.Length >= (page?.NumFound ?? 0)) {
+                break;
+            }
+        }
+
+        var docs = collected
             .Where(doc => OpenLibraryMetadata.WorkIdFromKey(doc.Key) is not null && !string.IsNullOrWhiteSpace(doc.Title))
             .GroupBy(doc => OpenLibraryMetadata.Normalize(doc.Title))
             .Select(group => group.OrderByDescending(doc => doc.CoverId is not null).First())

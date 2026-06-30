@@ -49,8 +49,8 @@ internal sealed class OpenLibraryApiClient {
     public Task<OpenLibrarySearchResponse?> SearchSeriesAsync(string seriesName, int limit) =>
         GetJsonAsync<OpenLibrarySearchResponse>($"/search.json?subject={Escape($"series:{seriesName}")}&sort=old&limit={limit}&fields={WorkFields}");
 
-    public Task<OpenLibrarySearchResponse?> SearchWorksByAuthorAsync(string authorId, int limit) =>
-        GetJsonAsync<OpenLibrarySearchResponse>($"/search.json?q={Escape($"author_key:{authorId}")}&sort=new&limit={limit}&fields={WorkFields}");
+    public Task<OpenLibrarySearchResponse?> SearchWorksByAuthorAsync(string authorId, int limit, int offset = 0) =>
+        GetJsonAsync<OpenLibrarySearchResponse>($"/search.json?q={Escape($"author_key:{authorId}")}&sort=new&limit={limit}&offset={offset}&fields={WorkFields}");
 
     public Task<OpenLibraryAuthorSearchResponse?> SearchAuthorsAsync(string query, int limit) =>
         GetJsonAsync<OpenLibraryAuthorSearchResponse>($"/search/authors.json?q={Escape(query)}&limit={limit}");
