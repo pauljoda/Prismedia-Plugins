@@ -88,7 +88,8 @@ internal sealed class OpenLibraryPlugin {
     private async Task<IdentifyPluginResult> IdentifyPersonAsync(IdentifyPluginRequest request) {
         var authorId = ResolveAuthorId(request);
         if (authorId is not null && !IsExplicitSearch(request)) {
-            return IdentifyPluginResult.ForProposal(await AuthorProposalAsync(authorId, "external-id"));
+            return IdentifyPluginResult.ForProposal(
+                await AuthorProposalAsync(authorId, "external-id", request.IncludeStructuralChildren));
         }
 
         var query = QueryTitle(request);
@@ -253,9 +254,61 @@ internal sealed class OpenLibraryPlugin {
             relationships);
     }
 
-    private async Task<EntityMetadataProposal> AuthorProposalAsync(string authorId, string reason) {
+    private async Task<EntityMetadataProposal> AuthorProposalAsync(string authorId, string reason, bool includeStructuralChildren = false) {
         var author = await _client.GetAuthorAsync(authorId) ?? throw new InvalidOperationException($"Open Library author '{authorId}' was not found.");
-        return AuthorProposal(authorId, author, reason);
+        var children = includeStructuralChildren ? await AuthorWorkChildrenAsync(authorId) : [];
+        return AuthorProposal(authorId, author, reason, children);
+    }
+
+    /// <summary>
+    /// Enumerates an author's books as structural child proposals so a request can fan each selected work out
+    /// into its own acquisition. Mirrors the series-volume children: a rich <c>author_key:</c> search supplies
+    /// cover/year/rating fields, results are de-duplicated by title (preferring an edition with a cover) and
+    /// ordered newest-first.
+    /// </summary>
+    private async Task<IReadOnlyList<EntityMetadataProposal>> AuthorWorkChildrenAsync(string authorId) {
+        var docs = ((await _client.SearchWorksByAuthorAsync(authorId, 50))?.Docs ?? [])
+            .Where(doc => OpenLibraryMetadata.WorkIdFromKey(doc.Key) is not null && !string.IsNullOrWhiteSpace(doc.Title))
+            .GroupBy(doc => OpenLibraryMetadata.Normalize(doc.Title))
+            .Select(group => group.OrderByDescending(doc => doc.CoverId is not null).First())
+            .OrderByDescending(doc => doc.FirstPublishYear ?? int.MinValue)
+            .ThenBy(doc => doc.Title, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return docs.Select(AuthorBookShell).ToArray();
+    }
+
+    /// <summary>Builds a requestable book child proposal from an author's-works search doc (no series context).</summary>
+    private static EntityMetadataProposal AuthorBookShell(OpenLibrarySearchDoc doc) {
+        var workId = OpenLibraryMetadata.WorkIdFromKey(doc.Key)!;
+        var stats = new Dictionary<string, int>();
+        if (doc.NumberOfPagesMedian is int pages) stats["pageCount"] = pages;
+        var dates = new Dictionary<string, string>();
+        if (doc.FirstPublishYear is int year) dates["published"] = year.ToString();
+        var patch = new EntityMetadataPatch(
+            doc.Title ?? workId,
+            CandidateOverview(doc),
+            WorkExternalIds(doc),
+            [OpenLibraryMetadata.WorkUrl(workId)],
+            OpenLibraryMetadata.Tags(doc.Subjects ?? [], [], [], [], null, null),
+            doc.Publishers?.FirstOrDefault(),
+            AuthorNames(doc).Select((name, index) => new CreditPatch(name, "author", null, index)).ToArray(),
+            dates,
+            stats,
+            new Dictionary<string, int>(),
+            "Book");
+        var images = doc.CoverId is int coverId
+            ? new[] { new ImageCandidate("cover", OpenLibraryMetadata.CoverUrl(coverId), "Open Library work cover", 10, null, null, null) }
+            : [];
+        return new EntityMetadataProposal(
+            $"openlibrary:author-work:{workId}",
+            OpenLibraryMetadata.Provider,
+            "book",
+            0.8m,
+            "author-works",
+            patch,
+            images,
+            [],
+            []);
     }
 
     private async Task<EntityMetadataProposal> AuthorRelationshipAsync(string authorId, string fallbackName, bool includeDetails) {
@@ -293,7 +346,7 @@ internal sealed class OpenLibraryPlugin {
             []);
     }
 
-    private static EntityMetadataProposal AuthorProposal(string authorId, OpenLibraryAuthor author, string reason) {
+    private static EntityMetadataProposal AuthorProposal(string authorId, OpenLibraryAuthor author, string reason, IReadOnlyList<EntityMetadataProposal>? children = null) {
         var name = OpenLibraryMetadata.FirstNonEmpty(author.Name, author.PersonalName, author.Title, authorId)!;
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(author.BirthDate)) dates["birth"] = author.BirthDate!;
@@ -336,7 +389,7 @@ internal sealed class OpenLibraryPlugin {
             reason,
             patch,
             images,
-            [],
+            children ?? [],
             []);
     }
 

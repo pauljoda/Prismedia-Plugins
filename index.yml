@@ -188,10 +188,10 @@
         - search
 - id: openlibrary
   name: Open Library
-  version: 0.1.0
-  date: '2026-06-25'
+  version: 0.2.0
+  date: '2026-06-30'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: 88b664c0d0d4a506a44cc1cc2059b253552d881766347ea61cf72c6b457dc3f9
+  sha256: 48c9d73f8ccd1f549e13c559c35ecc12237b56673c0e6d6f1101527d19ecd115
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
