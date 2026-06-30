@@ -76,6 +76,13 @@ internal static partial class OpenLibraryMetadata {
     public static string CoverUrl(int coverId) => $"https://covers.openlibrary.org/b/id/{coverId}-L.jpg?default=false";
     public static string AuthorPhotoUrl(int photoId) => $"https://covers.openlibrary.org/a/id/{photoId}-L.jpg?default=false";
 
+    /// <summary>
+    /// Author photo addressed by Open Library id (OLID) rather than a numeric photo id, so a search candidate can
+    /// carry a portrait without a second author fetch. <c>default=false</c> makes a photo-less author 404 so the
+    /// client falls back to its placeholder instead of a blank image.
+    /// </summary>
+    public static string AuthorPhotoUrlByOlid(string authorId) => $"https://covers.openlibrary.org/a/olid/{authorId}-M.jpg?default=false";
+
     public static string? JsonText(JsonElement? value) {
         if (value is not JsonElement element) return null;
         return element.ValueKind switch {

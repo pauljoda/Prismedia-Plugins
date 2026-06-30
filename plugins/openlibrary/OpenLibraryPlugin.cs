@@ -498,7 +498,9 @@ internal sealed class OpenLibraryPlugin {
             author.Name ?? id,
             OpenLibraryMetadata.YearFromDate(author.BirthDate),
             overviewParts.Count == 0 ? null : string.Join(' ', overviewParts),
-            null,
+            // Portrait addressed by OLID so the search thumbnail shows the author without a per-result fetch;
+            // a photo-less author 404s and the client falls back to its placeholder.
+            string.IsNullOrWhiteSpace(id) ? null : OpenLibraryMetadata.AuthorPhotoUrlByOlid(id),
             author.RatingsAverage,
             CandidateId: $"openlibrary:author:{id}",
             Source: "Open Library",
