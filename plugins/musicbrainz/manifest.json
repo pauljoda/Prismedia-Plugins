@@ -1,10 +1,12 @@
 {
   "manifestVersion": 1,
-  "apiTags": ["prismedia"],
+  "apiTags": [
+    "prismedia"
+  ],
   "id": "musicbrainz",
   "name": "MusicBrainz",
-  "version": "1.1.1",
-  "date": "2026-06-09",
+  "version": "1.2.0",
+  "date": "2026-07-02",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MusicBrainz.dll",
   "compat": {
@@ -16,8 +18,30 @@
   "auth": [],
   "isNsfw": false,
   "supports": [
-    { "entityKind": "music-artist", "actions": ["lookup-id", "lookup-url", "search"] },
-    { "entityKind": "audio-library", "actions": ["lookup-id", "lookup-url", "search"] },
-    { "entityKind": "audio-track", "actions": ["lookup-id", "lookup-url", "search"] }
+    {
+      "entityKind": "music-artist",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search",
+        "cascade"
+      ]
+    },
+    {
+      "entityKind": "audio-library",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    },
+    {
+      "entityKind": "audio-track",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    }
   ]
 }

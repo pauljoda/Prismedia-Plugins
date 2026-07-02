@@ -28,7 +28,7 @@ internal static partial class MusicBrainzPlugin {
 
     private static async Task<IdentifyPluginResult> IdentifyArtistAsync(IdentifyPluginRequest request) {
         var id = ExternalId(request) ?? ArtistIdFromUrl(request.Query.Url) ?? FirstUrlId(request.Hints.Urls, ArtistIdFromUrl);
-        if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(id, "external-id"));
+        if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(id, "external-id", request.IncludeStructuralChildren));
         var query = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
         var artists = (await SearchAsync<SearchArtistResponse>("artist", $"artist:{Quote(query)}", 10))?.Artists ?? [];
@@ -60,7 +60,7 @@ internal static partial class MusicBrainzPlugin {
         return DirectImageUrls(artist?.Relations).FirstOrDefault();
     }
 
-    private static async Task<EntityMetadataProposal> ArtistProposalAsync(string id, string reason) {
+    private static async Task<EntityMetadataProposal> ArtistProposalAsync(string id, string reason, bool includeChildren = false) {
         var artist = await GetJsonAsync<MbArtist>($"{MbBase}/artist/{id}?inc=artist-rels+genres+tags+url-rels&fmt=json");
         var tags = Tags(artist?.Genres, artist?.Tags);
         // "member of band" relations describe the band's people. Each becomes both a credit on the
@@ -91,6 +91,11 @@ internal static partial class MusicBrainzPlugin {
             .Select((url, index) => new ImageCandidate("cover", url, "musicbrainz", 10 - index, null, null, null))
             .ToArray();
 
+        // Structural children (the artist's albums) are enumerated only on request: the host asks for
+        // them when a container is being reviewed (an artist request surfacing its discography), and
+        // skips the extra rate-limited call for plain identify lookups.
+        var albumChildren = includeChildren ? await AlbumChildrenAsync(id) : [];
+
         return Proposal("music-artist", $"musicbrainz:artist:{id}", reason, new EntityMetadataPatch(
             artist?.Name ?? id,
             ArtistOverview(artist),
@@ -102,7 +107,57 @@ internal static partial class MusicBrainzPlugin {
             new Dictionary<string, string>(),
             new Dictionary<string, int>(),
             new Dictionary<string, int>(),
-            artist?.Type), images, memberProposals);
+            artist?.Type), images, memberProposals, albumChildren);
+    }
+
+    /// <summary>
+    /// Browses the artist's studio discography as album child proposals, keyed by release-group id —
+    /// the stable "the album" identity across its many per-country/per-edition releases. Secondary-typed
+    /// groups (compilations, live, remixes) are skipped so the list reads like the artist's core
+    /// discography. Release lookups accept a release-group id and resolve it to a concrete release.
+    /// </summary>
+    /// <summary>Resolves a release-group id to its earliest release id, or null when the id isn't a release group either.</summary>
+    private static async Task<string?> ResolveReleaseGroupToReleaseAsync(string id) {
+        var group = await GetJsonAsync<ReleaseGroupDetail>($"{MbBase}/release-group/{id}?inc=releases&fmt=json");
+        return (group?.Releases ?? [])
+            .Where(release => !string.IsNullOrWhiteSpace(release.Id))
+            .OrderBy(release => string.IsNullOrWhiteSpace(release.Date) ? "9999" : release.Date, StringComparer.Ordinal)
+            .Select(release => release.Id)
+            .FirstOrDefault();
+    }
+
+    private static async Task<IReadOnlyList<EntityMetadataProposal>> AlbumChildrenAsync(string artistId) {
+        var browse = await GetJsonAsync<BrowseReleaseGroupsResponse>(
+            $"{MbBase}/release-group?artist={artistId}&limit=100&fmt=json");
+        var groups = (browse?.ReleaseGroups ?? [])
+            .Where(group => !string.IsNullOrWhiteSpace(group.Id))
+            .Where(group => group.PrimaryType is { } type &&
+                (type.Equals("Album", StringComparison.OrdinalIgnoreCase) || type.Equals("EP", StringComparison.OrdinalIgnoreCase)))
+            .Where(group => group.SecondaryTypes is not { Length: > 0 })
+            .OrderBy(group => group.FirstReleaseDate ?? "9999", StringComparer.Ordinal)
+            .ToArray();
+
+        var children = new List<EntityMetadataProposal>(groups.Length);
+        foreach (var group in groups) {
+            var dates = new Dictionary<string, string>();
+            if (!string.IsNullOrWhiteSpace(group.FirstReleaseDate)) dates["released"] = group.FirstReleaseDate!;
+            var patch = new EntityMetadataPatch(
+                group.Title ?? group.Id,
+                null,
+                new Dictionary<string, string> { [Provider] = group.Id, ["musicbrainzReleaseGroup"] = group.Id },
+                [$"https://musicbrainz.org/release-group/{group.Id}"],
+                [], null, [], dates,
+                new Dictionary<string, int>(), new Dictionary<string, int>(),
+                group.PrimaryType);
+            // Cover Art Archive serves release-group front art directly; a missing cover 404s and the
+            // host renders its placeholder, so no per-album existence check is spent here.
+            var cover = new ImageCandidate("cover", $"{CoverBase}/release-group/{group.Id}/{CoverThumb}", Provider, 5, null, null, null);
+            children.Add(new EntityMetadataProposal(
+                $"musicbrainz:release-group:{group.Id}", Provider, "audio-library", 0.9m, "album-list",
+                patch, [cover], [], [], null, []));
+        }
+
+        return children;
     }
 
     /// <summary>The member's instruments/roles form the relationship role label (e.g. "lead vocals, guitar").</summary>
@@ -182,6 +237,11 @@ internal static partial class MusicBrainzPlugin {
 
     private static async Task<EntityMetadataProposal> ReleaseProposalAsync(string id, string reason) {
         var release = await GetJsonAsync<Release>($"{MbBase}/release/{id}?inc=artists+labels+tags+genres+release-groups+recordings&fmt=json");
+        if (release is null && await ResolveReleaseGroupToReleaseAsync(id) is { } releaseId) {
+            // The id was a release-group (the stable album identity an artist's discography is keyed
+            // by); resolve it to its earliest concrete release and look that up instead.
+            return await ReleaseProposalAsync(releaseId, reason);
+        }
         var images = await CoverImagesAsync(release?.ReleaseGroup?.Id, id);
         var tags = Tags(release?.Genres, release?.Tags);
         var dates = new Dictionary<string, string>();
@@ -507,6 +567,13 @@ internal static partial class MusicBrainzPlugin {
     private sealed record Label(string? Name);
     private sealed record Tag(string? Name);
     private sealed record ReleaseGroup([property: JsonPropertyName("primary-type")] string? PrimaryType, string? Id);
+    private sealed record BrowseReleaseGroupsResponse([property: JsonPropertyName("release-groups")] ReleaseGroupItem[]? ReleaseGroups);
+    private sealed record ReleaseGroupItem(
+        string Id, string? Title,
+        [property: JsonPropertyName("first-release-date")] string? FirstReleaseDate,
+        [property: JsonPropertyName("primary-type")] string? PrimaryType,
+        [property: JsonPropertyName("secondary-types")] string[]? SecondaryTypes);
+    private sealed record ReleaseGroupDetail(string Id, string? Title, Release[]? Releases);
     private sealed record Medium(string? Format, int? Position, Track[]? Tracks);
     private sealed record Track(int? Position, string? Number, string? Title, int? Length, Recording? Recording);
     private sealed record CoverArtResponse(CoverImage[]? Images);
@@ -514,7 +581,7 @@ internal static partial class MusicBrainzPlugin {
 }
 
 internal static class PluginHost { public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true, WriteIndented = false }; public static async Task<IdentifyPluginResponse> RunAsync(string[] args, Func<IdentifyPluginRequest, Task<IdentifyPluginResult>> identify) { try { if (args.Length == 0) return new(false, null, "Missing request JSON path."); var request = JsonSerializer.Deserialize<IdentifyPluginRequest>(await File.ReadAllTextAsync(args[0]), JsonOptions); if (request is null) return new(false, null, "Request JSON was empty or invalid."); return new(true, await identify(request), null); } catch (Exception ex) { return new(false, null, ex.Message); } } }
-internal sealed record IdentifyPluginRequest(int ProtocolVersion, string Action, IReadOnlyDictionary<string, string> Auth, IdentifyEntitySnapshot Entity, IdentifyQuery Query, IdentifyMatchHints Hints, IdentifyStructuralContext? StructuralContext = null);
+internal sealed record IdentifyPluginRequest(int ProtocolVersion, string Action, IReadOnlyDictionary<string, string> Auth, IdentifyEntitySnapshot Entity, IdentifyQuery Query, IdentifyMatchHints Hints, IdentifyStructuralContext? StructuralContext = null, bool IncludeStructuralChildren = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
 internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null);
