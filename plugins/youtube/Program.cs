@@ -252,6 +252,14 @@ internal static partial class YoutubePlugin {
     }
 
     private static async Task<IdentifyPluginResult> IdentifyMusicArtistAsync(IdentifyPluginRequest request) {
+        // Id-first: an id lookup (a request detail, a re-resolve) carries no title at all, so resolve
+        // the channel page directly by its browse id.
+        var channelId = ExternalId(request, Provider) ?? ExternalId(request, "youtubeChannel");
+        if (channelId is not null && channelId.StartsWith("UC", StringComparison.Ordinal) && !IsExplicitSearch(request)) {
+            var browsed = await ArtistByChannelIdAsync(channelId);
+            if (browsed is not null) return IdentifyPluginResult.ForProposal(ArtistProposal(browsed));
+        }
+
         var query = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
         if (query is null) return IdentifyPluginResult.None();
         var artists = (await MusicSearchAsync(query, ArtistParams)).Select(ParseArtistRow).OfType<MusicArtistRow>().ToList();
@@ -320,6 +328,14 @@ internal static partial class YoutubePlugin {
     }
 
     private static async Task<IdentifyPluginResult> IdentifyAlbumAsync(IdentifyPluginRequest request) {
+        // Id-first: an id lookup (a request detail, a re-resolve) carries no title at all, so resolve
+        // the album page directly by its MPREb browse id.
+        var albumId = ExternalId(request, Provider) ?? ExternalId(request, "youtubeAlbum");
+        if (albumId is not null && albumId.StartsWith("MPREb", StringComparison.Ordinal) && !IsExplicitSearch(request)) {
+            var browsed = await AlbumByBrowseIdAsync(albumId);
+            if (browsed is not null) return IdentifyPluginResult.ForProposal(await AlbumProposalAsync(browsed));
+        }
+
         var artist = AncestorTitle(request, "music-artist");
         var title = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
         if (title is null) return IdentifyPluginResult.None();
@@ -374,6 +390,62 @@ internal static partial class YoutubePlugin {
             new EntityMetadataPatch(EmptyToNull(song.Album) ?? song.Title, null, external, urls, [], null, [],
                 new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null),
             song.Images, [], [], null, []);
+    }
+
+    /// <summary>
+    /// Resolves an album page directly by its MPREb browse id — the id-lookup path. The page header
+    /// carries the canonical title/year/art; YouTube ships one of two header renderers depending on
+    /// client rollout, so both are accepted.
+    /// </summary>
+    private static async Task<MusicAlbumRow?> AlbumByBrowseIdAsync(string browseId) {
+        var root = await MusicPostAsync("browse", new { context = MusicContext(), browseId });
+        if (root is null) return null;
+        var header = FirstHeader(root.Value, "musicDetailHeaderRenderer", "musicResponsiveHeaderRenderer");
+        if (header is null) return null;
+        var title = HeaderRunsText(header.Value, "title");
+        if (string.IsNullOrWhiteSpace(title)) return null;
+        var byline = $"{HeaderRunsText(header.Value, "subtitle")} {HeaderRunsText(header.Value, "straplineTextOne")}";
+        return new MusicAlbumRow(browseId, title!, Artist: null, YearFromText(byline), RowCoverImages(header.Value));
+    }
+
+    /// <summary>Resolves an artist channel directly by its UC browse id — the id-lookup path.</summary>
+    private static async Task<MusicArtistRow?> ArtistByChannelIdAsync(string channelId) {
+        var root = await MusicPostAsync("browse", new { context = MusicContext(), browseId = channelId });
+        if (root is null) return null;
+        var header = FirstHeader(root.Value, "musicImmersiveHeaderRenderer", "musicVisualHeaderRenderer", "musicResponsiveHeaderRenderer");
+        if (header is null) return null;
+        var name = HeaderRunsText(header.Value, "title");
+        return string.IsNullOrWhiteSpace(name) ? null : new MusicArtistRow(channelId, name!, null, RowCoverImages(header.Value));
+    }
+
+    private static JsonElement? FirstHeader(JsonElement root, params string[] rendererKeys) {
+        foreach (var key in rendererKeys) {
+            var found = new List<JsonElement>();
+            CollectObjects(root, key, found);
+            if (found.Count > 0) return found[0];
+        }
+
+        return null;
+    }
+
+    /// <summary>The concatenated text of a header property's runs ("title", "subtitle"), or null.</summary>
+    private static string? HeaderRunsText(JsonElement header, string property) {
+        if (!header.TryGetProperty(property, out var text) ||
+            !text.TryGetProperty("runs", out var runs) || runs.ValueKind != JsonValueKind.Array) {
+            return null;
+        }
+
+        var joined = string.Concat(runs.EnumerateArray().Select(run => run.TryGetProperty("text", out var t) ? t.GetString() : null));
+        return string.IsNullOrWhiteSpace(joined) ? null : joined.Trim();
+    }
+
+    /// <summary>The first plausible release year in a header byline, or null.</summary>
+    private static int? YearFromText(string text) {
+        foreach (var match in System.Text.RegularExpressions.Regex.Matches(text, @"\b(19|20)\d{2}\b").Cast<System.Text.RegularExpressions.Match>()) {
+            if (int.TryParse(match.Value, out var year)) return year;
+        }
+
+        return null;
     }
 
     /// <summary>The album's track list as positioned child proposals (mirrors the MusicBrainz cascade), each carrying the album art.</summary>

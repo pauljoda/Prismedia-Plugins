@@ -1,10 +1,12 @@
 {
   "manifestVersion": 1,
-  "apiTags": ["prismedia"],
+  "apiTags": [
+    "prismedia"
+  ],
   "id": "youtube",
   "name": "YouTube Metadata",
-  "version": "1.2.1",
-  "date": "2026-06-04",
+  "version": "1.2.2",
+  "date": "2026-07-03",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Youtube.dll",
   "compat": {
@@ -16,9 +18,37 @@
   "auth": [],
   "isNsfw": false,
   "supports": [
-    { "entityKind": "video", "actions": ["lookup-id", "lookup-url", "search"] },
-    { "entityKind": "music-artist", "actions": ["lookup-id", "lookup-url", "search"] },
-    { "entityKind": "audio-library", "actions": ["lookup-id", "lookup-url", "search"] },
-    { "entityKind": "audio-track", "actions": ["lookup-id", "lookup-url", "search"] }
+    {
+      "entityKind": "video",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    },
+    {
+      "entityKind": "music-artist",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    },
+    {
+      "entityKind": "audio-library",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    },
+    {
+      "entityKind": "audio-track",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ]
+    }
   ]
 }
