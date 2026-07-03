@@ -254,7 +254,7 @@ internal static partial class YoutubePlugin {
     private static async Task<IdentifyPluginResult> IdentifyMusicArtistAsync(IdentifyPluginRequest request) {
         // Id-first: an id lookup (a request detail, a re-resolve) carries no title at all, so resolve
         // the channel page directly by its browse id.
-        var channelId = ExternalId(request, Provider) ?? ExternalId(request, "youtubeChannel");
+        var channelId = RawExternalId(request, Provider) ?? RawExternalId(request, "youtubeChannel");
         if (channelId is not null && channelId.StartsWith("UC", StringComparison.Ordinal) && !IsExplicitSearch(request)) {
             var browsed = await ArtistByChannelIdAsync(channelId);
             if (browsed is not null) return IdentifyPluginResult.ForProposal(ArtistProposal(browsed));
@@ -330,7 +330,7 @@ internal static partial class YoutubePlugin {
     private static async Task<IdentifyPluginResult> IdentifyAlbumAsync(IdentifyPluginRequest request) {
         // Id-first: an id lookup (a request detail, a re-resolve) carries no title at all, so resolve
         // the album page directly by its MPREb browse id.
-        var albumId = ExternalId(request, Provider) ?? ExternalId(request, "youtubeAlbum");
+        var albumId = RawExternalId(request, Provider) ?? RawExternalId(request, "youtubeAlbum");
         if (albumId is not null && albumId.StartsWith("MPREb", StringComparison.Ordinal) && !IsExplicitSearch(request)) {
             var browsed = await AlbumByBrowseIdAsync(albumId);
             if (browsed is not null) return IdentifyPluginResult.ForProposal(await AlbumProposalAsync(browsed));
@@ -745,6 +745,14 @@ internal static partial class YoutubePlugin {
             channel?.Images ?? [],
             [],
             []);
+    }
+
+    /// <summary>An external id read without the 11-char video-id shape gate — album (MPREb…) and channel (UC…) browse ids are longer.</summary>
+    private static string? RawExternalId(IdentifyPluginRequest request, string key) {
+        foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
+            if (ids is not null && ids.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)) return value.Trim();
+        }
+        return null;
     }
 
     private static string? ExternalId(IdentifyPluginRequest request, string key) {

@@ -55,7 +55,7 @@
   version: 1.2.2
   date: '2026-07-03'
   path: plugins/youtube/youtube.zip
-  sha256: b75e06825d70f350a697bcce37750507e3cf564a20e5ca7a06ba45c539e2538c
+  sha256: ed7c56eabb7b97c51d854b66c94d8d973c704a81e4d1e80eb69b0661c60bbf63
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 1
