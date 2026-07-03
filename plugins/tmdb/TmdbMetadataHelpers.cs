@@ -76,6 +76,27 @@ internal static class TmdbMetadataHelpers {
         return seriesId > 0 && seasonNumber > 0 && episodeNumber > 0;
     }
 
+    /// <summary>
+    /// Parses the composite season work id ("{seriesId}_s{seasonNumber}") from the request's external
+    /// ids. This is the canonical season id Prismedia stores — TMDB has no season-by-id endpoint, so
+    /// the composite form is the only one a later lookup can resolve.
+    /// </summary>
+    public static bool TryParseSeasonWorkId(IdentifyPluginRequest request, out int seriesId, out int seasonNumber) {
+        seriesId = 0;
+        seasonNumber = 0;
+        foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
+            if (ids is null || !ids.TryGetValue("tmdb", out var raw) || string.IsNullOrWhiteSpace(raw)) continue;
+            var parts = raw.Split("_s", 2, StringSplitOptions.TrimEntries);
+            if (parts.Length == 2 && int.TryParse(parts[0], out var series) && int.TryParse(parts[1], out var season)) {
+                seriesId = series;
+                seasonNumber = season;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static int? SeriesTmdbIdFromContext(IdentifyPluginRequest request) {
         var series = request.StructuralContext?.Ancestors
             .FirstOrDefault(ancestor => ancestor.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase));

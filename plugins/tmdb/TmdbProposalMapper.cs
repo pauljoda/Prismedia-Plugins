@@ -130,7 +130,9 @@ internal sealed class TmdbProposalMapper {
 
         var stats = new Dictionary<string, int> { ["episodeCount"] = season.EpisodeCount };
         var positions = new Dictionary<string, int> { ["seasonNumber"] = season.SeasonNumber };
-        var externalId = season.Id is { } seasonId ? seasonId.ToString() : $"{seriesId}_s{season.SeasonNumber}";
+        // The composite id is the canonical season work id: TMDB has no season-by-id endpoint, so only
+        // the "{seriesId}_s{seasonNumber}" form can be resolved back on a later lookup.
+        var externalId = $"{seriesId}_s{season.SeasonNumber}";
         var seasonUrl = $"https://www.themoviedb.org/tv/{seriesId}/season/{season.SeasonNumber}";
         var patch = new EntityMetadataPatch(
             string.IsNullOrWhiteSpace(season.Name) ? $"Season {season.SeasonNumber}" : season.Name,
@@ -216,7 +218,9 @@ internal sealed class TmdbProposalMapper {
 
         var stats = new Dictionary<string, int> { ["episodeCount"] = season.EpisodeCount };
         var positions = new Dictionary<string, int> { ["seasonNumber"] = season.SeasonNumber };
-        var externalId = season.Id is { } seasonId ? seasonId.ToString() : $"{seriesId}_s{season.SeasonNumber}";
+        // The composite id is the canonical season work id: TMDB has no season-by-id endpoint, so only
+        // the "{seriesId}_s{seasonNumber}" form can be resolved back on a later lookup.
+        var externalId = $"{seriesId}_s{season.SeasonNumber}";
         var seasonUrl = $"https://www.themoviedb.org/tv/{seriesId}/season/{season.SeasonNumber}";
         var patch = new EntityMetadataPatch(
             string.IsNullOrWhiteSpace(season.Name) ? $"Season {season.SeasonNumber}" : season.Name,

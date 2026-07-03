@@ -56,6 +56,14 @@ internal sealed class TmdbPlugin {
     private async Task<IdentifyPluginResult> IdentifySeasonAsync(IdentifyPluginRequest request) {
         var seriesId = TmdbMetadataHelpers.SeriesTmdbIdFromContext(request);
         var seasonNumber = TmdbMetadataHelpers.PositionValue(request, "seasonNumber", "season", "sortOrder");
+        // A bare id lookup carries the composite season work id ("{seriesId}_s{seasonNumber}") and no
+        // structural context — the id itself is the context.
+        if ((seriesId is null || seasonNumber is null) &&
+            TmdbMetadataHelpers.TryParseSeasonWorkId(request, out var idSeriesId, out var idSeasonNumber)) {
+            seriesId = idSeriesId;
+            seasonNumber = idSeasonNumber;
+        }
+
         if (seriesId is null || seasonNumber is null) {
             var parentTitle = request.StructuralContext?.Ancestors
                 .FirstOrDefault(ancestor => ancestor.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase))
