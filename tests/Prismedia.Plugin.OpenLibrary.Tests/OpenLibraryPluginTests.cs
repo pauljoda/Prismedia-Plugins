@@ -9,6 +9,8 @@ public sealed class OpenLibraryPluginTests {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/search.json", request.RequestUri?.AbsolutePath);
             Assert.Contains("A%20Song%20of%20Ice%20and%20Fire", request.RequestUri?.Query);
+            Assert.Contains("author%3A%22George%20R.%20R.%20Martin%22", request.RequestUri?.Query);
+            Assert.Contains("first_publish_year%3A%221996%22", request.RequestUri?.Query);
             return """
                 {
                   "numFound": 2,
@@ -41,7 +43,15 @@ public sealed class OpenLibraryPluginTests {
             "search",
             "book",
             "A Song of Ice and Fire",
-            new IdentifyQuery("A Song of Ice and Fire", null, null)));
+            new IdentifyQuery(
+                null,
+                null,
+                null,
+                Fields: new Dictionary<string, string> {
+                    ["title"] = "A Song of Ice and Fire",
+                    ["author"] = "George R. R. Martin",
+                    ["year"] = "1996"
+                })));
 
         Assert.Equal("candidates", result.Type);
         Assert.Contains(result.Candidates, candidate =>
@@ -103,7 +113,7 @@ public sealed class OpenLibraryPluginTests {
             var first = result.Candidates[0];
             Assert.Equal("A Song of Ice and Fire", first.Title);
             Assert.Equal("series-subject", first.MatchReason);
-            Assert.Equal("series:A Song of Ice and Fire", first.ExternalIds[OpenLibraryMetadata.Provider]);
+            Assert.Equal("series:A Song of Ice and Fire", first.ExternalIds[OpenLibraryMetadata.PrimaryIdentityNamespace]);
             Assert.Equal("A Song of Ice and Fire", first.ExternalIds[OpenLibraryMetadata.SeriesKey]);
         } finally {
             Directory.Delete(seriesPath);
@@ -131,7 +141,7 @@ public sealed class OpenLibraryPluginTests {
             "book",
             "Game of Thrones",
             new IdentifyQuery(null, null, new Dictionary<string, string> {
-                [OpenLibraryMetadata.Provider] = "series:A Song of Ice and Fire"
+                [OpenLibraryMetadata.PrimaryIdentityNamespace] = "series:A Song of Ice and Fire"
             })));
 
         Assert.Equal("proposal", result.Type);
@@ -166,7 +176,7 @@ public sealed class OpenLibraryPluginTests {
             "book",
             "Game of Thrones",
             new IdentifyQuery(null, null, new Dictionary<string, string> {
-                [OpenLibraryMetadata.Provider] = "series:A Song of Ice and Fire"
+                [OpenLibraryMetadata.PrimaryIdentityNamespace] = "series:A Song of Ice and Fire"
             }),
             includeStructuralChildren: false));
 
@@ -227,7 +237,7 @@ public sealed class OpenLibraryPluginTests {
                     "book",
                     "A Song of Ice and Fire",
                     new Dictionary<string, string> {
-                        [OpenLibraryMetadata.Provider] = "series:A Song of Ice and Fire",
+                        [OpenLibraryMetadata.PrimaryIdentityNamespace] = "series:A Song of Ice and Fire",
                         [OpenLibraryMetadata.SeriesKey] = "A Song of Ice and Fire"
                     })
             ],
@@ -331,7 +341,7 @@ public sealed class OpenLibraryPluginTests {
             "lookup-id",
             "book-volume",
             "A Game of Thrones",
-            new IdentifyQuery(null, null, new Dictionary<string, string> { [OpenLibraryMetadata.Provider] = "OL257943W" })));
+            new IdentifyQuery(null, null, new Dictionary<string, string> { ["openlibraryWork"] = "OL257943W" })));
 
         Assert.Equal("proposal", result.Type);
         Assert.NotNull(result.Proposal);
@@ -375,12 +385,54 @@ public sealed class OpenLibraryPluginTests {
             "lookup-id",
             "person",
             "",
-            new IdentifyQuery(null, null, new Dictionary<string, string> { [OpenLibraryMetadata.Provider] = "OL9A" }),
+            new IdentifyQuery(null, null, new Dictionary<string, string> { [OpenLibraryMetadata.PrimaryIdentityNamespace] = "OL9A" }),
             includeStructuralChildren: true));
 
         Assert.Equal("proposal", result.Type);
         Assert.Equal("person", result.Proposal!.TargetKind);
         Assert.Equal(150, result.Proposal!.Children.Count);
+    }
+
+    [Fact]
+    public async Task AuthorBookChildIdentityRoundTripsWithoutStructuralContext() {
+        using var http = new HttpClient(new StubHandler(request => request.RequestUri?.AbsolutePath switch {
+            "/authors/OL9A.json" => """{ "name": "Fixture Author", "key": "/authors/OL9A" }""",
+            "/search.json" when request.RequestUri.Query.Contains("author_key%3AOL9A", StringComparison.Ordinal) => """
+                { "numFound": 1, "docs": [{
+                  "key": "/works/OL1W", "title": "Fixture Book", "first_publish_year": 2020
+                }] }
+                """,
+            "/works/OL1W.json" => """
+                { "key": "/works/OL1W", "title": "Fixture Book", "subjects": [] }
+                """,
+            "/search.json" when request.RequestUri.Query.Contains("key%3A%2Fworks%2FOL1W", StringComparison.Ordinal) => """
+                { "numFound": 1, "docs": [{
+                  "key": "/works/OL1W", "title": "Fixture Book", "first_publish_year": 2020
+                }] }
+                """,
+            "/works/OL1W/editions.json" => """{ "size": 0, "entries": [] }""",
+            _ => throw new InvalidOperationException($"Unexpected Open Library request {request.RequestUri}")
+        }));
+        var plugin = new OpenLibraryPlugin(new OpenLibraryApiClient(http, TimeSpan.Zero));
+
+        var author = Assert.IsType<EntityMetadataProposal>((await plugin.IdentifyAsync(BookRequest(
+            "lookup-id",
+            "person",
+            string.Empty,
+            new IdentifyQuery(null, null, new Dictionary<string, string> { ["openlibraryauthor"] = "OL9A" }),
+            includeStructuralChildren: true))).Proposal);
+        var emittedBook = Assert.Single(author.Children);
+        var workIdentity = emittedBook.Patch.ExternalIds["openlibrarywork"];
+
+        var resolvedBook = Assert.IsType<EntityMetadataProposal>((await plugin.IdentifyAsync(BookRequest(
+            "lookup-id",
+            "book",
+            string.Empty,
+            new IdentifyQuery(null, null, new Dictionary<string, string> { ["openlibrarywork"] = workIdentity }),
+            includeStructuralChildren: false))).Proposal);
+        Assert.Equal("book", resolvedBook.TargetKind);
+        Assert.Equal(workIdentity, resolvedBook.Patch.ExternalIds["openlibrarywork"]);
+        Assert.Equal(workIdentity, resolvedBook.Patch.ExternalIds["openlibrary"]);
     }
 
     [Fact]

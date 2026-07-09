@@ -14,6 +14,8 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import yaml from "js-yaml";
+import { validateManifest } from "./manifest-contract.mjs";
+import { preserveUnselectedIndexEntry } from "./publication-contract.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = resolve(dirname(__filename), "..");
@@ -87,7 +89,7 @@ function discoverPluginIds() {
   return readdirSync(pluginsDir)
     .filter((name) => {
       const pluginDir = join(pluginsDir, name);
-      return statSync(pluginDir).isDirectory() && existsSync(join(pluginDir, "manifest.json"));
+      return statSync(pluginDir).isDirectory();
     })
     .sort((a, b) => a.localeCompare(b));
 }
@@ -149,44 +151,55 @@ const orderedIds = [
   ...existingIndex.map((entry) => String(entry.id)).filter((id) => knownIds.has(id)),
   ...discoveredIds.filter((id) => !existingById.has(id)),
 ];
+const manifestsById = new Map();
+const preservedById = new Map();
+
+// Preflight the whole publication before mutating any dist directory or zip. A malformed source
+// manifest or stale unselected artifact therefore fails without leaving a half-updated package set.
+for (const id of orderedIds) {
+  const pluginDir = join(pluginsDir, id);
+  const manifest = loadManifest(pluginDir);
+  if (!manifest) throw new Error(`Plugin is missing manifest.json: ${id}`);
+  validateManifest(manifest, id);
+  if (manifest.runtime !== "dotnet-process") throw new Error(`unsupported runtime for ${id}: ${manifest.runtime}`);
+  manifestsById.set(id, manifest);
+
+  if (requestedIds.size > 0 && !requestedIds.has(id)) {
+    const zipPath = join(pluginDir, `${id}.zip`);
+    if (!existsSync(zipPath)) {
+      throw new Error(`Partial build requires the existing zip for unselected plugin: ${id}`);
+    }
+    const digest = sha256(readFileSync(zipPath));
+    preservedById.set(id, preserveUnselectedIndexEntry(existingById.get(id), id, digest));
+  }
+}
+
 const index = [];
 
 for (const id of orderedIds) {
   const pluginDir = join(pluginsDir, id);
-  const manifest = loadManifest(pluginDir);
-  if (!manifest) {
-    throw new Error(`Plugin is missing manifest.json: ${id}`);
-  }
-
-  if (manifest.runtime !== "dotnet-process") {
-    throw new Error(`unsupported runtime for ${id}: ${manifest.runtime}`);
-  }
+  const manifest = manifestsById.get(id);
 
   const zipPath = join(pluginDir, `${id}.zip`);
-  let digest;
+  if (requestedIds.size > 0 && !requestedIds.has(id)) {
+    const preserved = preservedById.get(id);
+    index.push(preserved);
+    console.log(`preserved ${id} from its existing index entry (${preserved.sha256.slice(0, 12)}...)`);
+    continue;
+  }
 
-  if (requestedIds.size === 0 || requestedIds.has(id)) {
+  {
     buildDotnet(pluginDir);
 
     const zipBuf = zipPlugin(pluginDir);
     writeFileSync(zipPath, zipBuf);
-    digest = sha256(zipBuf);
+    const digest = sha256(zipBuf);
 
     console.log(
       `built ${id} v${manifest.version} (${zipBuf.length} bytes, sha256=${digest.slice(0, 12)}...)`,
     );
-  } else if (existsSync(zipPath)) {
-    digest = sha256(readFileSync(zipPath));
-  } else {
-    const existing = existingById.get(id);
-    if (!existing?.sha256) {
-      throw new Error(`No existing zip or index checksum for unbuilt plugin: ${id}`);
-    }
-
-    digest = String(existing.sha256);
+    index.push(indexEntryFromManifest(manifest, id, digest));
   }
-
-  index.push(indexEntryFromManifest(manifest, id, digest));
 }
 
 const dumped = yaml.dump(index, { lineWidth: 200 });

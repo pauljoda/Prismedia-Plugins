@@ -27,7 +27,7 @@ internal sealed class TmdbProposalMapper {
         var patch = new EntityMetadataPatch(
             detail.Title,
             detail.Overview,
-            new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() },
+            new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = detail.Id.ToString() },
             [TmdbMetadataHelpers.TmdbUrl("movie", detail.Id)],
             genres,
             studio,
@@ -45,7 +45,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:movie:{detail.Id}",
-            "tmdb",
+            TmdbConstants.PluginId,
             targetKind,
             matchReason is "external-id" or "url" ? 1 : 0.8m,
             matchReason,
@@ -82,7 +82,7 @@ internal sealed class TmdbProposalMapper {
         var patch = new EntityMetadataPatch(
             detail.Name,
             detail.Overview,
-            new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() },
+            new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = detail.Id.ToString() },
             [TmdbMetadataHelpers.TmdbUrl("tv", detail.Id)],
             genres,
             studio,
@@ -107,7 +107,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:tv:{detail.Id}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "video-series",
             matchReason is "external-id" or "url" ? 1 : 0.8m,
             matchReason,
@@ -130,14 +130,14 @@ internal sealed class TmdbProposalMapper {
 
         var stats = new Dictionary<string, int> { ["episodeCount"] = season.EpisodeCount };
         var positions = new Dictionary<string, int> { ["seasonNumber"] = season.SeasonNumber };
-        // The composite id is the canonical season work id: TMDB has no season-by-id endpoint, so only
-        // the "{seriesId}_s{seasonNumber}" form can be resolved back on a later lookup.
-        var externalId = $"{seriesId}_s{season.SeasonNumber}";
+        // TMDB has no season-by-id endpoint. Keep the resolvable series/season composite in a
+        // season-specific namespace so it can never be mistaken for a movie or series id.
+        var externalId = TmdbMetadataHelpers.SeasonIdentity(seriesId, season.SeasonNumber);
         var seasonUrl = $"https://www.themoviedb.org/tv/{seriesId}/season/{season.SeasonNumber}";
         var patch = new EntityMetadataPatch(
             string.IsNullOrWhiteSpace(season.Name) ? $"Season {season.SeasonNumber}" : season.Name,
             season.Overview,
-            new Dictionary<string, string> { ["tmdb"] = externalId },
+            new Dictionary<string, string> { [TmdbConstants.SeasonIdentityNamespace] = externalId },
             [seasonUrl],
             [],
             null,
@@ -152,7 +152,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:tv:{seriesId}:season:{season.SeasonNumber}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "video-season",
             0.9m,
             matchReason,
@@ -185,7 +185,12 @@ internal sealed class TmdbProposalMapper {
         var patch = new EntityMetadataPatch(
             episode.Name ?? $"Episode {episode.EpisodeNumber}",
             episode.Overview,
-            new Dictionary<string, string> { ["tmdb"] = episode.Id.ToString() },
+            new Dictionary<string, string> {
+                [TmdbConstants.EpisodeIdentityNamespace] = TmdbMetadataHelpers.EpisodeIdentity(
+                    seriesId,
+                    seasonNumber,
+                    episode.EpisodeNumber)
+            },
             [$"https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episode.EpisodeNumber}"],
             [],
             null,
@@ -197,7 +202,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:tv:{seriesId}:s{seasonNumber}:e{episode.EpisodeNumber}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "video-episode",
             0.9m,
             matchReason,
@@ -218,14 +223,14 @@ internal sealed class TmdbProposalMapper {
 
         var stats = new Dictionary<string, int> { ["episodeCount"] = season.EpisodeCount };
         var positions = new Dictionary<string, int> { ["seasonNumber"] = season.SeasonNumber };
-        // The composite id is the canonical season work id: TMDB has no season-by-id endpoint, so only
-        // the "{seriesId}_s{seasonNumber}" form can be resolved back on a later lookup.
-        var externalId = $"{seriesId}_s{season.SeasonNumber}";
+        // TMDB has no season-by-id endpoint. Keep the resolvable series/season composite in a
+        // season-specific namespace so it can never be mistaken for a movie or series id.
+        var externalId = TmdbMetadataHelpers.SeasonIdentity(seriesId, season.SeasonNumber);
         var seasonUrl = $"https://www.themoviedb.org/tv/{seriesId}/season/{season.SeasonNumber}";
         var patch = new EntityMetadataPatch(
             string.IsNullOrWhiteSpace(season.Name) ? $"Season {season.SeasonNumber}" : season.Name,
             season.Overview,
-            new Dictionary<string, string> { ["tmdb"] = externalId },
+            new Dictionary<string, string> { [TmdbConstants.SeasonIdentityNamespace] = externalId },
             [seasonUrl],
             [],
             null,
@@ -237,7 +242,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:tv:{seriesId}:season:{season.SeasonNumber}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "video-season",
             0.85m,
             matchReason,
@@ -263,7 +268,7 @@ internal sealed class TmdbProposalMapper {
         // stat on persistence, so emitting it only clutters the review proposal.
         var stats = new Dictionary<string, int>();
 
-        var externalIds = new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() };
+        var externalIds = new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = detail.Id.ToString() };
         if (!string.IsNullOrWhiteSpace(detail.ImdbId)) {
             externalIds["imdb"] = detail.ImdbId;
         }
@@ -288,7 +293,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:person:{detail.Id}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "person",
             matchReason is "external-id" or "url" ? 1 : null,
             matchReason,
@@ -309,7 +314,7 @@ internal sealed class TmdbProposalMapper {
         var patch = new EntityMetadataPatch(
             detail.Name,
             detail.Description,
-            new Dictionary<string, string> { ["tmdb"] = detail.Id.ToString() },
+            new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = detail.Id.ToString() },
             urls,
             [],
             null,
@@ -321,7 +326,7 @@ internal sealed class TmdbProposalMapper {
 
         return new EntityMetadataProposal(
             $"tmdb:studio:{detail.Id}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "studio",
             matchReason is "external-id" or "url" ? 1 : null,
             matchReason,
@@ -429,7 +434,7 @@ internal sealed class TmdbProposalMapper {
             return null;
         }
 
-        var externalIds = id > 0 ? new Dictionary<string, string> { ["tmdb"] = id.ToString() } : new Dictionary<string, string>();
+        var externalIds = id > 0 ? new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = id.ToString() } : new Dictionary<string, string>();
         var urls = id > 0 ? new[] { TmdbMetadataHelpers.TmdbUrl("person", id) } : [];
         var patch = new EntityMetadataPatch(
             name,
@@ -446,10 +451,10 @@ internal sealed class TmdbProposalMapper {
         var posterUrl = TmdbMetadataHelpers.ImageUrl(profilePath, "original");
         var images = posterUrl is null
             ? []
-            : new List<ImageCandidate> { new("poster", posterUrl, "tmdb", 10, null, null, null) };
+            : new List<ImageCandidate> { new("poster", posterUrl, TmdbConstants.PluginId, 10, null, null, null) };
         return new EntityMetadataProposal(
             id > 0 ? $"tmdb:person:{id}" : $"tmdb:person:{name}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "person",
             null,
             "cascade",
@@ -502,11 +507,11 @@ internal sealed class TmdbProposalMapper {
         var logoUrl = TmdbMetadataHelpers.ImageUrl(network.LogoPath, "w500");
         var images = logoUrl is null
             ? []
-            : new List<ImageCandidate> { new("logo", logoUrl, "tmdb", 10, null, null, null) };
+            : new List<ImageCandidate> { new("logo", logoUrl, TmdbConstants.PluginId, 10, null, null, null) };
 
         return new EntityMetadataProposal(
             network.Id > 0 ? $"tmdb:network:{network.Id}" : $"tmdb:network:{network.Name}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "studio",
             null,
             "cascade",
@@ -520,7 +525,7 @@ internal sealed class TmdbProposalMapper {
             return null;
         }
 
-        var externalIds = company.Id > 0 ? new Dictionary<string, string> { ["tmdb"] = company.Id.ToString() } : new Dictionary<string, string>();
+        var externalIds = company.Id > 0 ? new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = company.Id.ToString() } : new Dictionary<string, string>();
         var urls = company.Id > 0 ? new[] { TmdbMetadataHelpers.TmdbUrl("company", company.Id) } : [];
         var patch = new EntityMetadataPatch(
             company.Name,
@@ -535,11 +540,11 @@ internal sealed class TmdbProposalMapper {
             new Dictionary<string, int>(),
             null);
         var images = new List<ImageCandidate> {
-            new("logo", TmdbMetadataHelpers.ImageUrl(company.LogoPath, "w500")!, "tmdb", 10, null, null, null)
+            new("logo", TmdbMetadataHelpers.ImageUrl(company.LogoPath, "w500")!, TmdbConstants.PluginId, 10, null, null, null)
         };
         return new EntityMetadataProposal(
             company.Id > 0 ? $"tmdb:studio:{company.Id}" : $"tmdb:studio:{company.Name}",
-            "tmdb",
+            TmdbConstants.PluginId,
             "studio",
             null,
             "cascade",
@@ -583,7 +588,7 @@ internal sealed class TmdbProposalMapper {
             .Select(entry => new ImageCandidate(
                 kind,
                 TmdbMetadataHelpers.ImageUrl(entry.FilePath, size)!,
-                "tmdb",
+                TmdbConstants.PluginId,
                 entry.VoteAverage ?? 0,
                 entry.Language,
                 entry.Width,
@@ -594,6 +599,6 @@ internal sealed class TmdbProposalMapper {
             return;
         }
 
-        images.Add(new ImageCandidate(kind, url, "tmdb", rank, null, null, null));
+        images.Add(new ImageCandidate(kind, url, TmdbConstants.PluginId, rank, null, null, null));
     }
 }

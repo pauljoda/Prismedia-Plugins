@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "description": "Community-maintained plugins for Prismedia media library.",
   "scripts": {
-    "build": "node scripts/build-plugins.mjs"
+    "build": "node scripts/build-plugins.mjs",
+    "test:manifests": "node --test tests/manifest-v2.test.mjs tests/publication-contract.test.mjs",
+    "test:publication": "node --test tests/publication-artifacts.test.mjs"
   },
   "devDependencies": {
     "fflate": "^0.8.2",

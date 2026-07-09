@@ -3,19 +3,19 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.8
-  date: '2026-07-03'
+  version: 1.1.9
+  date: '2026-07-09'
   path: plugins/tmdb/tmdb.zip
-  sha256: 22479da2e50b32cd16c2b83b01bf4e2209c643708fd5453e2f09d90bf23515dc
+  sha256: 219e86df95c8215e6583d14fdee06133bf07c810dd034832365fbbedf225f396
   runtime: dotnet-process
   isNsfw: false
-  manifestVersion: 1
+  manifestVersion: 2
   apiTags:
     - prismedia
   compat:
-    pluginApiMin: 1.0.0
+    pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 1.0.0
+    prismediaMin: 2.0.1
     prismediaMax: null
   supports:
     - entityKind: movie
@@ -23,48 +23,107 @@
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - tmdb
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+            placeholder: Movie title
+          - key: year
+            label: Year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: video
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - tmdbepisode
+        - tmdb
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+            placeholder: Video title
+          - key: year
+            label: Year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: video-series
       actions:
         - lookup-id
         - lookup-url
         - search
-        - cascade
+      identityNamespaces:
+        - tmdb
+      search:
+        fields:
+          - key: seriesTitle
+            label: Series title
+            type: text
+            required: true
+            placeholder: Series title
+          - key: year
+            label: Premiere year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: video-season
       actions:
         - lookup-id
-        - lookup-url
-        - search
-        - cascade
+      identityNamespaces:
+        - tmdbseason
     - entityKind: person
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - tmdb
+      search:
+        fields:
+          - key: title
+            label: Name
+            type: text
+            required: true
+            placeholder: Person name
     - entityKind: studio
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - tmdb
+      search:
+        fields:
+          - key: title
+            label: Studio name
+            type: text
+            required: true
+            placeholder: Studio name
 - id: youtube
   name: YouTube Metadata
-  version: 1.2.2
-  date: '2026-07-03'
+  version: 1.2.3
+  date: '2026-07-09'
   path: plugins/youtube/youtube.zip
-  sha256: ed7c56eabb7b97c51d854b66c94d8d973c704a81e4d1e80eb69b0661c60bbf63
+  sha256: 8e276cd65e6feb73c134afecb0237911b36993e9e14406c037983de45d9e1140
   runtime: dotnet-process
   isNsfw: false
-  manifestVersion: 1
+  manifestVersion: 2
   apiTags:
     - prismedia
   compat:
-    pluginApiMin: 1.0.0
+    pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 1.0.0
+    prismediaMin: 2.0.1
     prismediaMax: null
   supports:
     - entityKind: video
@@ -72,36 +131,96 @@
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - youtube
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+            placeholder: Video title
+          - key: channel
+            label: Channel
+            type: text
+            required: false
+            placeholder: Channel name
     - entityKind: music-artist
       actions:
         - lookup-id
-        - lookup-url
         - search
+      identityNamespaces:
+        - youtubechannel
+        - youtube
+      search:
+        fields:
+          - key: title
+            label: Artist
+            type: text
+            required: true
+            placeholder: Artist name
     - entityKind: audio-library
       actions:
         - lookup-id
-        - lookup-url
         - search
+      identityNamespaces:
+        - youtubealbum
+        - youtube
+      search:
+        fields:
+          - key: title
+            label: Album
+            type: text
+            required: true
+            placeholder: Album title
+          - key: artist
+            label: Artist
+            type: text
+            required: false
+            placeholder: Artist name
+          - key: year
+            label: Year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: audio-track
       actions:
         - lookup-id
-        - lookup-url
         - search
+      identityNamespaces:
+        - youtube
+      search:
+        fields:
+          - key: title
+            label: Track
+            type: text
+            required: true
+            placeholder: Track title
+          - key: artist
+            label: Artist
+            type: text
+            required: false
+            placeholder: Artist name
+          - key: album
+            label: Album
+            type: text
+            required: false
+            placeholder: Album title
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.2.0
-  date: '2026-07-02'
+  version: 1.2.1
+  date: '2026-07-09'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: 2443facfeb6bb80b819388479a166c920e892eb5e0c3c57385964107ba9748bd
+  sha256: fe09f6198b5dc7737ff8efd3f2f2f4fb684174af5a885363fc022b39c1f82583
   runtime: dotnet-process
   isNsfw: false
-  manifestVersion: 1
+  manifestVersion: 2
   apiTags:
     - prismedia
   compat:
-    pluginApiMin: 1.0.0
+    pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 1.0.0
+    prismediaMin: 2.0.1
     prismediaMax: null
   supports:
     - entityKind: music-artist
@@ -109,32 +228,97 @@
         - lookup-id
         - lookup-url
         - search
-        - cascade
+      identityNamespaces:
+        - musicbrainzartist
+        - musicbrainz
+      search:
+        fields:
+          - key: title
+            label: Artist
+            type: text
+            required: true
+            placeholder: Artist name
+          - key: country
+            label: Country
+            type: text
+            required: false
+            placeholder: US
+          - key: startYear
+            label: Started
+            type: year
+            required: false
+            placeholder: '1994'
     - entityKind: audio-library
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - musicbrainzrelease
+        - musicbrainzreleasegroup
+        - musicbrainz
+      search:
+        fields:
+          - key: title
+            label: Album
+            type: text
+            required: true
+            placeholder: Album title
+          - key: artist
+            label: Artist
+            type: text
+            required: false
+            placeholder: Artist name
+          - key: year
+            label: Release year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: audio-track
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - musicbrainzrecording
+        - musicbrainz
+      search:
+        fields:
+          - key: title
+            label: Track
+            type: text
+            required: true
+            placeholder: Track title
+          - key: artist
+            label: Artist
+            type: text
+            required: false
+            placeholder: Artist name
+          - key: album
+            label: Album
+            type: text
+            required: false
+            placeholder: Album title
+          - key: year
+            label: Release year
+            type: year
+            required: false
+            placeholder: '2024'
 - id: anilist
   name: AniList
-  version: 1.0.1
-  date: '2026-05-29'
+  version: 1.0.2
+  date: '2026-07-09'
   path: plugins/anilist/anilist.zip
-  sha256: c034eacf927c79c5e906ced169730f26cbfe880b6f20f4855a3de166c6d080c1
+  sha256: 8778b8a87697c7ffba2b06dd1e537d71df6528d2b498dfe3d1ab51e7e26a1d01
   runtime: dotnet-process
   isNsfw: false
-  manifestVersion: 1
+  manifestVersion: 2
   apiTags:
     - prismedia
   compat:
-    pluginApiMin: 1.0.0
+    pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 1.0.0
+    prismediaMin: 2.0.1
     prismediaMax: null
   supports:
     - entityKind: video-series
@@ -142,33 +326,60 @@
         - lookup-id
         - lookup-url
         - search
-        - cascade
+      identityNamespaces:
+        - anilist
+      search:
+        fields:
+          - key: seriesTitle
+            label: Series title
+            type: text
+            required: true
+            placeholder: Anime title
+          - key: year
+            label: Premiere year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: video-season
       actions:
         - lookup-id
-        - lookup-url
-        - search
-        - cascade
+      identityNamespaces:
+        - anilistseason
     - entityKind: video
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - anilistepisode
+        - anilist
+      search:
+        fields:
+          - key: title
+            label: Anime title
+            type: text
+            required: true
+            placeholder: Movie or series title
+          - key: year
+            label: Premiere year
+            type: year
+            required: false
+            placeholder: '2024'
 - id: mangadex
   name: MangaDex
-  version: 1.1.4
-  date: '2026-06-09'
+  version: 1.1.5
+  date: '2026-07-09'
   path: plugins/mangadex/mangadex.zip
-  sha256: cbe9d7a0cd054994989c4ab35226e158dc0d3edba888107a48f268dee4ae4881
+  sha256: 99017f6ddf1cc3292736a89ad8f974d3ab7f83e0a829384a82c41813512a9b7a
   runtime: dotnet-process
   isNsfw: false
-  manifestVersion: 1
+  manifestVersion: 2
   apiTags:
     - prismedia
   compat:
-    pluginApiMin: 1.0.0
+    pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 1.0.0
+    prismediaMin: 2.0.1
     prismediaMax: null
   supports:
     - entityKind: book
@@ -176,32 +387,51 @@
         - lookup-id
         - lookup-url
         - search
-        - cascade
+      identityNamespaces:
+        - mangadex
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+            placeholder: Manga title
+          - key: creator
+            label: Creator
+            type: text
+            required: false
+            placeholder: Author or artist
+          - key: year
+            label: Year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: book-volume
       actions:
         - lookup-id
-        - lookup-url
-        - search
+      identityNamespaces:
+        - mangadexvolume
     - entityKind: book-chapter
       actions:
         - lookup-id
         - lookup-url
-        - search
+      identityNamespaces:
+        - mangadexchapter
 - id: openlibrary
   name: Open Library
-  version: 0.3.0
-  date: '2026-06-30'
+  version: 0.3.1
+  date: '2026-07-09'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: 116cb3c1bd5e3b924440a2abf8397e2998da5ee6ddf83423f359fa165701799c
+  sha256: 614423365f7f8fe013167b5b1e2bc0d25ec2a0f6be7bd80c298dd29d9a7758a4
   runtime: dotnet-process
   isNsfw: false
-  manifestVersion: 1
+  manifestVersion: 2
   apiTags:
     - prismedia
   compat:
-    pluginApiMin: 1.0.0
+    pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 1.0.0
+    prismediaMin: 2.0.1
     prismediaMax: null
   supports:
     - entityKind: book
@@ -209,16 +439,88 @@
         - lookup-id
         - lookup-url
         - search
-        - cascade
+      identityNamespaces:
+        - openlibrary
+        - openlibrarywork
+        - openlibraryedition
+        - isbn
+        - isbn10
+        - isbn13
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+            placeholder: Book or series title
+          - key: author
+            label: Author
+            type: text
+            required: false
+            placeholder: Author name
+          - key: year
+            label: First published
+            type: year
+            required: false
+            placeholder: '1996'
+          - key: seriesTitle
+            label: Series
+            type: text
+            required: false
+            placeholder: Series title
     - entityKind: book-volume
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - openlibrary
+        - openlibrarywork
+        - openlibraryedition
+        - isbn
+        - isbn10
+        - isbn13
+      search:
+        fields:
+          - key: title
+            label: Volume title
+            type: text
+            required: true
+            placeholder: Volume title
+          - key: author
+            label: Author
+            type: text
+            required: false
+            placeholder: Author name
+          - key: year
+            label: First published
+            type: year
+            required: false
+            placeholder: '1996'
+          - key: seriesTitle
+            label: Series
+            type: text
+            required: false
+            placeholder: Series title
     - entityKind: person
       actions:
         - lookup-id
         - lookup-url
         - search
+      identityNamespaces:
+        - openlibrary
+        - openlibraryauthor
+      search:
+        fields:
+          - key: title
+            label: Author
+            type: text
+            required: true
+            placeholder: Author name
+          - key: birthYear
+            label: Birth year
+            type: year
+            required: false
+            placeholder: '1948'
   description: Book, book-series, edition, and author metadata from Open Library
   author: Prismedia Community

@@ -6,4 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>Prismedia.Plugin.Youtube</AssemblyName>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prismedia.Plugin.Youtube.Tests" />
+  </ItemGroup>
 </Project>

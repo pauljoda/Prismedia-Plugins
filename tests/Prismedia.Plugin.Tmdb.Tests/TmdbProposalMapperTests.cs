@@ -57,6 +57,8 @@ public sealed class TmdbProposalMapperTests {
         var season = Assert.Single(proposal.Children);
         Assert.Equal("video-season", season.TargetKind);
         Assert.Equal(1, season.Patch.Positions["seasonNumber"]);
+        Assert.Equal("271267:1", season.Patch.ExternalIds["tmdbseason"]);
+        Assert.DoesNotContain("tmdb", season.Patch.ExternalIds.Keys);
         Assert.Empty(season.Children);
         var person = Assert.Single(proposal.Relationships ?? [], row => row.TargetKind == "person");
         Assert.Equal("Quinta Brunson", person.Patch.Title);

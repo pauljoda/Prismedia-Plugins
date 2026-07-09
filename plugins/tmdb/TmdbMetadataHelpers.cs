@@ -38,7 +38,7 @@ internal static class TmdbMetadataHelpers {
         var result = row.Result;
         return new(
             $"tmdb:{mediaType}:{result.Id}",
-            new Dictionary<string, string> { ["tmdb"] = result.Id.ToString() },
+            new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = result.Id.ToString() },
             result.Name ?? result.Title ?? string.Empty,
             result.Overview,
             ImageUrl(result.PosterPath ?? result.ProfilePath ?? result.LogoPath, "w342"),
@@ -51,7 +51,7 @@ internal static class TmdbMetadataHelpers {
     public static EntitySearchCandidate ToCandidate(TmdbSearchResult result, string mediaType) =>
         new(
             $"tmdb:{mediaType}:{result.Id}",
-            new Dictionary<string, string> { ["tmdb"] = result.Id.ToString() },
+            new Dictionary<string, string> { [TmdbConstants.IdentityNamespace] = result.Id.ToString() },
             result.Name ?? result.Title ?? string.Empty,
             result.Overview,
             ImageUrl(result.PosterPath ?? result.ProfilePath ?? result.LogoPath, "w342"),
@@ -61,19 +61,22 @@ internal static class TmdbMetadataHelpers {
             "title-search");
 
     public static int? ExtractTmdbId(IReadOnlyDictionary<string, string>? externalIds) {
-        if (externalIds is null || !externalIds.TryGetValue("tmdb", out var value)) {
+        if (!TryGetValue(externalIds, TmdbConstants.IdentityNamespace, out var value)) {
             return null;
         }
 
-        var match = Regex.Match(value, @"\d+");
-        return match.Success && int.TryParse(match.Value, out var id) ? id : null;
+        return int.TryParse(value, out var id) && id > 0 ? id : null;
     }
 
     public static bool TryEpisodeContext(IdentifyPluginRequest request, out int seriesId, out int seasonNumber, out int episodeNumber) {
+        if (TryParseEpisodeWorkId(request, out seriesId, out seasonNumber, out episodeNumber)) {
+            return true;
+        }
+
         seriesId = SeriesTmdbIdFromContext(request) ?? 0;
         seasonNumber = PositionValue(request, "seasonNumber", "season") ?? SeasonNumberFromAncestor(request) ?? 0;
         episodeNumber = PositionValue(request, "episodeNumber", "episode", "sortOrder") ?? 0;
-        return seriesId > 0 && seasonNumber > 0 && episodeNumber > 0;
+        return seriesId > 0 && seasonNumber >= 0 && episodeNumber > 0;
     }
 
     /// <summary>
@@ -85,9 +88,17 @@ internal static class TmdbMetadataHelpers {
         seriesId = 0;
         seasonNumber = 0;
         foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
-            if (ids is null || !ids.TryGetValue("tmdb", out var raw) || string.IsNullOrWhiteSpace(raw)) continue;
-            var parts = raw.Split("_s", 2, StringSplitOptions.TrimEntries);
-            if (parts.Length == 2 && int.TryParse(parts[0], out var series) && int.TryParse(parts[1], out var season)) {
+            if (TryGetValue(ids, TmdbConstants.SeasonIdentityNamespace, out var canonical) &&
+                TryParseSeasonIdentity(canonical, out seriesId, out seasonNumber)) {
+                return true;
+            }
+
+            // Legacy v1/v2-preview values stored the composite under the generic tmdb namespace.
+            if (!TryGetValue(ids, TmdbConstants.IdentityNamespace, out var raw) || string.IsNullOrWhiteSpace(raw)) continue;
+            var parts = raw.Split("_s", 2, StringSplitOptions.None);
+            if (parts.Length == 2 &&
+                int.TryParse(parts[0], out var series) && series > 0 &&
+                int.TryParse(parts[1], out var season) && season >= 0) {
                 seriesId = series;
                 seasonNumber = season;
                 return true;
@@ -95,6 +106,55 @@ internal static class TmdbMetadataHelpers {
         }
 
         return false;
+    }
+
+    public static string SeasonIdentity(int seriesId, int seasonNumber) => $"{seriesId}:{seasonNumber}";
+
+    public static bool TryParseSeasonIdentity(string? value, out int seriesId, out int seasonNumber) {
+        seriesId = 0;
+        seasonNumber = 0;
+        if (string.IsNullOrEmpty(value)) return false;
+        var separator = value.IndexOf(':');
+        return separator > 0 && separator == value.LastIndexOf(':') &&
+            int.TryParse(value[..separator], out seriesId) && seriesId > 0 &&
+            int.TryParse(value[(separator + 1)..], out seasonNumber) && seasonNumber >= 0;
+    }
+
+    public static string EpisodeIdentity(int seriesId, int seasonNumber, int episodeNumber) =>
+        $"{seriesId}:{seasonNumber}:{episodeNumber}";
+
+    public static bool TryParseEpisodeWorkId(
+        IdentifyPluginRequest request,
+        out int seriesId,
+        out int seasonNumber,
+        out int episodeNumber) {
+        foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
+            if (TryGetValue(ids, TmdbConstants.EpisodeIdentityNamespace, out var value) &&
+                TryParseEpisodeIdentity(value, out seriesId, out seasonNumber, out episodeNumber)) {
+                return true;
+            }
+        }
+
+        seriesId = 0;
+        seasonNumber = 0;
+        episodeNumber = 0;
+        return false;
+    }
+
+    public static bool TryParseEpisodeIdentity(
+        string? value,
+        out int seriesId,
+        out int seasonNumber,
+        out int episodeNumber) {
+        seriesId = 0;
+        seasonNumber = 0;
+        episodeNumber = 0;
+        if (string.IsNullOrEmpty(value)) return false;
+        var parts = value.Split(':', StringSplitOptions.None);
+        return parts.Length == 3 &&
+            int.TryParse(parts[0], out seriesId) && seriesId > 0 &&
+            int.TryParse(parts[1], out seasonNumber) && seasonNumber >= 0 &&
+            int.TryParse(parts[2], out episodeNumber) && episodeNumber > 0;
     }
 
     public static int? SeriesTmdbIdFromContext(IdentifyPluginRequest request) {
@@ -117,6 +177,24 @@ internal static class TmdbMetadataHelpers {
 
         return null;
     }
+
+    public static string? SearchField(IdentifyPluginRequest request, params string[] keys) {
+        foreach (var key in keys) {
+            if (TryGetValue(request.Query.Fields, key, out var value) && !string.IsNullOrWhiteSpace(value)) {
+                return value.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    public static int? SearchYear(IdentifyPluginRequest request) =>
+        int.TryParse(SearchField(request, TmdbConstants.SearchFields.Year), out var year) && year is >= 1800 and <= 2200
+            ? year
+            : null;
+
+    public static bool HasSearchFields(IdentifyPluginRequest request) =>
+        request.Query.Fields?.Values.Any(value => !string.IsNullOrWhiteSpace(value)) == true;
 
     public static bool ParseTmdbUrl(string url) => ParseTmdbUrlValue(url) is not null;
 
@@ -169,4 +247,21 @@ internal static class TmdbMetadataHelpers {
 
     private static int? ParseYear(string? value) =>
         !string.IsNullOrWhiteSpace(value) && value.Length >= 4 && int.TryParse(value[..4], out var year) ? year : null;
+
+    private static bool TryGetValue(
+        IReadOnlyDictionary<string, string>? values,
+        string key,
+        out string value) {
+        if (values is not null) {
+            foreach (var pair in values) {
+                if (pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) {
+                    value = pair.Value;
+                    return true;
+                }
+            }
+        }
+
+        value = string.Empty;
+        return false;
+    }
 }

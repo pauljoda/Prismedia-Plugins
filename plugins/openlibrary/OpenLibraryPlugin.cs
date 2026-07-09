@@ -53,7 +53,7 @@ internal sealed class OpenLibraryPlugin {
             return IdentifyPluginResult.None();
         }
 
-        var search = await _client.SearchWorksAsync(query, 10);
+        var search = await _client.SearchWorksAsync(BuildWorkSearchQuery(request, query), 10);
         var docs = search?.Docs ?? [];
         var workCandidates = WorkCandidates(docs, query).ToArray();
         var seriesCandidates = SeriesCandidates(docs, query, PreferImpliedSeries(request, targetKind)).ToArray();
@@ -97,7 +97,10 @@ internal sealed class OpenLibraryPlugin {
             return IdentifyPluginResult.None();
         }
 
-        var authors = (await _client.SearchAuthorsAsync(query, 10))?.Docs ?? [];
+        var birthYear = int.TryParse(SearchField(request, OpenLibraryMetadata.SearchFields.BirthYear), out var parsedBirthYear) ? parsedBirthYear : (int?)null;
+        var authors = ((await _client.SearchAuthorsAsync(query, 10))?.Docs ?? [])
+            .Where(author => birthYear is null || OpenLibraryMetadata.YearFromDate(author.BirthDate) == birthYear)
+            .ToArray();
         var candidates = authors
             .Where(author => OpenLibraryMetadata.AuthorIdFromKey(author.Key) is not null || !string.IsNullOrWhiteSpace(author.Key))
             .Select(author => AuthorCandidate(author))
@@ -117,7 +120,7 @@ internal sealed class OpenLibraryPlugin {
                 seriesName,
                 null,
                 new Dictionary<string, string> {
-                    [OpenLibraryMetadata.Provider] = $"series:{seriesName}",
+                    [OpenLibraryMetadata.PrimaryIdentityNamespace] = $"series:{seriesName}",
                     [OpenLibraryMetadata.SeriesKey] = seriesName
                 },
                 [OpenLibraryMetadata.SearchUrl($"subject:\"series:{seriesName}\"")],
@@ -130,7 +133,7 @@ internal sealed class OpenLibraryPlugin {
                 "Book series");
             return new EntityMetadataProposal(
                 $"openlibrary:series:{OpenLibraryMetadata.Normalize(seriesName).Replace(' ', '-')}",
-                OpenLibraryMetadata.Provider,
+                OpenLibraryMetadata.PluginId,
                 "book",
                 0.9m,
                 reason,
@@ -171,7 +174,7 @@ internal sealed class OpenLibraryPlugin {
             ? new Dictionary<string, int> { ["bookCount"] = children.Length }
             : new Dictionary<string, int>();
         var externalIds = new Dictionary<string, string> {
-            [OpenLibraryMetadata.Provider] = $"series:{seriesName}",
+            [OpenLibraryMetadata.PrimaryIdentityNamespace] = $"series:{seriesName}",
             [OpenLibraryMetadata.SeriesKey] = seriesName
         };
         var patch = new EntityMetadataPatch(
@@ -192,7 +195,7 @@ internal sealed class OpenLibraryPlugin {
 
         return new EntityMetadataProposal(
             $"openlibrary:series:{OpenLibraryMetadata.Normalize(seriesName).Replace(' ', '-')}",
-            OpenLibraryMetadata.Provider,
+            OpenLibraryMetadata.PluginId,
             "book",
             0.9m,
             reason,
@@ -242,7 +245,7 @@ internal sealed class OpenLibraryPlugin {
 
         return new EntityMetadataProposal(
             $"openlibrary:work:{workId}:{targetKind}",
-            OpenLibraryMetadata.Provider,
+            OpenLibraryMetadata.PluginId,
             targetKind,
             reason is "external-id" or "url" or "isbn" ? 1m : 0.85m,
             reason,
@@ -317,7 +320,7 @@ internal sealed class OpenLibraryPlugin {
             : [];
         return new EntityMetadataProposal(
             $"openlibrary:author-work:{workId}",
-            OpenLibraryMetadata.Provider,
+            OpenLibraryMetadata.PluginId,
             "book",
             0.8m,
             "author-works",
@@ -339,7 +342,7 @@ internal sealed class OpenLibraryPlugin {
             fallbackName,
             null,
             new Dictionary<string, string> {
-                [OpenLibraryMetadata.Provider] = authorId,
+                [OpenLibraryMetadata.PrimaryIdentityNamespace] = authorId,
                 [OpenLibraryMetadata.AuthorIdKey] = authorId
             },
             [OpenLibraryMetadata.AuthorUrl(authorId)],
@@ -352,7 +355,7 @@ internal sealed class OpenLibraryPlugin {
             "Author");
         return new EntityMetadataProposal(
             $"openlibrary:author:{authorId}",
-            OpenLibraryMetadata.Provider,
+            OpenLibraryMetadata.PluginId,
             "person",
             null,
             "cascade",
@@ -369,7 +372,7 @@ internal sealed class OpenLibraryPlugin {
         if (!string.IsNullOrWhiteSpace(author.DeathDate)) dates["death"] = author.DeathDate!;
 
         var externalIds = new Dictionary<string, string> {
-            [OpenLibraryMetadata.Provider] = authorId,
+            [OpenLibraryMetadata.PrimaryIdentityNamespace] = authorId,
             [OpenLibraryMetadata.AuthorIdKey] = authorId
         };
         foreach (var (key, value) in author.RemoteIds ?? []) {
@@ -399,7 +402,7 @@ internal sealed class OpenLibraryPlugin {
             .ToArray();
         return new EntityMetadataProposal(
             $"openlibrary:author:{authorId}",
-            OpenLibraryMetadata.Provider,
+            OpenLibraryMetadata.PluginId,
             "person",
             reason is "external-id" or "url" ? 1m : 0.8m,
             reason,
@@ -448,7 +451,7 @@ internal sealed class OpenLibraryPlugin {
 
             yield return new EntitySearchCandidate(
                 new Dictionary<string, string> {
-                    [OpenLibraryMetadata.Provider] = $"series:{series}",
+                    [OpenLibraryMetadata.PrimaryIdentityNamespace] = $"series:{series}",
                     [OpenLibraryMetadata.SeriesKey] = series
                 },
                 series,
@@ -506,7 +509,7 @@ internal sealed class OpenLibraryPlugin {
         if (!string.IsNullOrWhiteSpace(author.TopWork)) overviewParts.Add($"Known for {author.TopWork}.");
         if (author.WorkCount is int count) overviewParts.Add($"{count} works in Open Library.");
         var externalIds = new Dictionary<string, string> {
-            [OpenLibraryMetadata.Provider] = id,
+            [OpenLibraryMetadata.PrimaryIdentityNamespace] = id,
             [OpenLibraryMetadata.AuthorIdKey] = id
         };
         return new EntitySearchCandidate(
@@ -615,7 +618,7 @@ internal sealed class OpenLibraryPlugin {
             : [];
         return new EntityMetadataProposal(
             $"openlibrary:series:{OpenLibraryMetadata.Normalize(seriesName).Replace(' ', '-')}:work:{workId}",
-            OpenLibraryMetadata.Provider,
+            OpenLibraryMetadata.PluginId,
             "book",
             0.8m,
             "series-subject",
@@ -681,7 +684,7 @@ internal sealed class OpenLibraryPlugin {
 
     private static IReadOnlyDictionary<string, string> BookExternalIds(string workId, OpenLibraryEdition? edition, OpenLibrarySearchDoc? searchDoc) {
         var ids = new Dictionary<string, string> {
-            [OpenLibraryMetadata.Provider] = workId,
+            [OpenLibraryMetadata.PrimaryIdentityNamespace] = workId,
             [OpenLibraryMetadata.WorkIdKey] = workId
         };
         if (OpenLibraryMetadata.EditionIdFromKey(edition?.Key) is { } editionId) {
@@ -751,7 +754,7 @@ internal sealed class OpenLibraryPlugin {
     private static IReadOnlyDictionary<string, string> WorkExternalIds(OpenLibrarySearchDoc doc, string? seriesName = null) {
         var workId = OpenLibraryMetadata.WorkIdFromKey(doc.Key)!;
         var ids = new Dictionary<string, string> {
-            [OpenLibraryMetadata.Provider] = workId,
+            [OpenLibraryMetadata.PrimaryIdentityNamespace] = workId,
             [OpenLibraryMetadata.WorkIdKey] = workId
         };
         if (!string.IsNullOrWhiteSpace(seriesName)) ids[OpenLibraryMetadata.SeriesKey] = seriesName!;
@@ -824,7 +827,7 @@ internal sealed class OpenLibraryPlugin {
 
     private static string? SeriesFromIds(IReadOnlyDictionary<string, string>? ids) =>
         OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.SeriesKey) ??
-        OpenLibraryMetadata.SeriesFromProviderId(OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.Provider));
+        OpenLibraryMetadata.SeriesFromProviderId(OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.PrimaryIdentityNamespace));
 
     private static string? ResolveWorkId(IdentifyPluginRequest request) =>
         WorkIdFromIds(request.Query.ExternalIds) ??
@@ -834,7 +837,7 @@ internal sealed class OpenLibraryPlugin {
         WorkIdFromIds(request.Hints.ExternalIds);
 
     private static string? WorkIdFromIds(IReadOnlyDictionary<string, string>? ids) {
-        var value = OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.WorkIdKey, OpenLibraryMetadata.Provider);
+        var value = OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.WorkIdKey, OpenLibraryMetadata.PrimaryIdentityNamespace);
         return OpenLibraryMetadata.WorkIdFromKey(value);
     }
 
@@ -863,16 +866,42 @@ internal sealed class OpenLibraryPlugin {
         AuthorIdFromIds(request.Hints.ExternalIds);
 
     private static string? AuthorIdFromIds(IReadOnlyDictionary<string, string>? ids) {
-        var value = OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.AuthorIdKey, OpenLibraryMetadata.Provider);
+        var value = OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.AuthorIdKey, OpenLibraryMetadata.PrimaryIdentityNamespace);
         return OpenLibraryMetadata.AuthorIdFromKey(value);
     }
 
     private static string? QueryTitle(IdentifyPluginRequest request) =>
-        OpenLibraryMetadata.FirstNonEmpty(request.Query.Title, request.Hints.Title, request.Entity.Title);
+        OpenLibraryMetadata.FirstNonEmpty(
+            SearchField(request, OpenLibraryMetadata.SearchFields.Title, OpenLibraryMetadata.SearchFields.SeriesTitle),
+            request.Query.Title,
+            request.Hints.Title,
+            request.Entity.Title);
+
+    internal static string BuildWorkSearchQuery(IdentifyPluginRequest request, string fallbackTitle) {
+        var terms = new List<string>();
+        var title = SearchField(request, OpenLibraryMetadata.SearchFields.Title);
+        var seriesTitle = SearchField(request, OpenLibraryMetadata.SearchFields.SeriesTitle);
+        if (!string.IsNullOrWhiteSpace(title)) terms.Add($"title:{QuoteSearch(title)}");
+        else if (string.IsNullOrWhiteSpace(seriesTitle)) terms.Add($"title:{QuoteSearch(fallbackTitle)}");
+        if (!string.IsNullOrWhiteSpace(seriesTitle)) terms.Add($"subject:{QuoteSearch($"series:{seriesTitle}")}");
+        if (SearchField(request, OpenLibraryMetadata.SearchFields.Author) is { } author) terms.Add($"author:{QuoteSearch(author)}");
+        if (SearchField(request, OpenLibraryMetadata.SearchFields.Year) is { } year) terms.Add($"first_publish_year:{QuoteSearch(year)}");
+        return string.Join(' ', terms);
+    }
+
+    private static string QuoteSearch(string value) => $"\"{value.Replace("\"", string.Empty).Trim()}\"";
+
+    private static string? SearchField(IdentifyPluginRequest request, params string[] keys) {
+        foreach (var key in keys) {
+            var value = OpenLibraryMetadata.OpenLibraryId(request.Query.Fields, key);
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return null;
+    }
 
     private static bool IsExplicitSearch(IdentifyPluginRequest request) =>
         request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(request.Query.Title) &&
+        (!string.IsNullOrWhiteSpace(request.Query.Title) || request.Query.Fields?.Values.Any(value => !string.IsNullOrWhiteSpace(value)) == true) &&
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
 

@@ -1,18 +1,18 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "apiTags": [
     "prismedia"
   ],
   "id": "youtube",
   "name": "YouTube Metadata",
-  "version": "1.2.2",
-  "date": "2026-07-03",
+  "version": "1.2.3",
+  "date": "2026-07-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Youtube.dll",
   "compat": {
-    "pluginApiMin": "1.0.0",
+    "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "1.0.0",
+    "prismediaMin": "2.0.1",
     "prismediaMax": null
   },
   "auth": [],
@@ -24,31 +24,57 @@
         "lookup-id",
         "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["youtube"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Video title" },
+          { "key": "channel", "label": "Channel", "type": "text", "required": false, "placeholder": "Channel name" }
+        ]
+      }
     },
     {
       "entityKind": "music-artist",
       "actions": [
         "lookup-id",
-        "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["youtubechannel", "youtube"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Artist", "type": "text", "required": true, "placeholder": "Artist name" }
+        ]
+      }
     },
     {
       "entityKind": "audio-library",
       "actions": [
         "lookup-id",
-        "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["youtubealbum", "youtube"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Album", "type": "text", "required": true, "placeholder": "Album title" },
+          { "key": "artist", "label": "Artist", "type": "text", "required": false, "placeholder": "Artist name" },
+          { "key": "year", "label": "Year", "type": "year", "required": false, "placeholder": "2024" }
+        ]
+      }
     },
     {
       "entityKind": "audio-track",
       "actions": [
         "lookup-id",
-        "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["youtube"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Track", "type": "text", "required": true, "placeholder": "Track title" },
+          { "key": "artist", "label": "Artist", "type": "text", "required": false, "placeholder": "Artist name" },
+          { "key": "album", "label": "Album", "type": "text", "required": false, "placeholder": "Album title" }
+        ]
+      }
     }
   ]
 }

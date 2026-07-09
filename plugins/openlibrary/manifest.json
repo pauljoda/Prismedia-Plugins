@@ -1,18 +1,18 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "apiTags": [
     "prismedia"
   ],
   "id": "openlibrary",
   "name": "Open Library",
-  "version": "0.3.0",
-  "date": "2026-06-30",
+  "version": "0.3.1",
+  "date": "2026-07-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.OpenLibrary.dll",
   "compat": {
-    "pluginApiMin": "1.0.0",
+    "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "1.0.0",
+    "prismediaMin": "2.0.1",
     "prismediaMax": null
   },
   "auth": [],
@@ -25,9 +25,17 @@
       "actions": [
         "lookup-id",
         "lookup-url",
-        "search",
-        "cascade"
-      ]
+        "search"
+      ],
+      "identityNamespaces": ["openlibrary", "openlibrarywork", "openlibraryedition", "isbn", "isbn10", "isbn13"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Book or series title" },
+          { "key": "author", "label": "Author", "type": "text", "required": false, "placeholder": "Author name" },
+          { "key": "year", "label": "First published", "type": "year", "required": false, "placeholder": "1996" },
+          { "key": "seriesTitle", "label": "Series", "type": "text", "required": false, "placeholder": "Series title" }
+        ]
+      }
     },
     {
       "entityKind": "book-volume",
@@ -35,7 +43,16 @@
         "lookup-id",
         "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["openlibrary", "openlibrarywork", "openlibraryedition", "isbn", "isbn10", "isbn13"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Volume title", "type": "text", "required": true, "placeholder": "Volume title" },
+          { "key": "author", "label": "Author", "type": "text", "required": false, "placeholder": "Author name" },
+          { "key": "year", "label": "First published", "type": "year", "required": false, "placeholder": "1996" },
+          { "key": "seriesTitle", "label": "Series", "type": "text", "required": false, "placeholder": "Series title" }
+        ]
+      }
     },
     {
       "entityKind": "person",
@@ -43,7 +60,14 @@
         "lookup-id",
         "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["openlibrary", "openlibraryauthor"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Author", "type": "text", "required": true, "placeholder": "Author name" },
+          { "key": "birthYear", "label": "Birth year", "type": "year", "required": false, "placeholder": "1948" }
+        ]
+      }
     }
   ]
 }

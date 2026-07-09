@@ -9,15 +9,16 @@ const repoRoot = path.resolve(__dirname, "..");
 const manifest = require("../plugins/mangadex/manifest.json");
 
 test("MangaDex manifest declares the Prismedia dotnet-process contract", () => {
-  assert.equal(manifest.manifestVersion, 1);
+  assert.equal(manifest.manifestVersion, 2);
   assert.deepEqual(manifest.apiTags, ["prismedia"]);
   assert.equal(manifest.runtime, "dotnet-process");
   assert.equal(manifest.entry, "dist/Prismedia.Plugin.MangaDex.dll");
-  assert.deepEqual(manifest.supports, [
-    { entityKind: "book", actions: ["lookup-id", "lookup-url", "search", "cascade"] },
-    { entityKind: "book-volume", actions: ["lookup-id", "lookup-url", "search"] },
-    { entityKind: "book-chapter", actions: ["lookup-id", "lookup-url", "search"] },
+  assert.deepEqual(manifest.supports.map(({ entityKind, actions, identityNamespaces }) => ({ entityKind, actions, identityNamespaces })), [
+    { entityKind: "book", actions: ["lookup-id", "lookup-url", "search"], identityNamespaces: ["mangadex"] },
+    { entityKind: "book-volume", actions: ["lookup-id"], identityNamespaces: ["mangadexvolume"] },
+    { entityKind: "book-chapter", actions: ["lookup-id", "lookup-url"], identityNamespaces: ["mangadexchapter"] },
   ]);
+  assert.deepEqual(manifest.supports[0].search.fields.map((field) => field.key), ["title", "creator", "year"]);
 });
 
 test("MangaDex process returns a Prismedia none result for empty book input", () => {
@@ -166,8 +167,8 @@ liveTest("MangaDex process scopes zero-based book chapter sort order to MangaDex
     const proposal = response.result.proposal;
     assert.equal(proposal.targetKind, "book-chapter");
     assert.equal(proposal.patch.title, testCase.expectedTitle);
-    assert.equal(proposal.patch.externalIds.mangadexChapter, testCase.expectedChapterId);
-    assert.equal(proposal.patch.externalIds.chapterNumber, String(testCase.sortOrder + 1));
+    assert.equal(proposal.patch.externalIds.mangadexchapter, testCase.expectedChapterId);
+    assert.equal(proposal.patch.externalIds.chapternumber, String(testCase.sortOrder + 1));
     assert.equal(proposal.patch.positions.sortOrder, testCase.sortOrder);
     assert.equal(proposal.patch.positions.chapterNumber, undefined);
     assert.equal(proposal.patch.stats.pageCount, 33);

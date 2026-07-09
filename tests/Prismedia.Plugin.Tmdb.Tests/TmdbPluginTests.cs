@@ -35,7 +35,7 @@ public sealed class TmdbPluginTests {
                 Guid.NewGuid(),
                 "movie",
                 "Friendship"),
-            new IdentifyQuery(null, null, new Dictionary<string, string> { ["tmdb"] = "1239655" }),
+            new IdentifyQuery(null, null, new Dictionary<string, string> { ["TMDB"] = "1239655" }),
             new IdentifyMatchHints(new Dictionary<string, string>(), [], "Friendship", null)));
 
         Assert.NotNull(result.Proposal);
@@ -51,6 +51,7 @@ public sealed class TmdbPluginTests {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/3/search/tv", request.RequestUri?.AbsolutePath);
             Assert.Contains("query=the%20chair%20company", request.RequestUri?.Query);
+            Assert.Contains("first_air_date_year=2025", request.RequestUri?.Query);
             return """
                 {
                   "results": [
@@ -75,7 +76,14 @@ public sealed class TmdbPluginTests {
                 Guid.NewGuid(),
                 "video-series",
                 "The Chair Company"),
-            new IdentifyQuery("The Chair Company", null, null),
+            new IdentifyQuery(
+                null,
+                null,
+                null,
+                Fields: new Dictionary<string, string> {
+                    ["seriesTitle"] = "The Chair Company",
+                    ["year"] = "2025"
+                }),
             new IdentifyMatchHints(
                 new Dictionary<string, string> { ["tmdb"] = "418214" },
                 ["https://www.themoviedb.org/tv/271267"],
@@ -242,6 +250,67 @@ public sealed class TmdbPluginTests {
 
         Assert.Equal(2, result.Candidates.Count);
         Assert.Contains(result.Candidates, candidate => candidate.ExternalIds["tmdb"] == "2");
+    }
+
+    [Fact]
+    public async Task SeasonAndEpisodeStructuralIdentitiesRoundTripWithoutContext() {
+        using var http = new HttpClient(new StubHandler(request => request.RequestUri?.AbsolutePath switch {
+            "/3/tv/207/season/1" => """
+                {
+                  "id": 668,
+                  "season_number": 1,
+                  "name": "Season 1",
+                  "episodes": [{
+                    "id": 1107384,
+                    "episode_number": 1,
+                    "name": "Home Is Where the Bear Is",
+                    "runtime": 25,
+                    "guest_stars": [],
+                    "crew": []
+                  }]
+                }
+                """,
+            "/3/tv/207/season/1/episode/1" => """
+                {
+                  "id": 1107384,
+                  "episode_number": 1,
+                  "name": "Home Is Where the Bear Is",
+                  "runtime": 25,
+                  "guest_stars": [],
+                  "crew": [],
+                  "images": { "stills": [] }
+                }
+                """,
+            _ => throw new InvalidOperationException($"Unexpected TMDB request {request.RequestUri}")
+        }));
+        var plugin = new TmdbPlugin(new TmdbApiClient(http, "test-key"));
+
+        var seasonIdentity = TmdbMetadataHelpers.SeasonIdentity(207, 1);
+        var seasonResult = await plugin.IdentifyAsync(Lookup("video-season", "tmdbseason", seasonIdentity));
+        var season = Assert.IsType<EntityMetadataProposal>(seasonResult.Proposal);
+        Assert.Equal("tmdb:tv:207:season:1", season.ProposalId);
+        Assert.Equal("video-season", season.TargetKind);
+        Assert.Equal(seasonIdentity, season.Patch.ExternalIds["tmdbseason"]);
+        Assert.DoesNotContain("tmdb", season.Patch.ExternalIds.Keys);
+
+        var emittedEpisode = Assert.Single(season.Children);
+        var episodeIdentity = emittedEpisode.Patch.ExternalIds["tmdbepisode"];
+        var episodeResult = await plugin.IdentifyAsync(Lookup("video", "tmdbepisode", episodeIdentity));
+        var resolvedEpisode = Assert.IsType<EntityMetadataProposal>(episodeResult.Proposal);
+        Assert.Equal(emittedEpisode.ProposalId, resolvedEpisode.ProposalId);
+        Assert.Equal("video-episode", resolvedEpisode.TargetKind);
+        Assert.Equal(episodeIdentity, resolvedEpisode.Patch.ExternalIds["tmdbepisode"]);
+        Assert.DoesNotContain("tmdb", resolvedEpisode.Patch.ExternalIds.Keys);
+    }
+
+    private static IdentifyPluginRequest Lookup(string kind, string identityNamespace, string value) {
+        var ids = new Dictionary<string, string> { [identityNamespace] = value };
+        return new IdentifyPluginRequest(
+            "lookup-id",
+            new Dictionary<string, string>(),
+            new IdentifyEntitySnapshot(Guid.NewGuid(), kind, string.Empty, ids),
+            new IdentifyQuery(null, null, ids),
+            new IdentifyMatchHints(ids, [], null, null));
     }
 
     private sealed class StubHandler(Func<HttpRequestMessage, string> respond) : HttpMessageHandler {
