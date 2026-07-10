@@ -3,10 +3,10 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.9
+  version: 1.1.10
   date: '2026-07-09'
   path: plugins/tmdb/tmdb.zip
-  sha256: 219e86df95c8215e6583d14fdee06133bf07c810dd034832365fbbedf225f396
+  sha256: 276d28b1fc03d43655835bbba5a6a56edda574e93f1f6daf289d9a1b0a138206
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -25,6 +25,10 @@
         - search
       identityNamespaces:
         - tmdb
+      identityUrls:
+        - identityNamespace: tmdb
+          valuePattern: '{id}'
+          urlTemplate: https://www.themoviedb.org/movie/{id}
       search:
         fields:
           - key: title
@@ -45,6 +49,13 @@
       identityNamespaces:
         - tmdbepisode
         - tmdb
+      identityUrls:
+        - identityNamespace: tmdbepisode
+          valuePattern: '{seriesId}:{seasonNumber}:{episodeNumber}'
+          urlTemplate: https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}
+        - identityNamespace: tmdb
+          valuePattern: '{id}'
+          urlTemplate: https://www.themoviedb.org/movie/{id}
       search:
         fields:
           - key: title
@@ -64,6 +75,10 @@
         - search
       identityNamespaces:
         - tmdb
+      identityUrls:
+        - identityNamespace: tmdb
+          valuePattern: '{id}'
+          urlTemplate: https://www.themoviedb.org/tv/{id}
       search:
         fields:
           - key: seriesTitle
@@ -81,6 +96,10 @@
         - lookup-id
       identityNamespaces:
         - tmdbseason
+      identityUrls:
+        - identityNamespace: tmdbseason
+          valuePattern: '{seriesId}:{seasonNumber}'
+          urlTemplate: https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}
     - entityKind: person
       actions:
         - lookup-id
@@ -88,6 +107,10 @@
         - search
       identityNamespaces:
         - tmdb
+      identityUrls:
+        - identityNamespace: tmdb
+          valuePattern: '{id}'
+          urlTemplate: https://www.themoviedb.org/person/{id}
       search:
         fields:
           - key: title
@@ -102,6 +125,10 @@
         - search
       identityNamespaces:
         - tmdb
+      identityUrls:
+        - identityNamespace: tmdb
+          valuePattern: '{id}'
+          urlTemplate: https://www.themoviedb.org/company/{id}
       search:
         fields:
           - key: title

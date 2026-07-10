@@ -5,7 +5,7 @@
   ],
   "id": "tmdb",
   "name": "The Movie Database",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "date": "2026-07-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Tmdb.dll",
@@ -33,6 +33,13 @@
         "search"
       ],
       "identityNamespaces": ["tmdb"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdb",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://www.themoviedb.org/movie/{id}"
+        }
+      ],
       "search": {
         "fields": [
           { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Movie title" },
@@ -48,6 +55,18 @@
         "search"
       ],
       "identityNamespaces": ["tmdbepisode", "tmdb"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdbepisode",
+          "valuePattern": "{seriesId}:{seasonNumber}:{episodeNumber}",
+          "urlTemplate": "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}"
+        },
+        {
+          "identityNamespace": "tmdb",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://www.themoviedb.org/movie/{id}"
+        }
+      ],
       "search": {
         "fields": [
           { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Video title" },
@@ -63,6 +82,13 @@
         "search"
       ],
       "identityNamespaces": ["tmdb"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdb",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://www.themoviedb.org/tv/{id}"
+        }
+      ],
       "search": {
         "fields": [
           { "key": "seriesTitle", "label": "Series title", "type": "text", "required": true, "placeholder": "Series title" },
@@ -75,7 +101,14 @@
       "actions": [
         "lookup-id"
       ],
-      "identityNamespaces": ["tmdbseason"]
+      "identityNamespaces": ["tmdbseason"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdbseason",
+          "valuePattern": "{seriesId}:{seasonNumber}",
+          "urlTemplate": "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}"
+        }
+      ]
     },
     {
       "entityKind": "person",
@@ -85,6 +118,13 @@
         "search"
       ],
       "identityNamespaces": ["tmdb"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdb",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://www.themoviedb.org/person/{id}"
+        }
+      ],
       "search": {
         "fields": [
           { "key": "title", "label": "Name", "type": "text", "required": true, "placeholder": "Person name" }
@@ -99,6 +139,13 @@
         "search"
       ],
       "identityNamespaces": ["tmdb"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdb",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://www.themoviedb.org/company/{id}"
+        }
+      ],
       "search": {
         "fields": [
           { "key": "title", "label": "Studio name", "type": "text", "required": true, "placeholder": "Studio name" }

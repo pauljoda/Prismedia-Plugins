@@ -59,6 +59,53 @@ for (const pluginId of readdirSync(pluginsRoot).sort()) {
   });
 }
 
+test("tmdb declares kind-scoped provider identity URLs", () => {
+  const manifest = JSON.parse(readFileSync(join(pluginsRoot, "tmdb", "manifest.json"), "utf8"));
+  const identityUrls = Object.fromEntries(
+    manifest.supports.map((support) => [support.entityKind, support.identityUrls ?? []]),
+  );
+
+  assert.deepEqual(identityUrls, {
+    movie: [{
+      identityNamespace: "tmdb",
+      valuePattern: "{id}",
+      urlTemplate: "https://www.themoviedb.org/movie/{id}",
+    }],
+    video: [
+      {
+        identityNamespace: "tmdbepisode",
+        valuePattern: "{seriesId}:{seasonNumber}:{episodeNumber}",
+        urlTemplate: "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}",
+      },
+      {
+        identityNamespace: "tmdb",
+        valuePattern: "{id}",
+        urlTemplate: "https://www.themoviedb.org/movie/{id}",
+      },
+    ],
+    "video-series": [{
+      identityNamespace: "tmdb",
+      valuePattern: "{id}",
+      urlTemplate: "https://www.themoviedb.org/tv/{id}",
+    }],
+    "video-season": [{
+      identityNamespace: "tmdbseason",
+      valuePattern: "{seriesId}:{seasonNumber}",
+      urlTemplate: "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}",
+    }],
+    person: [{
+      identityNamespace: "tmdb",
+      valuePattern: "{id}",
+      urlTemplate: "https://www.themoviedb.org/person/{id}",
+    }],
+    studio: [{
+      identityNamespace: "tmdb",
+      valuePattern: "{id}",
+      urlTemplate: "https://www.themoviedb.org/company/{id}",
+    }],
+  });
+});
+
 function validManifest(overrides = {}) {
   return {
     manifestVersion: 2,
@@ -118,4 +165,148 @@ test("manifest-v2 requires protocol 2 compatibility", () => {
 
 test("manifest-v2 rejects a missing manifest object", () => {
   assert.throws(() => validateManifest(null, "missing"), /requires an object at root/);
+});
+
+test("manifest-v2 accepts a safe identity URL format", () => {
+  const manifest = validManifest({
+    supports: [{
+      entityKind: "video-season",
+      actions: ["lookup-id"],
+      identityNamespaces: ["tmdbseason"],
+      identityUrls: [{
+        identityNamespace: "tmdbseason",
+        valuePattern: "{seriesId}:{seasonNumber}",
+        urlTemplate: "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}",
+      }],
+    }],
+  });
+
+  assert.equal(validateManifest(manifest, "invalid"), manifest);
+});
+
+test("manifest-v2 permits identity URLs to be omitted or empty", () => {
+  const omitted = validManifest();
+  const empty = validManifest({
+    supports: [{
+      entityKind: "book",
+      actions: ["lookup-id"],
+      identityNamespaces: ["openlibrary"],
+      identityUrls: [],
+    }],
+  });
+
+  assert.equal(validateManifest(omitted, "invalid"), omitted);
+  assert.equal(validateManifest(empty, "invalid"), empty);
+});
+
+test("manifest-v2 requires identity URL namespaces to be canonical and declared by the same support", () => {
+  for (const identityNamespace of ["TMDB", "imdb"]) {
+    const manifest = validManifest({
+      supports: [{
+        entityKind: "movie",
+        actions: ["lookup-id"],
+        identityNamespaces: ["tmdb"],
+        identityUrls: [{
+          identityNamespace,
+          valuePattern: "{id}",
+          urlTemplate: "https://www.themoviedb.org/movie/{id}",
+        }],
+      }],
+    });
+
+    assert.throws(() => validateManifest(manifest, "invalid"), /identity URL namespace/);
+  }
+});
+
+test("manifest-v2 rejects duplicate identity URL formats for one namespace", () => {
+  const format = {
+    identityNamespace: "tmdb",
+    valuePattern: "{id}",
+    urlTemplate: "https://www.themoviedb.org/movie/{id}",
+  };
+  const manifest = validManifest({
+    supports: [{
+      entityKind: "movie",
+      actions: ["lookup-id"],
+      identityNamespaces: ["tmdb"],
+      identityUrls: [format, { ...format }],
+    }],
+  });
+
+  assert.throws(() => validateManifest(manifest, "invalid"), /duplicate identity URL namespace/);
+});
+
+test("manifest-v2 rejects ambiguous or malformed identity value patterns", () => {
+  for (const valuePattern of ["id", "{}", "{ id }", "{id}:{id}", "{id}{other}", "{id"]) {
+    const manifest = validManifest({
+      supports: [{
+        entityKind: "movie",
+        actions: ["lookup-id"],
+        identityNamespaces: ["tmdb"],
+        identityUrls: [{
+          identityNamespace: "tmdb",
+          valuePattern,
+          urlTemplate: "https://www.themoviedb.org/movie/{id}",
+        }],
+      }],
+    });
+
+    assert.throws(() => validateManifest(manifest, "invalid"), /identity URL value pattern/);
+  }
+});
+
+test("manifest-v2 requires safe HTTPS templates whose placeholders come from the value pattern", () => {
+  for (const urlTemplate of [
+    "http://www.themoviedb.org/movie/{id}",
+    "javascript:alert({id})",
+    "https://user@www.themoviedb.org/movie/{id}",
+    "https://www.themoviedb.org/movie/{missing}",
+    "https://www.themoviedb.org/movie/static",
+    "https://www.themoviedb.org/movie/{id",
+  ]) {
+    const manifest = validManifest({
+      supports: [{
+        entityKind: "movie",
+        actions: ["lookup-id"],
+        identityNamespaces: ["tmdb"],
+        identityUrls: [{
+          identityNamespace: "tmdb",
+          valuePattern: "{id}",
+          urlTemplate,
+        }],
+      }],
+    });
+
+    assert.throws(() => validateManifest(manifest, "invalid"), /identity URL template/);
+  }
+});
+
+test("manifest-v2 identity URLs preserve every captured identity component", () => {
+  const omitted = validManifest({
+    supports: [{
+      entityKind: "video-season",
+      actions: ["lookup-id"],
+      identityNamespaces: ["tmdbseason"],
+      identityUrls: [{
+        identityNamespace: "tmdbseason",
+        valuePattern: "{seriesId}:{seasonNumber}",
+        urlTemplate: "https://www.themoviedb.org/tv/{seriesId}",
+      }],
+    }],
+  });
+  assert.throws(() => validateManifest(omitted, "invalid"), /omits an identity placeholder/);
+
+  const repeated = validManifest({
+    supports: [{
+      entityKind: "video-season",
+      actions: ["lookup-id"],
+      identityNamespaces: ["tmdbseason"],
+      identityUrls: [{
+        identityNamespace: "tmdbseason",
+        valuePattern: "{seriesId}:{seasonNumber}",
+        urlTemplate: "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}?series={seriesId}",
+      }],
+    }],
+  });
+  assert.equal(validateManifest(repeated, "invalid"), repeated);
 });
