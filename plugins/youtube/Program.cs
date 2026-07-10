@@ -6,14 +6,25 @@ var response = await PluginHost.RunAsync(args, YoutubePlugin.IdentifyAsync);
 Console.Write(JsonSerializer.Serialize(response, PluginHost.JsonOptions));
 
 internal static partial class YoutubePlugin {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    internal static HttpClient Http { get; set; } = new() { Timeout = TimeSpan.FromSeconds(15) };
     private static readonly Random Jitter = new();
     private const int MaxAttempts = 4;
-    private const string Provider = "youtube";
+    private const string PluginId = "youtube";
+    private const string PrimaryIdentityNamespace = "youtube";
+    private const string ChannelIdentityNamespace = "youtubechannel";
+    private const string AlbumIdentityNamespace = "youtubealbum";
     private const string OEmbed = "https://www.youtube.com/oembed";
     private const string InnerTube = "https://www.youtube.com/youtubei/v1";
     private const string InnerTubeKey = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
     private const string ClientVersion = "2.20240726.00.00";
+
+    private static class SearchFields {
+        public const string Title = "title";
+        public const string Channel = "channel";
+        public const string Artist = "artist";
+        public const string Album = "album";
+        public const string Year = "year";
+    }
 
     public static async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
         var kind = request.Entity.Kind;
@@ -24,14 +35,15 @@ internal static partial class YoutubePlugin {
             return IdentifyPluginResult.None();
         }
 
-        var id = ExternalId(request, Provider) ?? IdFromString(request.Query.Url) ?? FirstUrlId(request.Hints.Urls) ?? IdFromString(request.Hints.FilePath) ?? IdFromString(request.Query.Title) ?? IdFromString(request.Hints.Title) ?? IdFromString(request.Entity.Title);
+        var id = ExternalId(request, PrimaryIdentityNamespace) ?? IdFromString(request.Query.Url) ?? FirstUrlId(request.Hints.Urls) ?? IdFromString(request.Hints.FilePath) ?? IdFromString(request.Query.Title) ?? IdFromString(request.Hints.Title) ?? IdFromString(request.Entity.Title);
         if (id is not null && IsExplicitSearch(request)) id = null;
         if (id is not null) {
             return IdentifyPluginResult.ForProposal(await ProposalForIdAsync(id, request.Entity.Kind, "youtube-id"));
         }
 
-        var query = CleanQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        var query = CleanQuery(SearchField(request, SearchFields.Title) ?? request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
+        if (SearchField(request, SearchFields.Channel) is { } channel) query = ScopedQuery(channel, query);
 
         var candidates = await SearchCandidatesAsync(query);
         return IdentifyPluginResult.ForCandidates(candidates);
@@ -39,7 +51,7 @@ internal static partial class YoutubePlugin {
 
     private static bool IsExplicitSearch(IdentifyPluginRequest request) =>
         request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(request.Query.Title) &&
+        (!string.IsNullOrWhiteSpace(request.Query.Title) || HasSearchFields(request)) &&
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
 
@@ -200,8 +212,8 @@ internal static partial class YoutubePlugin {
         }
         if (biggest?.Url is null) return [];
         return [
-            new ImageCandidate("cover", Upsize(biggest.Url, 1000), Provider, 10, null, 1000, 1000),
-            new ImageCandidate("cover", biggest.Url, Provider, 8, null, biggest.Width, biggest.Height)
+            new ImageCandidate("cover", Upsize(biggest.Url, 1000), PluginId, 10, null, 1000, 1000),
+            new ImageCandidate("cover", biggest.Url, PluginId, 8, null, biggest.Width, biggest.Height)
         ];
     }
 
@@ -254,45 +266,52 @@ internal static partial class YoutubePlugin {
     private static async Task<IdentifyPluginResult> IdentifyMusicArtistAsync(IdentifyPluginRequest request) {
         // Id-first: an id lookup (a request detail, a re-resolve) carries no title at all, so resolve
         // the channel page directly by its browse id.
-        var channelId = RawExternalId(request, Provider) ?? RawExternalId(request, "youtubeChannel");
+        var channelId = RawExternalId(request, ChannelIdentityNamespace) ?? RawExternalId(request, PrimaryIdentityNamespace);
         if (channelId is not null && channelId.StartsWith("UC", StringComparison.Ordinal) && !IsExplicitSearch(request)) {
             var browsed = await ArtistByChannelIdAsync(channelId);
-            if (browsed is not null) return IdentifyPluginResult.ForProposal(ArtistProposal(browsed));
+            if (browsed is not null) return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(browsed, request.IncludeStructuralChildren));
         }
 
-        var query = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        var query = CleanAudioQuery(SearchField(request, SearchFields.Title, SearchFields.Artist) ?? request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
         if (query is null) return IdentifyPluginResult.None();
         var artists = (await MusicSearchAsync(query, ArtistParams)).Select(ParseArtistRow).OfType<MusicArtistRow>().ToList();
         if (artists.Count == 0) return IdentifyPluginResult.None();
         if (IsExplicitSearch(request)) {
             return IdentifyPluginResult.ForCandidates(artists.Select(artist => new EntitySearchCandidate(
-                new Dictionary<string, string> { [Provider] = artist.ChannelId, ["youtubeChannel"] = artist.ChannelId },
+                new Dictionary<string, string> { [ChannelIdentityNamespace] = artist.ChannelId, [PrimaryIdentityNamespace] = artist.ChannelId },
                 artist.Name, null, artist.Subtitle, artist.Images.Count > 0 ? artist.Images[0].Url : null, null)).ToList());
         }
         var best = artists.FirstOrDefault(artist => ArtistMatches(artist.Name, query)) ?? artists[0];
-        return IdentifyPluginResult.ForProposal(ArtistProposal(best));
+        return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(best, request.IncludeStructuralChildren));
     }
 
-    private static EntityMetadataProposal ArtistProposal(MusicArtistRow artist) {
-        var external = new Dictionary<string, string> { [Provider] = artist.ChannelId, ["youtubeChannel"] = artist.ChannelId };
+    private static async Task<EntityMetadataProposal> ArtistProposalAsync(MusicArtistRow artist, bool includeStructuralChildren) {
+        var external = new Dictionary<string, string> { [ChannelIdentityNamespace] = artist.ChannelId, [PrimaryIdentityNamespace] = artist.ChannelId };
         var urls = new[] { $"https://music.youtube.com/channel/{artist.ChannelId}", ChannelUrl(artist.ChannelId) };
+        var children = includeStructuralChildren ? await ArtistAlbumChildrenAsync(artist.Name) : [];
         return new EntityMetadataProposal(
-            $"youtube:music:artist:{artist.ChannelId}", Provider, "music-artist", 0.9m, "yt-music-artist",
+            $"youtube:music:artist:{artist.ChannelId}", PluginId, "music-artist", 0.9m, "yt-music-artist",
             new EntityMetadataPatch(artist.Name, null, external, urls, [], null, [],
                 new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null),
-            artist.Images, [], [], null, []);
+            artist.Images, children, [], null, []);
     }
 
     private static async Task<IdentifyPluginResult> IdentifyTrackAsync(IdentifyPluginRequest request) {
-        var artist = AncestorTitle(request, "music-artist");
-        var album = AncestorTitle(request, "audio-library");
-        var title = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        var id = ExternalId(request, PrimaryIdentityNamespace);
+        if (id is not null && !IsExplicitSearch(request)) {
+            var proposal = await ProposalForIdAsync(id, "audio-track", "youtube-id");
+            return IdentifyPluginResult.ForProposal(proposal with { ProposalId = $"youtube:music:song:{id}" });
+        }
+
+        var artist = SearchField(request, SearchFields.Artist) ?? AncestorTitle(request, "music-artist");
+        var album = SearchField(request, SearchFields.Album) ?? AncestorTitle(request, "audio-library");
+        var title = CleanAudioQuery(SearchField(request, SearchFields.Title) ?? request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
         if (title is null) return IdentifyPluginResult.None();
         var songs = (await MusicSearchAsync(ScopedQuery(artist, title), SongParams)).Select(ParseSongRow).OfType<MusicSongRow>().ToList();
         if (songs.Count == 0) return IdentifyPluginResult.None();
         if (IsExplicitSearch(request)) {
             return IdentifyPluginResult.ForCandidates(songs.Where(song => song.VideoId is not null).Select(song => new EntitySearchCandidate(
-                new Dictionary<string, string> { [Provider] = song.VideoId! },
+                new Dictionary<string, string> { [PrimaryIdentityNamespace] = song.VideoId! },
                 song.Title, null, SongOverview(song), song.Images.Count > 0 ? song.Images[0].Url : null, null)).ToList());
         }
         var pool = artist is null ? songs : songs.Where(song => ArtistMatches(song.Artist, artist)).ToList();
@@ -307,7 +326,7 @@ internal static partial class YoutubePlugin {
         var external = new Dictionary<string, string>();
         var urls = new List<string>();
         if (song.VideoId is not null) {
-            external[Provider] = song.VideoId;
+            external[PrimaryIdentityNamespace] = song.VideoId;
             urls.Add(MusicWatchUrl(song.VideoId));
             urls.Add(VideoUrl(song.VideoId));
         }
@@ -321,7 +340,7 @@ internal static partial class YoutubePlugin {
         // song.Album is still used for match scoring (IdentifyTrackAsync) and the search overview.
         return new EntityMetadataProposal(
             song.VideoId is not null ? $"youtube:music:song:{song.VideoId}" : $"youtube:music:song:{Slug(song.Title)}",
-            Provider, "audio-track", 0.9m, "yt-music-song",
+            PluginId, "audio-track", 0.9m, "yt-music-song",
             new EntityMetadataPatch(song.Title, null, external, urls, [], null, credits,
                 new Dictionary<string, string>(), stats, new Dictionary<string, int>(), null),
             song.Images, [], [], null, []);
@@ -330,21 +349,32 @@ internal static partial class YoutubePlugin {
     private static async Task<IdentifyPluginResult> IdentifyAlbumAsync(IdentifyPluginRequest request) {
         // Id-first: an id lookup (a request detail, a re-resolve) carries no title at all, so resolve
         // the album page directly by its MPREb browse id.
-        var albumId = RawExternalId(request, Provider) ?? RawExternalId(request, "youtubeAlbum");
+        var albumId = RawExternalId(request, AlbumIdentityNamespace) ?? RawExternalId(request, PrimaryIdentityNamespace);
         if (albumId is not null && albumId.StartsWith("MPREb", StringComparison.Ordinal) && !IsExplicitSearch(request)) {
             var browsed = await AlbumByBrowseIdAsync(albumId);
             if (browsed is not null) return IdentifyPluginResult.ForProposal(await AlbumProposalAsync(browsed));
         }
+        if (TryParseVideoAlbumIdentity(albumId, out var videoId) && !IsExplicitSearch(request)) {
+            return IdentifyPluginResult.ForProposal(await SingleAlbumProposalForIdAsync(videoId));
+        }
+        // Legacy single-album proposals stored the backing video directly under youtube. Keep that
+        // lookup resolvable even though new proposals prefer the unambiguous youtubealbum composite.
+        if (IsValidId(albumId) && !IsExplicitSearch(request)) {
+            return IdentifyPluginResult.ForProposal(await SingleAlbumProposalForIdAsync(albumId!));
+        }
 
-        var artist = AncestorTitle(request, "music-artist");
-        var title = CleanAudioQuery(request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
+        var artist = SearchField(request, SearchFields.Artist) ?? AncestorTitle(request, "music-artist");
+        var requestedYear = ParseYear(SearchField(request, SearchFields.Year));
+        var title = CleanAudioQuery(SearchField(request, SearchFields.Title) ?? request.Query.Title ?? request.Hints.Title ?? request.Entity.Title);
         if (title is null) return IdentifyPluginResult.None();
         var scoped = ScopedQuery(artist, title);
 
-        var albums = (await MusicSearchAsync(scoped, AlbumParams)).Select(ParseAlbumRow).OfType<MusicAlbumRow>().ToList();
+        var albums = (await MusicSearchAsync(scoped, AlbumParams)).Select(ParseAlbumRow).OfType<MusicAlbumRow>()
+            .Where(album => requestedYear is null || album.Year == requestedYear)
+            .ToList();
         if (IsExplicitSearch(request)) {
             return IdentifyPluginResult.ForCandidates(albums.Select(album => new EntitySearchCandidate(
-                new Dictionary<string, string> { [Provider] = album.BrowseId, ["youtubeAlbum"] = album.BrowseId },
+                new Dictionary<string, string> { [AlbumIdentityNamespace] = album.BrowseId, [PrimaryIdentityNamespace] = album.BrowseId },
                 album.Title, album.Year, album.Artist, album.Images.Count > 0 ? album.Images[0].Url : null, null)).ToList());
         }
 
@@ -362,7 +392,7 @@ internal static partial class YoutubePlugin {
     }
 
     private static async Task<EntityMetadataProposal> AlbumProposalAsync(MusicAlbumRow album) {
-        var external = new Dictionary<string, string> { [Provider] = album.BrowseId, ["youtubeAlbum"] = album.BrowseId };
+        var external = new Dictionary<string, string> { [AlbumIdentityNamespace] = album.BrowseId, [PrimaryIdentityNamespace] = album.BrowseId };
         var urls = new[] { $"https://music.youtube.com/browse/{album.BrowseId}" };
         var dates = new Dictionary<string, string>();
         if (album.Year is int year) dates["released"] = year.ToString();
@@ -370,7 +400,7 @@ internal static partial class YoutubePlugin {
         // An album's artist is its structural parent (the music-artist grouping), not a studio. Writing
         // the byline artist into the Studio field fabricated a redundant studio duplicating the artist.
         return new EntityMetadataProposal(
-            $"youtube:music:album:{album.BrowseId}", Provider, "audio-library", 0.9m, "yt-music-album",
+            $"youtube:music:album:{album.BrowseId}", PluginId, "audio-library", 0.9m, "yt-music-album",
             new EntityMetadataPatch(album.Title, null, external, urls, [], null, [],
                 dates, new Dictionary<string, int>(), new Dictionary<string, int>(), null),
             album.Images, children, [], null, []);
@@ -380,16 +410,86 @@ internal static partial class YoutubePlugin {
         var external = new Dictionary<string, string>();
         var urls = new List<string>();
         if (song.VideoId is not null) {
-            external[Provider] = song.VideoId;
+            external[PrimaryIdentityNamespace] = song.VideoId;
+            external[AlbumIdentityNamespace] = FormatVideoAlbumIdentity(song.VideoId);
             urls.Add(MusicWatchUrl(song.VideoId));
         }
         // Same as albums: the artist is the structural parent, not a studio (see AlbumProposalAsync).
         return new EntityMetadataProposal(
             song.VideoId is not null ? $"youtube:music:single:{song.VideoId}" : $"youtube:music:single:{Slug(song.Title)}",
-            Provider, "audio-library", 0.9m, "yt-music-single",
+            PluginId, "audio-library", 0.9m, "yt-music-single",
             new EntityMetadataPatch(EmptyToNull(song.Album) ?? song.Title, null, external, urls, [], null, [],
                 new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null),
             song.Images, [], [], null, []);
+    }
+
+    private static async Task<EntityMetadataProposal> SingleAlbumProposalForIdAsync(string videoId) {
+        var proposal = await ProposalForIdAsync(videoId, "audio-library", "youtube-id");
+        var external = new Dictionary<string, string>(proposal.Patch.ExternalIds, StringComparer.OrdinalIgnoreCase) {
+            [PrimaryIdentityNamespace] = videoId,
+            [AlbumIdentityNamespace] = FormatVideoAlbumIdentity(videoId)
+        };
+        return proposal with {
+            ProposalId = $"youtube:music:single:{videoId}",
+            Patch = proposal.Patch with { ExternalIds = external }
+        };
+    }
+
+    internal static string FormatVideoAlbumIdentity(string videoId) => $"video:{videoId}";
+
+    internal static bool TryParseVideoAlbumIdentity(string? value, out string videoId) {
+        const string prefix = "video:";
+        if (value is not null && value.StartsWith(prefix, StringComparison.Ordinal) &&
+            IsValidId(value[prefix.Length..])) {
+            videoId = value[prefix.Length..];
+            return true;
+        }
+        videoId = string.Empty;
+        return false;
+    }
+
+    private static async Task<IReadOnlyList<EntityMetadataProposal>> ArtistAlbumChildrenAsync(string artistName) {
+        var albums = (await MusicSearchAsync(artistName, AlbumParams))
+            .Select(ParseAlbumRow)
+            .OfType<MusicAlbumRow>()
+            .Where(album => string.IsNullOrWhiteSpace(album.Artist) || ArtistMatches(album.Artist, artistName))
+            .GroupBy(album => album.BrowseId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Take(25)
+            .ToArray();
+        return albums.Select(AlbumShellProposal).ToArray();
+    }
+
+    private static EntityMetadataProposal AlbumShellProposal(MusicAlbumRow album) {
+        var dates = album.Year is int year
+            ? new Dictionary<string, string> { ["released"] = year.ToString() }
+            : new Dictionary<string, string>();
+        return new EntityMetadataProposal(
+            $"youtube:music:album:{album.BrowseId}",
+            PluginId,
+            "audio-library",
+            0.9m,
+            "artist-albums",
+            new EntityMetadataPatch(
+                album.Title,
+                album.Artist,
+                new Dictionary<string, string> {
+                    [AlbumIdentityNamespace] = album.BrowseId,
+                    [PrimaryIdentityNamespace] = album.BrowseId
+                },
+                [$"https://music.youtube.com/browse/{album.BrowseId}"],
+                [],
+                null,
+                [],
+                dates,
+                new Dictionary<string, int>(),
+                new Dictionary<string, int>(),
+                null),
+            album.Images,
+            [],
+            [],
+            null,
+            []);
     }
 
     /// <summary>
@@ -466,7 +566,7 @@ internal static partial class YoutubePlugin {
             var external = new Dictionary<string, string>();
             var urls = new List<string>();
             if (videoId is not null) {
-                external[Provider] = videoId;
+                external[PrimaryIdentityNamespace] = videoId;
                 urls.Add(MusicWatchUrl(videoId));
             }
             var patch = new EntityMetadataPatch(title!, null, external, urls, [], null, [],
@@ -474,7 +574,7 @@ internal static partial class YoutubePlugin {
                 new Dictionary<string, int> { ["sortOrder"] = index }, null);
             children.Add(new EntityMetadataProposal(
                 videoId is not null ? $"youtube:music:song:{videoId}" : $"youtube:music:song:{browseId}:{index}",
-                Provider, "audio-track", 0.85m, "track-list", patch, RowCoverImages(row), [], [], null, []));
+                PluginId, "audio-track", 0.85m, "track-list", patch, RowCoverImages(row), [], [], null, []));
             index++;
         }
         return children;
@@ -550,8 +650,8 @@ internal static partial class YoutubePlugin {
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(micro?.PublishDate)) dates["published"] = micro.PublishDate!;
         if (!string.IsNullOrWhiteSpace(micro?.UploadDate)) dates["uploaded"] = micro.UploadDate!;
-        var external = new Dictionary<string, string> { [Provider] = id };
-        if (!string.IsNullOrWhiteSpace(video.ChannelId)) external["youtubeChannel"] = video.ChannelId!;
+        var external = new Dictionary<string, string> { [PrimaryIdentityNamespace] = id };
+        if (!string.IsNullOrWhiteSpace(video.ChannelId)) external[ChannelIdentityNamespace] = video.ChannelId!;
         var channel = await FetchChannelAsync(video.ChannelId);
         var channelName = EmptyToNull(channel?.Title ?? micro?.OwnerChannelName ?? video.Author);
         var relationships = channelName is null ? [] : new[] { StudioRelationship(channelName, video.ChannelId, channel) };
@@ -579,7 +679,7 @@ internal static partial class YoutubePlugin {
         Proposal(targetKind, $"youtube:{id}", reason, new EntityMetadataPatch(
             EmptyToNull(data?.Title) ?? id,
             null,
-            new Dictionary<string, string> { [Provider] = id },
+            new Dictionary<string, string> { [PrimaryIdentityNamespace] = id },
             [VideoUrl(id)],
             [],
             channelName,
@@ -588,7 +688,7 @@ internal static partial class YoutubePlugin {
             new Dictionary<string, int>(),
             new Dictionary<string, int>(),
             null),
-            data?.ThumbnailUrl is null ? StaticImages(id) : [new ImageCandidate("poster", data.ThumbnailUrl, Provider, 10, null, data.ThumbnailWidth, data.ThumbnailHeight), .. StaticImages(id)],
+            data?.ThumbnailUrl is null ? StaticImages(id) : [new ImageCandidate("poster", data.ThumbnailUrl, PluginId, 10, null, data.ThumbnailWidth, data.ThumbnailHeight), .. StaticImages(id)],
             relationships);
     }
 
@@ -612,7 +712,7 @@ internal static partial class YoutubePlugin {
             var title = TextFromRenderer(renderer);
             if (string.IsNullOrWhiteSpace(title)) return;
             candidates.Add(new EntitySearchCandidate(
-                new Dictionary<string, string> { [Provider] = id! },
+                new Dictionary<string, string> { [PrimaryIdentityNamespace] = id! },
                 title!,
                 null,
                 null,
@@ -677,14 +777,14 @@ internal static partial class YoutubePlugin {
         var images = new List<ImageCandidate>();
         images.AddRange(ImageCandidates(
             "logo",
-            Provider,
+            PluginId,
             ThumbnailSources(
                 root,
                 ["metadata", "channelMetadataRenderer", "avatar", "thumbnails"],
                 ["header", "pageHeaderRenderer", "content", "pageHeaderViewModel", "image", "decoratedAvatarViewModel", "avatar", "avatarViewModel", "image", "sources"])));
         images.AddRange(ImageCandidates(
             "backdrop",
-            Provider,
+            PluginId,
             ThumbnailSources(
                 root,
                 ["header", "pageHeaderRenderer", "content", "pageHeaderViewModel", "banner", "imageBannerViewModel", "image", "sources"])));
@@ -695,7 +795,7 @@ internal static partial class YoutubePlugin {
     private static IReadOnlyList<ImageCandidate> ThumbnailImages(string id, IReadOnlyList<YoutubeThumbnail>? thumbs) {
         var images = (thumbs ?? []).OrderByDescending(t => t.Width ?? 0)
             .Where(t => !string.IsNullOrWhiteSpace(t.Url))
-            .Select((t, i) => new ImageCandidate("poster", t.Url!, Provider, 10 - i, null, t.Width, t.Height))
+            .Select((t, i) => new ImageCandidate("poster", t.Url!, PluginId, 10 - i, null, t.Width, t.Height))
             .Concat(StaticImages(id))
             .GroupBy(i => i.Url)
             .Select(g => g.First())
@@ -704,9 +804,9 @@ internal static partial class YoutubePlugin {
     }
 
     private static IReadOnlyList<ImageCandidate> StaticImages(string id) => [
-        new("poster", $"https://i.ytimg.com/vi/{id}/maxresdefault.jpg", Provider, 9, null, null, null),
-        new("poster", $"https://i.ytimg.com/vi/{id}/sddefault.jpg", Provider, 7, null, null, null),
-        new("poster", $"https://i.ytimg.com/vi/{id}/hqdefault.jpg", Provider, 5, null, null, null)
+        new("poster", $"https://i.ytimg.com/vi/{id}/maxresdefault.jpg", PluginId, 9, null, null, null),
+        new("poster", $"https://i.ytimg.com/vi/{id}/sddefault.jpg", PluginId, 7, null, null, null),
+        new("poster", $"https://i.ytimg.com/vi/{id}/hqdefault.jpg", PluginId, 5, null, null, null)
     ];
 
     private static EntityMetadataProposal Proposal(
@@ -716,17 +816,17 @@ internal static partial class YoutubePlugin {
         EntityMetadataPatch patch,
         IReadOnlyList<ImageCandidate> images,
         IReadOnlyList<EntityMetadataProposal>? relationships = null) =>
-        new(id, Provider, kind, 0.95m, reason, patch, images, [], [], null, relationships ?? []);
+        new(id, PluginId, kind, 0.95m, reason, patch, images, [], [], null, relationships ?? []);
 
     private static EntityMetadataProposal StudioRelationship(string channelName, string? channelId, ChannelMetadata? channel) {
         var externalIds = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(channel?.ExternalId ?? channelId)) {
-            externalIds["youtubeChannel"] = (channel?.ExternalId ?? channelId)!;
+            externalIds[ChannelIdentityNamespace] = (channel?.ExternalId ?? channelId)!;
         }
 
         return new EntityMetadataProposal(
             channel?.ExternalId is null ? $"youtube:channel:{Slug(channelName)}" : $"youtube:channel:{channel.ExternalId}",
-            Provider,
+            PluginId,
             "studio",
             0.95m,
             "youtube-channel",
@@ -750,16 +850,37 @@ internal static partial class YoutubePlugin {
     /// <summary>An external id read without the 11-char video-id shape gate — album (MPREb…) and channel (UC…) browse ids are longer.</summary>
     private static string? RawExternalId(IdentifyPluginRequest request, string key) {
         foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
-            if (ids is not null && ids.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)) return value.Trim();
+            if (TryGetValue(ids, key, out var value) && !string.IsNullOrWhiteSpace(value)) return value.Trim();
         }
         return null;
     }
 
     private static string? ExternalId(IdentifyPluginRequest request, string key) {
         foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
-            if (ids is not null && ids.TryGetValue(key, out var value) && IsValidId(value)) return value;
+            if (TryGetValue(ids, key, out var value) && IsValidId(value)) return value;
         }
         return null;
+    }
+
+    internal static string? SearchField(IdentifyPluginRequest request, params string[] keys) {
+        foreach (var key in keys) {
+            if (TryGetValue(request.Query.Fields, key, out var value) && !string.IsNullOrWhiteSpace(value)) return value.Trim();
+        }
+        return null;
+    }
+
+    private static bool HasSearchFields(IdentifyPluginRequest request) =>
+        request.Query.Fields?.Values.Any(value => !string.IsNullOrWhiteSpace(value)) == true;
+
+    private static bool TryGetValue(IReadOnlyDictionary<string, string>? values, string key, out string value) {
+        foreach (var pair in values ?? new Dictionary<string, string>()) {
+            if (pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) {
+                value = pair.Value;
+                return true;
+            }
+        }
+        value = string.Empty;
+        return false;
     }
 
     private static string? FirstUrlId(IReadOnlyList<string> urls) => urls.Select(IdFromString).FirstOrDefault(id => id is not null);
@@ -915,10 +1036,20 @@ internal static class PluginHost {
     }
 }
 
-internal sealed record IdentifyPluginRequest(int ProtocolVersion, string Action, IReadOnlyDictionary<string, string> Auth, IdentifyEntitySnapshot Entity, IdentifyQuery Query, IdentifyMatchHints Hints, IdentifyStructuralContext? StructuralContext = null);
+internal sealed record IdentifyPluginRequest(
+    int ProtocolVersion,
+    string Action,
+    IReadOnlyDictionary<string, string> Auth,
+    IdentifyEntitySnapshot Entity,
+    IdentifyQuery Query,
+    IdentifyMatchHints Hints,
+    IdentifyStructuralContext? StructuralContext = null,
+    bool IncludeNsfw = false,
+    bool IncludeRelationshipDetails = true,
+    bool IncludeStructuralChildren = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
-internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null);
+internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null);
 internal sealed record IdentifyMatchHints(IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, string? Title, string? FilePath);
 internal sealed record ImageCandidate(string Kind, string Url, string Source, decimal? Rank, string? Language, int? Width, int? Height);
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);

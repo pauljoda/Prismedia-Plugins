@@ -4,11 +4,20 @@ using System.Text.RegularExpressions;
 namespace Prismedia.Plugin.OpenLibrary;
 
 internal static partial class OpenLibraryMetadata {
-    public const string Provider = "openlibrary";
-    public const string WorkIdKey = "openlibraryWork";
-    public const string EditionIdKey = "openlibraryEdition";
-    public const string AuthorIdKey = "openlibraryAuthor";
-    public const string SeriesKey = "openlibrarySeries";
+    public const string PluginId = "openlibrary";
+    public const string PrimaryIdentityNamespace = "openlibrary";
+    public const string WorkIdKey = "openlibrarywork";
+    public const string EditionIdKey = "openlibraryedition";
+    public const string AuthorIdKey = "openlibraryauthor";
+    public const string SeriesKey = "openlibraryseries";
+
+    internal static class SearchFields {
+        public const string Title = "title";
+        public const string Author = "author";
+        public const string Year = "year";
+        public const string SeriesTitle = "seriesTitle";
+        public const string BirthYear = "birthYear";
+    }
 
     private static readonly HashSet<string> NoisySubjects = new(StringComparer.OrdinalIgnoreCase) {
         "accessible book",
@@ -26,8 +35,10 @@ internal static partial class OpenLibraryMetadata {
     public static string? OpenLibraryId(IReadOnlyDictionary<string, string>? ids, params string[] keys) {
         if (ids is null) return null;
         foreach (var key in keys) {
-            if (ids.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)) {
-                return value.Trim();
+            foreach (var pair in ids) {
+                if (pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(pair.Value)) {
+                    return pair.Value.Trim();
+                }
             }
         }
 

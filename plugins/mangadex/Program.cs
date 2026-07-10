@@ -6,16 +6,29 @@ var response = await PluginHost.RunAsync(args, MangaDexPlugin.IdentifyAsync);
 Console.Write(JsonSerializer.Serialize(response, PluginHost.JsonOptions));
 
 internal static partial class MangaDexPlugin {
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    internal static HttpClient Http { get; set; } = new() { Timeout = TimeSpan.FromSeconds(30) };
     private static readonly string[] SfwContentRatings = ["safe", "suggestive"];
     private static readonly string[] AllContentRatings = ["safe", "suggestive", "erotica", "pornographic"];
-    private const string Provider = "mangadex";
+    private const string PluginId = "mangadex";
+    private const string PrimaryIdentityNamespace = "mangadex";
+    private const string VolumeIdentityNamespace = "mangadexvolume";
+    private const string ChapterIdentityNamespace = "mangadexchapter";
+    private const string ChapterNumberLocator = "chapternumber";
+    private const string VolumeLocator = "volume";
+    private const string LanguageField = "language";
     private static readonly string RateLimitPath = Path.Combine(Path.GetTempPath(), "prismedia-mangadex.ratelimit");
     private static readonly TimeSpan MinRequestInterval = TimeSpan.FromMilliseconds(250);
     private const string Api = "https://api.mangadex.org";
     private const string Web = "https://mangadex.org";
     private const string Uploads = "https://uploads.mangadex.org";
     private const string DefaultLanguage = "en";
+
+    private static class SearchFields {
+        public const string Title = "title";
+        public const string SeriesTitle = "seriesTitle";
+        public const string Creator = "creator";
+        public const string Year = "year";
+    }
 
     static MangaDexPlugin() => Http.DefaultRequestHeaders.UserAgent.ParseAdd("Prismedia-MangaDex-Plugin/1.1");
 
@@ -26,18 +39,25 @@ internal static partial class MangaDexPlugin {
             return IdentifyPluginResult.None();
         }
 
-        var query = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
-        var mangaId = ExternalId(request, Provider)
+        var query = SearchField(request, SearchFields.Title, SearchFields.SeriesTitle) ?? request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
+        var hasVolumeIdentity = TryGetVolumeIdentity(request, out var volumeMangaId, out var selectedVolume);
+        var mangaId = (hasVolumeIdentity ? volumeMangaId : null)
+            ?? ExternalId(request, PrimaryIdentityNamespace)
             ?? IdFromUrl(request.Query.Url)
             ?? FirstUrlId(request.Hints.Urls)
-            ?? AncestorExternalId(request, Provider);
+            ?? AncestorExternalId(request, PrimaryIdentityNamespace);
 
-        var chapterId = ExternalId(request, "mangadexChapter")
+        var chapterId = ExternalId(request, ChapterIdentityNamespace)
             ?? ChapterIdFromUrl(request.Query.Url)
             ?? FirstChapterUrlId(request.Hints.Urls);
 
         if (mangaId is not null && !IsExplicitSearch(request)) {
-            return IdentifyPluginResult.ForProposal(await ProposalAsync(mangaId, request, "external-id", query));
+            return IdentifyPluginResult.ForProposal(await ProposalAsync(
+                mangaId,
+                request,
+                "external-id",
+                query,
+                selectedVolume: hasVolumeIdentity ? selectedVolume : null));
         }
 
         if (chapterId is not null && !IsExplicitSearch(request)) {
@@ -52,9 +72,13 @@ internal static partial class MangaDexPlugin {
             return IdentifyPluginResult.None();
         }
 
-        var results = await SearchAsync(query, request.IncludeNsfw);
+        var results = await SearchAsync(
+            query,
+            request.IncludeNsfw,
+            SearchYear(request),
+            SearchField(request, SearchFields.Creator));
         return IdentifyPluginResult.ForCandidates(results.Select(manga => new EntitySearchCandidate(
-            new Dictionary<string, string> { [Provider] = manga.Id },
+            new Dictionary<string, string> { [PrimaryIdentityNamespace] = manga.Id },
             Title(manga, query) ?? manga.Id,
             manga.Attributes?.Year,
             DescriptionText(manga),
@@ -67,7 +91,8 @@ internal static partial class MangaDexPlugin {
         IdentifyPluginRequest request,
         string reason,
         string? preferredTitle,
-        string? selectedChapterId = null) {
+        string? selectedChapterId = null,
+        string? selectedVolume = null) {
         var manga = await GetMangaAsync(id) ?? throw new InvalidOperationException("MangaDex title not found.");
         if (!request.IncludeNsfw && IsAdult(manga)) {
             throw new InvalidOperationException("MangaDex title is adult-rated and NSFW mode is not enabled.");
@@ -79,14 +104,14 @@ internal static partial class MangaDexPlugin {
         var children = BuildChildren(manga, chapters, aggregate, covers, selectedChapterId, PreferredLanguage(request)).ToArray();
         var images = BookImages(manga, covers).ToArray();
         var attrs = manga.Attributes;
-        var external = new Dictionary<string, string> { [Provider] = manga.Id };
+        var external = new Dictionary<string, string> { [PrimaryIdentityNamespace] = manga.Id };
         var urls = new[] { $"{Web}/title/{manga.Id}" };
         var dates = new Dictionary<string, string>();
         if (attrs?.Year is int year) dates["published"] = year.ToString();
 
         var proposal = new EntityMetadataProposal(
             $"mangadex:{manga.Id}",
-            Provider,
+            PluginId,
             "book",
             0.9m,
             reason,
@@ -109,16 +134,19 @@ internal static partial class MangaDexPlugin {
             [],
             request.Entity.Kind.Equals("book", StringComparison.OrdinalIgnoreCase) ? request.Entity.Id : null,
             []);
-        return ScopedProposalForRequest(proposal, request);
+        return ScopedProposalForRequest(proposal, request, selectedVolume);
     }
 
-    private static EntityMetadataProposal ScopedProposalForRequest(EntityMetadataProposal bookProposal, IdentifyPluginRequest request) {
+    private static EntityMetadataProposal ScopedProposalForRequest(
+        EntityMetadataProposal bookProposal,
+        IdentifyPluginRequest request,
+        string? selectedVolume = null) {
         if (request.Entity.Kind.Equals("book", StringComparison.OrdinalIgnoreCase)) {
             return bookProposal;
         }
 
         if (request.Entity.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase)) {
-            var volume = bookProposal.Children.FirstOrDefault(child => MatchesVolumeRequest(child, request));
+            var volume = bookProposal.Children.FirstOrDefault(child => MatchesVolumeRequest(child, request, selectedVolume));
             return volume is null
                 ? ScopedFallback(bookProposal, request, "book-volume")
                 : volume with { TargetEntityId = request.Entity.Id };
@@ -146,11 +174,13 @@ internal static partial class MangaDexPlugin {
         var ancestor = request.StructuralContext?.Ancestors
             .FirstOrDefault(snapshot => snapshot.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase));
         if (ancestor is null) return null;
-        var volumeNumber = NormalizeNumber(ancestor.ExternalIds?.GetValueOrDefault("volume")) ?? NumberFromTitle(ancestor.Title);
+        var volumeNumber = NormalizeNumber(
+            TryGetValue(ancestor.ExternalIds, VolumeLocator, out var ancestorVolume) ? ancestorVolume : null) ??
+            NumberFromTitle(ancestor.Title);
         if (volumeNumber is null) return null;
         return bookProposal.Children.FirstOrDefault(child =>
             child.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase) &&
-            child.Patch.ExternalIds.TryGetValue("volume", out var volume) &&
+            TryGetValue(child.Patch.ExternalIds, VolumeLocator, out var volume) &&
             NormalizeNumber(volume) == volumeNumber);
     }
 
@@ -192,8 +222,8 @@ internal static partial class MangaDexPlugin {
         };
 
     private static IReadOnlyDictionary<string, string> MangaOnlyExternalIds(IReadOnlyDictionary<string, string> externalIds) =>
-        externalIds.TryGetValue(Provider, out var mangaId)
-            ? new Dictionary<string, string> { [Provider] = mangaId }
+        TryGetValue(externalIds, PrimaryIdentityNamespace, out var mangaId)
+            ? new Dictionary<string, string> { [PrimaryIdentityNamespace] = mangaId }
             : new Dictionary<string, string>();
 
     private static IEnumerable<EntityMetadataProposal> StructuralDescendants(EntityMetadataProposal proposal) {
@@ -205,13 +235,21 @@ internal static partial class MangaDexPlugin {
         }
     }
 
-    private static bool MatchesVolumeRequest(EntityMetadataProposal volume, IdentifyPluginRequest request) {
+    private static bool MatchesVolumeRequest(
+        EntityMetadataProposal volume,
+        IdentifyPluginRequest request,
+        string? selectedVolume = null) {
         if (!volume.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase)) return false;
 
-        var requestedVolume = ExternalId(request, "volume");
+        if (selectedVolume is not null &&
+            TryGetValue(volume.Patch.ExternalIds, VolumeLocator, out var exactVolume)) {
+            return exactVolume.Equals(selectedVolume, StringComparison.Ordinal);
+        }
+
+        var requestedVolume = SearchField(request, "volumeNumber") ?? ExternalId(request, VolumeLocator);
         var requestedVolumeNumber = NormalizeNumber(requestedVolume) ?? NumberFromTitle(request.Entity.Title);
         if (requestedVolumeNumber is not null &&
-            volume.Patch.ExternalIds.TryGetValue("volume", out var volumeId) &&
+            TryGetValue(volume.Patch.ExternalIds, VolumeLocator, out var volumeId) &&
             NormalizeNumber(volumeId) == requestedVolumeNumber) {
             return true;
         }
@@ -233,16 +271,16 @@ internal static partial class MangaDexPlugin {
     }
 
     private static bool MatchesChapterRequest(EntityMetadataProposal chapter, IdentifyPluginRequest request) {
-        var requestedChapterId = ExternalId(request, "mangadexChapter");
+        var requestedChapterId = ExternalId(request, ChapterIdentityNamespace);
         if (!string.IsNullOrWhiteSpace(requestedChapterId) &&
-            chapter.Patch.ExternalIds.TryGetValue("mangadexChapter", out var chapterId) &&
-            chapterId.Equals(requestedChapterId, StringComparison.OrdinalIgnoreCase)) {
+            TryGetValue(chapter.Patch.ExternalIds, ChapterIdentityNamespace, out var chapterId) &&
+            chapterId.Equals(requestedChapterId, StringComparison.Ordinal)) {
             return true;
         }
 
-        var requestedChapterNumber = ExternalId(request, "chapterNumber");
+        var requestedChapterNumber = SearchField(request, "chapterNumber") ?? ExternalId(request, ChapterNumberLocator);
         if (!string.IsNullOrWhiteSpace(requestedChapterNumber) &&
-            chapter.Patch.ExternalIds.TryGetValue("chapterNumber", out var proposalChapterNumber) &&
+            TryGetValue(chapter.Patch.ExternalIds, ChapterNumberLocator, out var proposalChapterNumber) &&
             NormalizeChapterNumber(proposalChapterNumber) == NormalizeChapterNumber(requestedChapterNumber)) {
             return true;
         }
@@ -252,7 +290,7 @@ internal static partial class MangaDexPlugin {
         // positional alignment.
         var titleChapterNumber = ChapterNumberFromTitle(request.Entity.Title);
         if (titleChapterNumber is not null &&
-            chapter.Patch.ExternalIds.TryGetValue("chapterNumber", out var candidateNumber) &&
+            TryGetValue(chapter.Patch.ExternalIds, ChapterNumberLocator, out var candidateNumber) &&
             NormalizeChapterNumber(candidateNumber) == titleChapterNumber) {
             return true;
         }
@@ -275,7 +313,7 @@ internal static partial class MangaDexPlugin {
     }
 
     private static int? ProposalChapterNumber(EntityMetadataProposal chapter) {
-        if (chapter.Patch.ExternalIds.TryGetValue("chapterNumber", out var value)) {
+        if (TryGetValue(chapter.Patch.ExternalIds, ChapterNumberLocator, out var value)) {
             return PositionNumber(value);
         }
 
@@ -339,14 +377,18 @@ internal static partial class MangaDexPlugin {
         var dates = VolumeDates(chapters);
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:volume:{volume}",
-            Provider,
+            PluginId,
             "book-volume",
             0.8m,
             "volume-map",
             new EntityMetadataPatch(
                 $"Volume {volume}",
                 VolumeDescription(chapters),
-                new Dictionary<string, string> { [Provider] = manga.Id, ["volume"] = volume },
+                new Dictionary<string, string> {
+                    [VolumeIdentityNamespace] = FormatVolumeIdentity(manga.Id, volume),
+                    [PrimaryIdentityNamespace] = manga.Id,
+                    [VolumeLocator] = volume
+                },
                 [$"{Web}/title/{manga.Id}"],
                 [],
                 null,
@@ -394,15 +436,15 @@ internal static partial class MangaDexPlugin {
         }
 
         var external = new Dictionary<string, string> {
-            [Provider] = manga.Id,
-            ["mangadexChapter"] = chapter.Id
+            [PrimaryIdentityNamespace] = manga.Id,
+            [ChapterIdentityNamespace] = chapter.Id
         };
-        if (!string.IsNullOrWhiteSpace(chapterText)) external["chapterNumber"] = chapterText!;
-        if (NormalizeVolumeValue(chapter.Attributes?.Volume) is string chapterVolume) external["volume"] = chapterVolume;
+        if (!string.IsNullOrWhiteSpace(chapterText)) external[ChapterNumberLocator] = chapterText!;
+        if (NormalizeVolumeValue(chapter.Attributes?.Volume) is string chapterVolume) external[VolumeLocator] = chapterVolume;
 
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:chapter:{chapter.Id}",
-            Provider,
+            PluginId,
             "book-chapter",
             selectedChapterId == chapter.Id ? 0.9m : 0.7m,
             "chapter-feed",
@@ -425,9 +467,15 @@ internal static partial class MangaDexPlugin {
             []);
     }
 
-    private static async Task<IReadOnlyList<MangaResource>> SearchAsync(string title, bool includeNsfw) {
-        var url = $"{Api}/manga?title={Uri.EscapeDataString(title)}&limit=10&includes[]=cover_art&includes[]=author&includes[]=artist&order[relevance]=desc{ContentRatingQuery(includeNsfw)}";
-        return (await GetJsonAsync<ListEnvelope<MangaResource>>(url))?.Data ?? [];
+    private static async Task<IReadOnlyList<MangaResource>> SearchAsync(string title, bool includeNsfw, int? year, string? creator) {
+        var yearQuery = year is null ? string.Empty : $"&year={year.Value}";
+        var url = $"{Api}/manga?title={Uri.EscapeDataString(title)}&limit=10&includes[]=cover_art&includes[]=author&includes[]=artist&order[relevance]=desc{yearQuery}{ContentRatingQuery(includeNsfw)}";
+        var results = (await GetJsonAsync<ListEnvelope<MangaResource>>(url))?.Data ?? [];
+        return string.IsNullOrWhiteSpace(creator)
+            ? results
+            : results.Where(manga => RelationshipNames(manga, "author", "artist")
+                .Any(name => name.Contains(creator, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
     }
 
     private static async Task<MangaResource?> GetMangaAsync(string id) =>
@@ -825,8 +873,9 @@ internal static partial class MangaDexPlugin {
         manga.Attributes?.ContentRating is "erotica" or "pornographic";
 
     private static string PreferredLanguage(IdentifyPluginRequest request) =>
-        request.Query.ExternalIds?.GetValueOrDefault("language") ??
-        request.Entity.ExternalIds?.GetValueOrDefault("language") ??
+        SearchField(request, LanguageField) ??
+        (TryGetValue(request.Query.ExternalIds, LanguageField, out var queryLanguage) ? queryLanguage : null) ??
+        (TryGetValue(request.Entity.ExternalIds, LanguageField, out var entityLanguage) ? entityLanguage : null) ??
         DefaultLanguage;
 
     private static string? Title(MangaResource manga, string? preferredTitle = null) {
@@ -913,14 +962,79 @@ internal static partial class MangaDexPlugin {
 
     private static string? ExternalId(IdentifyPluginRequest request, string key) {
         foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
-            if (ids is not null && ids.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)) return value;
+            if (TryGetValue(ids, key, out var value) && !string.IsNullOrWhiteSpace(value)) return value;
         }
 
         return null;
     }
 
     private static string? AncestorExternalId(IdentifyPluginRequest request, string key) =>
-        request.StructuralContext?.Ancestors.Select(ancestor => ancestor.ExternalIds?.GetValueOrDefault(key)).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        request.StructuralContext?.Ancestors
+            .Select(ancestor => TryGetValue(ancestor.ExternalIds, key, out var value) ? value : null)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    internal static string? SearchField(IdentifyPluginRequest request, params string[] keys) {
+        foreach (var key in keys) {
+            if (TryGetValue(request.Query.Fields, key, out var value) && !string.IsNullOrWhiteSpace(value)) return value.Trim();
+        }
+        return null;
+    }
+
+    private static int? SearchYear(IdentifyPluginRequest request) =>
+        int.TryParse(SearchField(request, SearchFields.Year), out var year) && year is >= 1900 and <= 2200
+            ? year
+            : null;
+
+    internal static string FormatVolumeIdentity(string mangaId, string volume) =>
+        $"{mangaId}:{volume.Length}:{volume}";
+
+    internal static bool TryParseVolumeIdentity(string? value, out string mangaId, out string volume) {
+        mangaId = string.Empty;
+        volume = string.Empty;
+        if (string.IsNullOrEmpty(value)) return false;
+
+        var idSeparator = value.IndexOf(':');
+        if (idSeparator <= 0 || !Guid.TryParse(value[..idSeparator], out _)) return false;
+        var lengthSeparator = value.IndexOf(':', idSeparator + 1);
+        if (lengthSeparator <= idSeparator + 1 ||
+            !int.TryParse(value[(idSeparator + 1)..lengthSeparator], out var expectedLength) ||
+            expectedLength < 1) {
+            return false;
+        }
+
+        var encodedVolume = value[(lengthSeparator + 1)..];
+        if (encodedVolume.Length != expectedLength) return false;
+        mangaId = value[..idSeparator];
+        volume = encodedVolume;
+        return true;
+    }
+
+    private static bool TryGetVolumeIdentity(
+        IdentifyPluginRequest request,
+        out string mangaId,
+        out string volume) {
+        foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
+            if (TryGetValue(ids, VolumeIdentityNamespace, out var value) &&
+                TryParseVolumeIdentity(value, out mangaId, out volume)) {
+                return true;
+            }
+        }
+
+        mangaId = string.Empty;
+        volume = string.Empty;
+        return false;
+    }
+
+    private static bool TryGetValue(IReadOnlyDictionary<string, string>? values, string key, out string value) {
+        foreach (var pair in values ?? new Dictionary<string, string>()) {
+            if (pair.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) {
+                value = pair.Value;
+                return true;
+            }
+        }
+        value = string.Empty;
+        return false;
+    }
 
     private static string? FirstUrlId(IReadOnlyList<string> urls) => urls.Select(IdFromUrl).FirstOrDefault(id => id is not null);
     private static string? FirstChapterUrlId(IReadOnlyList<string> urls) => urls.Select(ChapterIdFromUrl).FirstOrDefault(id => id is not null);
@@ -939,7 +1053,7 @@ internal static partial class MangaDexPlugin {
 
     private static bool IsExplicitSearch(IdentifyPluginRequest request) =>
         request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(request.Query.Title) &&
+        (!string.IsNullOrWhiteSpace(request.Query.Title) || request.Query.Fields?.Values.Any(value => !string.IsNullOrWhiteSpace(value)) == true) &&
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
 
@@ -978,7 +1092,7 @@ internal static class PluginHost {
 internal sealed record IdentifyPluginRequest(int ProtocolVersion, string Action, IReadOnlyDictionary<string, string> Auth, IdentifyEntitySnapshot Entity, IdentifyQuery Query, IdentifyMatchHints Hints, IdentifyStructuralContext? StructuralContext = null, bool IncludeNsfw = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
-internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null);
+internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null);
 internal sealed record IdentifyMatchHints(IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, string? Title, string? FilePath);
 internal sealed record ImageCandidate(string Kind, string Url, string Source, decimal? Rank, string? Language, int? Width, int? Height);
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);

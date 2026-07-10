@@ -78,7 +78,7 @@ Required fields:
 
 | Field | Notes |
 |---|---|
-| `manifestVersion` | Current registry manifest version. Use `1` unless the Prismedia docs say otherwise. |
+| `manifestVersion` | Current registry manifest version. Use `2`. |
 | `apiTags` | Include `prismedia`. |
 | `id` | Lowercase, no spaces. Must match the directory name. |
 | `name` | Display name shown to users. |
@@ -87,10 +87,14 @@ Required fields:
 | `entry` | Published assembly path under `dist/`, for example `dist/Prismedia.Plugin.Example.dll`. |
 | `compat` | Prismedia/plugin API compatibility bounds. |
 | `auth` | Optional list of credentials Prismedia should prompt for. Omit if the upstream API is public. |
-| `supports` | Entity/action support matrix. Must match the actions handled by the plugin. |
+| `supports` | Entity/action support matrix. Each entry declares canonical identity namespaces and, when searchable, an ordered field schema. |
 | `isNsfw` | Set `true` if the plugin can return adult content by default. |
 
 The full action/input/output schemas — including normalized video, series, book, person, studio, and audio result shapes — are documented in the [plugin guide](https://pauljoda.github.io/Prismedia/docs/plugins/overview).
+
+Manifest-v2 support entries keep the plugin installation id separate from upstream identities. For example, a plugin named `movie-metadata` can declare `identityNamespaces: ["tmdb"]`. Namespace values must be lowercase. Search fields use the `text`, `number`, or `year` type and are sent to the process through `query.fields`; plugins should continue accepting `query.title` as a compatibility fallback. Only declare `lookup-id`, `lookup-url`, or `search` when that action can round-trip to the requested entity kind.
+
+The build script validates every source manifest before publishing. A full build repackages every plugin and regenerates the complete index. A plugin-id-limited build preserves each unselected plugin's existing index row and requires its zip checksum to remain unchanged, so future source manifests can never be advertised against stale artifacts.
 
 ### 3. Build & test locally
 

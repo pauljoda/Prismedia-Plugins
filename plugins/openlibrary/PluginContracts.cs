@@ -27,7 +27,8 @@ internal sealed record IdentifyQuery(
     string? Title,
     string? Url,
     IReadOnlyDictionary<string, string>? ExternalIds,
-    bool? RequireChoice = null);
+    bool? RequireChoice = null,
+    IReadOnlyDictionary<string, string>? Fields = null);
 
 internal sealed record IdentifyMatchHints(
     IReadOnlyDictionary<string, string> ExternalIds,

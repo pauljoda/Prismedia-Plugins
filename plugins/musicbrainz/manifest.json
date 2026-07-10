@@ -1,18 +1,18 @@
 {
-  "manifestVersion": 1,
+  "manifestVersion": 2,
   "apiTags": [
     "prismedia"
   ],
   "id": "musicbrainz",
   "name": "MusicBrainz",
-  "version": "1.2.0",
-  "date": "2026-07-02",
+  "version": "1.2.1",
+  "date": "2026-07-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MusicBrainz.dll",
   "compat": {
-    "pluginApiMin": "1.0.0",
+    "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "1.0.0",
+    "prismediaMin": "2.0.1",
     "prismediaMax": null
   },
   "auth": [],
@@ -23,9 +23,16 @@
       "actions": [
         "lookup-id",
         "lookup-url",
-        "search",
-        "cascade"
-      ]
+        "search"
+      ],
+      "identityNamespaces": ["musicbrainzartist", "musicbrainz"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Artist", "type": "text", "required": true, "placeholder": "Artist name" },
+          { "key": "country", "label": "Country", "type": "text", "required": false, "placeholder": "US" },
+          { "key": "startYear", "label": "Started", "type": "year", "required": false, "placeholder": "1994" }
+        ]
+      }
     },
     {
       "entityKind": "audio-library",
@@ -33,7 +40,15 @@
         "lookup-id",
         "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["musicbrainzrelease", "musicbrainzreleasegroup", "musicbrainz"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Album", "type": "text", "required": true, "placeholder": "Album title" },
+          { "key": "artist", "label": "Artist", "type": "text", "required": false, "placeholder": "Artist name" },
+          { "key": "year", "label": "Release year", "type": "year", "required": false, "placeholder": "2024" }
+        ]
+      }
     },
     {
       "entityKind": "audio-track",
@@ -41,7 +56,16 @@
         "lookup-id",
         "lookup-url",
         "search"
-      ]
+      ],
+      "identityNamespaces": ["musicbrainzrecording", "musicbrainz"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Track", "type": "text", "required": true, "placeholder": "Track title" },
+          { "key": "artist", "label": "Artist", "type": "text", "required": false, "placeholder": "Artist name" },
+          { "key": "album", "label": "Album", "type": "text", "required": false, "placeholder": "Album title" },
+          { "key": "year", "label": "Release year", "type": "year", "required": false, "placeholder": "2024" }
+        ]
+      }
     }
   ]
 }

@@ -25,7 +25,7 @@ internal sealed class TmdbPlugin {
             : IdentifyPluginResult.None();
 
     private async Task<IdentifyPluginResult> IdentifySeriesAsync(IdentifyPluginRequest request) {
-        var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
+        var title = SearchTitle(request, TmdbConstants.SearchFields.SeriesTitle, TmdbConstants.SearchFields.Title);
         if (ResolveTmdbReference(request, "tv") is { } reference) {
             return Proposal(await _mapper.TvToProposalAsync(
                 await _client.GetTvAsync(reference.Id),
@@ -33,7 +33,10 @@ internal sealed class TmdbPlugin {
                 request.IncludeRelationshipDetails));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchSeriesCandidatesAsync(title, request.IncludeNsfw));
+        return IdentifyPluginResult.ForCandidates(await SearchSeriesCandidatesAsync(
+            title,
+            request.IncludeNsfw,
+            TmdbMetadataHelpers.SearchYear(request)));
     }
 
     private async Task<IdentifyPluginResult> IdentifyVideoAsync(IdentifyPluginRequest request) {
@@ -41,7 +44,7 @@ internal sealed class TmdbPlugin {
             return Proposal(await EpisodeFromContextAsync(seriesId, seasonNumber, episodeNumber));
         }
 
-        var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
+        var title = SearchTitle(request, TmdbConstants.SearchFields.Title);
         if (ResolveTmdbReference(request, "movie") is { } reference) {
             return Proposal(await _mapper.MovieToProposalAsync(
                 await _client.GetMovieAsync(reference.Id),
@@ -50,7 +53,10 @@ internal sealed class TmdbPlugin {
                 request.IncludeRelationshipDetails));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(title, request.IncludeNsfw));
+        return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(
+            title,
+            request.IncludeNsfw,
+            TmdbMetadataHelpers.SearchYear(request)));
     }
 
     private async Task<IdentifyPluginResult> IdentifySeasonAsync(IdentifyPluginRequest request) {
@@ -94,7 +100,7 @@ internal sealed class TmdbPlugin {
     }
 
     private async Task<IdentifyPluginResult> IdentifyPersonAsync(IdentifyPluginRequest request) {
-        var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
+        var title = SearchTitle(request, TmdbConstants.SearchFields.Title);
         if (ResolveTmdbReference(request, "person") is { } reference) {
             return Proposal(await _mapper.PersonToProposalAsync(reference.Id, reference.MatchReason));
         }
@@ -103,7 +109,7 @@ internal sealed class TmdbPlugin {
     }
 
     private async Task<IdentifyPluginResult> IdentifyStudioAsync(IdentifyPluginRequest request) {
-        var title = request.Query.Title ?? request.Hints.Title ?? request.Entity.Title;
+        var title = SearchTitle(request, TmdbConstants.SearchFields.Title);
         if (ResolveTmdbReference(request, "company") is { } reference) {
             return Proposal(await _mapper.StudioToProposalAsync(reference.Id, reference.MatchReason));
         }
@@ -156,9 +162,15 @@ internal sealed class TmdbPlugin {
 
     private static bool IsExplicitTitleSearch(IdentifyPluginRequest request) =>
         request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) &&
-        !string.IsNullOrWhiteSpace(request.Query.Title) &&
+        (!string.IsNullOrWhiteSpace(request.Query.Title) || TmdbMetadataHelpers.HasSearchFields(request)) &&
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
+
+    private static string? SearchTitle(IdentifyPluginRequest request, params string[] fieldKeys) =>
+        TmdbMetadataHelpers.SearchField(request, fieldKeys) ??
+        request.Query.Title ??
+        request.Hints.Title ??
+        request.Entity.Title;
 
     // TMDB returns explicit adult titles whenever include_adult is set. Honor the request's
     // NSFW gate: only ask for adult results in NSFW mode, and defensively drop any result the
@@ -168,49 +180,56 @@ internal sealed class TmdbPlugin {
     private static IReadOnlyList<TmdbSearchResult> FilterAdult(TmdbSearchResult[]? results, bool includeNsfw) =>
         (results ?? []).Where(result => includeNsfw || result.Adult != true).ToArray();
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchMovieCandidatesAsync(string? rawTitle, bool includeNsfw) =>
-        (await SearchMovieResultsAsync(rawTitle, includeNsfw))
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchMovieCandidatesAsync(string? rawTitle, bool includeNsfw, int? year) =>
+        (await SearchMovieResultsAsync(rawTitle, includeNsfw, year))
         .Take(10)
         .Select(row => TmdbMetadataHelpers.ToCandidate(row, "movie"))
         .ToArray();
 
-    private async Task<List<ScoredResult>> SearchMovieResultsAsync(string? rawTitle, bool includeNsfw) {
+    private async Task<List<ScoredResult>> SearchMovieResultsAsync(string? rawTitle, bool includeNsfw, int? year = null) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
 
         var clean = TmdbMetadataHelpers.Normalize(rawTitle);
-        var data = await _client.FetchAsync<TmdbSearchResponse>("/search/movie", new Dictionary<string, string> {
+        var parameters = new Dictionary<string, string> {
             ["query"] = clean.Length == 0 ? rawTitle : clean,
             ["include_adult"] = IncludeAdultParam(includeNsfw)
-        });
+        };
+        if (year is not null) parameters["year"] = year.Value.ToString();
+        var data = await _client.FetchAsync<TmdbSearchResponse>("/search/movie", parameters);
         return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(data.Results, includeNsfw), result => result.Title ?? result.Name ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchSeriesCandidatesAsync(string? rawTitle, bool includeNsfw) =>
-        (await SearchSeriesResultsAsync(rawTitle, includeNsfw))
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchSeriesCandidatesAsync(string? rawTitle, bool includeNsfw, int? year) =>
+        (await SearchSeriesResultsAsync(rawTitle, includeNsfw, year))
         .Take(10)
         .Select(row => TmdbMetadataHelpers.ToCandidate(row, "tv"))
         .ToArray();
 
-    private async Task<List<ScoredResult>> SearchSeriesResultsAsync(string? rawTitle, bool includeNsfw) {
+    private async Task<List<ScoredResult>> SearchSeriesResultsAsync(string? rawTitle, bool includeNsfw, int? year = null) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
 
         var clean = TmdbMetadataHelpers.Normalize(rawTitle);
         var includeAdult = IncludeAdultParam(includeNsfw);
-        var data = await _client.FetchAsync<TmdbSearchResponse>("/search/tv", new Dictionary<string, string> {
+        var parameters = new Dictionary<string, string> {
             ["query"] = clean.Length == 0 ? rawTitle : clean,
             ["include_adult"] = includeAdult
-        });
+        };
+        if (year is not null) parameters["first_air_date_year"] = year.Value.ToString();
+        var data = await _client.FetchAsync<TmdbSearchResponse>("/search/tv", parameters);
         var results = data.Results ?? [];
         if (results.Length == 0) {
             var multi = await _client.FetchAsync<TmdbSearchResponse>("/search/multi", new Dictionary<string, string> {
                 ["query"] = clean.Length == 0 ? rawTitle : clean,
                 ["include_adult"] = includeAdult
             });
-            results = (multi.Results ?? []).Where(result => result.MediaType == "tv").ToArray();
+            results = (multi.Results ?? [])
+                .Where(result => result.MediaType == "tv")
+                .Where(result => year is null || result.FirstAirDate?.StartsWith(year.Value.ToString(), StringComparison.Ordinal) == true)
+                .ToArray();
         }
 
         return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(results, includeNsfw), result => result.Name ?? result.Title ?? string.Empty);
