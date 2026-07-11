@@ -5,6 +5,28 @@ namespace Prismedia.Plugin.Tmdb.Tests;
 
 public sealed class TmdbPluginTests {
     [Fact]
+    public async Task MovieSearchHonorsRequestedLimitBeyondLegacyTen() {
+        using var http = new HttpClient(new StubHandler(request => {
+            Assert.Equal("/3/search/movie", request.RequestUri?.AbsolutePath);
+            return $$"""
+                { "results": [
+                  {{string.Join(',', Enumerable.Range(1, 15).Select(id => $$"""{ "id": {{id}}, "title": "Movie {{id}}", "adult": false }"""))}}
+                ] }
+                """;
+        }));
+        var plugin = new TmdbPlugin(new TmdbApiClient(http, "test-key"));
+
+        var result = await plugin.IdentifyAsync(new IdentifyPluginRequest(
+            "search",
+            new Dictionary<string, string>(),
+            new IdentifyEntitySnapshot(Guid.NewGuid(), "movie", "Movie"),
+            new IdentifyQuery("Movie", null, null, Limit: 25),
+            new IdentifyMatchHints(new Dictionary<string, string>(), [], "Movie", null)));
+
+        Assert.Equal(15, result.Candidates.Count);
+    }
+
+    [Fact]
     public async Task MovieLookupReturnsMovieProposalKind() {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/3/movie/1239655", request.RequestUri?.AbsolutePath);

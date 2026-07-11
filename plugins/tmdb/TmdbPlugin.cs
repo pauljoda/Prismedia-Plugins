@@ -1,6 +1,7 @@
 namespace Prismedia.Plugin.Tmdb;
 
 internal sealed class TmdbPlugin {
+    private const int MaxSearchCandidates = 20;
     private readonly TmdbApiClient _client;
     private readonly TmdbProposalMapper _mapper;
     private readonly IReadOnlyDictionary<string, Func<IdentifyPluginRequest, Task<IdentifyPluginResult>>> _handlers;
@@ -36,7 +37,8 @@ internal sealed class TmdbPlugin {
         return IdentifyPluginResult.ForCandidates(await SearchSeriesCandidatesAsync(
             title,
             request.IncludeNsfw,
-            TmdbMetadataHelpers.SearchYear(request)));
+            TmdbMetadataHelpers.SearchYear(request),
+            SearchLimit(request)));
     }
 
     private async Task<IdentifyPluginResult> IdentifyVideoAsync(IdentifyPluginRequest request) {
@@ -56,7 +58,8 @@ internal sealed class TmdbPlugin {
         return IdentifyPluginResult.ForCandidates(await SearchMovieCandidatesAsync(
             title,
             request.IncludeNsfw,
-            TmdbMetadataHelpers.SearchYear(request)));
+            TmdbMetadataHelpers.SearchYear(request),
+            SearchLimit(request)));
     }
 
     private async Task<IdentifyPluginResult> IdentifySeasonAsync(IdentifyPluginRequest request) {
@@ -105,7 +108,7 @@ internal sealed class TmdbPlugin {
             return Proposal(await _mapper.PersonToProposalAsync(reference.Id, reference.MatchReason));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchPersonCandidatesAsync(title, request.IncludeNsfw));
+        return IdentifyPluginResult.ForCandidates(await SearchPersonCandidatesAsync(title, request.IncludeNsfw, SearchLimit(request)));
     }
 
     private async Task<IdentifyPluginResult> IdentifyStudioAsync(IdentifyPluginRequest request) {
@@ -114,7 +117,7 @@ internal sealed class TmdbPlugin {
             return Proposal(await _mapper.StudioToProposalAsync(reference.Id, reference.MatchReason));
         }
 
-        return IdentifyPluginResult.ForCandidates(await SearchStudioCandidatesAsync(title));
+        return IdentifyPluginResult.ForCandidates(await SearchStudioCandidatesAsync(title, SearchLimit(request)));
     }
 
     private static IdentifyPluginResult Proposal(EntityMetadataProposal? proposal) =>
@@ -180,9 +183,12 @@ internal sealed class TmdbPlugin {
     private static IReadOnlyList<TmdbSearchResult> FilterAdult(TmdbSearchResult[]? results, bool includeNsfw) =>
         (results ?? []).Where(result => includeNsfw || result.Adult != true).ToArray();
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchMovieCandidatesAsync(string? rawTitle, bool includeNsfw, int? year) =>
+    private static int SearchLimit(IdentifyPluginRequest request) =>
+        Math.Clamp(request.Query.Limit ?? 10, 1, MaxSearchCandidates);
+
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchMovieCandidatesAsync(string? rawTitle, bool includeNsfw, int? year, int limit) =>
         (await SearchMovieResultsAsync(rawTitle, includeNsfw, year))
-        .Take(10)
+        .Take(limit)
         .Select(row => TmdbMetadataHelpers.ToCandidate(row, "movie"))
         .ToArray();
 
@@ -201,9 +207,9 @@ internal sealed class TmdbPlugin {
         return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(data.Results, includeNsfw), result => result.Title ?? result.Name ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchSeriesCandidatesAsync(string? rawTitle, bool includeNsfw, int? year) =>
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchSeriesCandidatesAsync(string? rawTitle, bool includeNsfw, int? year, int limit) =>
         (await SearchSeriesResultsAsync(rawTitle, includeNsfw, year))
-        .Take(10)
+        .Take(limit)
         .Select(row => TmdbMetadataHelpers.ToCandidate(row, "tv"))
         .ToArray();
 
@@ -235,7 +241,7 @@ internal sealed class TmdbPlugin {
         return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(results, includeNsfw), result => result.Name ?? result.Title ?? string.Empty);
     }
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchPersonCandidatesAsync(string? rawTitle, bool includeNsfw) {
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchPersonCandidatesAsync(string? rawTitle, bool includeNsfw, int limit) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
@@ -245,12 +251,12 @@ internal sealed class TmdbPlugin {
             ["include_adult"] = IncludeAdultParam(includeNsfw)
         });
         return TmdbMetadataHelpers.Score(rawTitle, FilterAdult(data.Results, includeNsfw), result => result.Name ?? string.Empty)
-            .Take(10)
+            .Take(limit)
             .Select(row => TmdbMetadataHelpers.ToCandidate(row, "person"))
             .ToArray();
     }
 
-    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchStudioCandidatesAsync(string? rawTitle) {
+    private async Task<IReadOnlyList<EntitySearchCandidate>> SearchStudioCandidatesAsync(string? rawTitle, int limit) {
         if (string.IsNullOrWhiteSpace(rawTitle)) {
             return [];
         }
@@ -259,7 +265,7 @@ internal sealed class TmdbPlugin {
             ["query"] = TmdbMetadataHelpers.Normalize(rawTitle)
         });
         return TmdbMetadataHelpers.Score(rawTitle, data.Results ?? [], result => result.Name ?? string.Empty)
-            .Take(10)
+            .Take(limit)
             .Select(row => TmdbMetadataHelpers.ToCandidate(row, "company"))
             .ToArray();
     }

@@ -1,6 +1,7 @@
 namespace Prismedia.Plugin.OpenLibrary;
 
 internal sealed class OpenLibraryPlugin {
+    private const int MaxSearchCandidates = 25;
     private readonly OpenLibraryApiClient _client;
 
     public OpenLibraryPlugin(OpenLibraryApiClient client) {
@@ -53,7 +54,8 @@ internal sealed class OpenLibraryPlugin {
             return IdentifyPluginResult.None();
         }
 
-        var search = await _client.SearchWorksAsync(BuildWorkSearchQuery(request, query), 10);
+        var requestedLimit = SearchLimit(request, 10);
+        var search = await _client.SearchWorksAsync(BuildWorkSearchQuery(request, query), requestedLimit);
         var docs = search?.Docs ?? [];
         var workCandidates = WorkCandidates(docs, query).ToArray();
         var seriesCandidates = SeriesCandidates(docs, query, PreferImpliedSeries(request, targetKind)).ToArray();
@@ -61,7 +63,7 @@ internal sealed class OpenLibraryPlugin {
             ? seriesCandidates.Concat(workCandidates)
             : workCandidates.Concat(seriesCandidates);
         var candidates = orderedCandidates
-            .Take(12)
+            .Take(request.Query.Limit is null ? 12 : requestedLimit)
             .ToArray();
         return candidates.Length == 0 ? IdentifyPluginResult.None() : IdentifyPluginResult.ForCandidates(candidates);
     }
@@ -98,7 +100,7 @@ internal sealed class OpenLibraryPlugin {
         }
 
         var birthYear = int.TryParse(SearchField(request, OpenLibraryMetadata.SearchFields.BirthYear), out var parsedBirthYear) ? parsedBirthYear : (int?)null;
-        var authors = ((await _client.SearchAuthorsAsync(query, 10))?.Docs ?? [])
+        var authors = ((await _client.SearchAuthorsAsync(query, SearchLimit(request, 10)))?.Docs ?? [])
             .Where(author => birthYear is null || OpenLibraryMetadata.YearFromDate(author.BirthDate) == birthYear)
             .ToArray();
         var candidates = authors
@@ -108,6 +110,9 @@ internal sealed class OpenLibraryPlugin {
             .ToArray();
         return candidates.Length == 0 ? IdentifyPluginResult.None() : IdentifyPluginResult.ForCandidates(candidates);
     }
+
+    private static int SearchLimit(IdentifyPluginRequest request, int defaultLimit) =>
+        Math.Clamp(request.Query.Limit ?? defaultLimit, 1, MaxSearchCandidates);
 
     private async Task<EntityMetadataProposal> SeriesProposalAsync(
         string seriesName,

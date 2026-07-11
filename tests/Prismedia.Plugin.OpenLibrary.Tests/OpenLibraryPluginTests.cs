@@ -5,6 +5,27 @@ namespace Prismedia.Plugin.OpenLibrary.Tests;
 
 public sealed class OpenLibraryPluginTests {
     [Fact]
+    public async Task BookSearchHonorsRequestedLimitBeyondLegacyTen() {
+        using var http = new HttpClient(new StubHandler(request => {
+            Assert.Contains("limit=25", request.RequestUri?.Query);
+            return $$"""
+                { "docs": [
+                  {{string.Join(',', Enumerable.Range(1, 25).Select(id => $$"""{ "key": "/works/OL{{id}}W", "title": "Book {{id}}" }"""))}}
+                ] }
+                """;
+        }));
+        var plugin = new OpenLibraryPlugin(new OpenLibraryApiClient(http, TimeSpan.Zero));
+
+        var result = await plugin.IdentifyAsync(BookRequest(
+            "search",
+            "book",
+            "Book",
+            new IdentifyQuery("Book", null, null, Limit: 25)));
+
+        Assert.Equal(25, result.Candidates.Count);
+    }
+
+    [Fact]
     public async Task SearchIncludesSeriesCandidateWhenQueryMatchesSeriesSubject() {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/search.json", request.RequestUri?.AbsolutePath);
