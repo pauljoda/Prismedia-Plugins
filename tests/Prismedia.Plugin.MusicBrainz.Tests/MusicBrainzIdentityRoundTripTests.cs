@@ -6,6 +6,8 @@ namespace Prismedia.Plugin.MusicBrainz.Tests;
 public sealed class MusicBrainzIdentityRoundTripTests {
     private const string ArtistId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     private const string GroupId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    private const string SingleGroupId = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+    private const string LaterSingleGroupId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
     private const string ReleaseId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
     private const string RecordingId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 
@@ -19,7 +21,12 @@ public sealed class MusicBrainzIdentityRoundTripTests {
         try {
             var artist = Assert.IsType<EntityMetadataProposal>((await MusicBrainzPlugin.IdentifyAsync(
                 Lookup("music-artist", "musicbrainzartist", ArtistId, includeChildren: true))).Proposal);
-            var emittedAlbum = Assert.Single(artist.Children);
+            Assert.Collection(
+                artist.Children,
+                album => Assert.Equal("Fixture Album", album.Patch.Title),
+                single => Assert.Equal("Fixture Single", single.Patch.Title),
+                laterSingle => Assert.Equal("Later Fixture Single", laterSingle.Patch.Title));
+            var emittedAlbum = artist.Children[0];
             var groupIdentity = emittedAlbum.Patch.ExternalIds["musicbrainzreleasegroup"];
 
             var resolvedAlbum = Assert.IsType<EntityMetadataProposal>((await MusicBrainzPlugin.IdentifyAsync(
@@ -66,11 +73,30 @@ public sealed class MusicBrainzIdentityRoundTripTests {
             { "id": "{{ArtistId}}", "name": "Fixture Artist", "relations": [], "tags": [], "genres": [] }
             """);
         if (path == "/ws/2/release-group" && uri.Query.Contains($"artist={ArtistId}", StringComparison.Ordinal)) {
+            if (uri.Query.Contains("offset=100", StringComparison.Ordinal)) return (HttpStatusCode.OK, $$"""
+                {
+                  "release-group-count": 101,
+                  "release-group-offset": 100,
+                  "release-groups": [{
+                    "id": "{{LaterSingleGroupId}}", "title": "Later Fixture Single", "first-release-date": "2022-01-01",
+                    "primary-type": "Single", "secondary-types": []
+                  }]
+                }
+                """);
             return (HttpStatusCode.OK, $$"""
-                { "release-groups": [{
-                  "id": "{{GroupId}}", "title": "Fixture Album", "first-release-date": "2020-01-01",
-                  "primary-type": "Album", "secondary-types": []
-                }] }
+                {
+                  "release-group-count": 101,
+                  "release-group-offset": 0,
+                  "release-groups": [
+                  {
+                    "id": "{{GroupId}}", "title": "Fixture Album", "first-release-date": "2020-01-01",
+                    "primary-type": "Album", "secondary-types": []
+                  },
+                  {
+                    "id": "{{SingleGroupId}}", "title": "Fixture Single", "first-release-date": "2021-01-01",
+                    "primary-type": "Single", "secondary-types": []
+                  }
+                ] }
                 """);
         }
         if (path == $"/ws/2/release/{GroupId}") return (HttpStatusCode.NotFound, "{}");

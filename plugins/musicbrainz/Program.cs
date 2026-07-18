@@ -25,6 +25,16 @@ internal static partial class MusicBrainzPlugin {
         public const string Year = "year";
         public const string Album = "album";
     }
+    private static class ReleaseGroupPrimaryTypes {
+        public const string Album = "Album";
+        public const string Ep = "EP";
+        public const string Single = "Single";
+
+        public static bool IsCoreDiscography(string type) =>
+            type.Equals(Album, StringComparison.OrdinalIgnoreCase) ||
+            type.Equals(Ep, StringComparison.OrdinalIgnoreCase) ||
+            type.Equals(Single, StringComparison.OrdinalIgnoreCase);
+    }
     // MusicBrainz asks for roughly one request per second; pace a little slower to be safe.
     internal static TimeSpan MinRequestInterval { get; set; } = TimeSpan.FromMilliseconds(1100);
     private static readonly string RateLimitPath = Path.Combine(Path.GetTempPath(), "prismedia-musicbrainz.ratelimit");
@@ -126,12 +136,6 @@ internal static partial class MusicBrainzPlugin {
             artist?.Type), images, memberProposals, albumChildren);
     }
 
-    /// <summary>
-    /// Browses the artist's studio discography as album child proposals, keyed by release-group id —
-    /// the stable "the album" identity across its many per-country/per-edition releases. Secondary-typed
-    /// groups (compilations, live, remixes) are skipped so the list reads like the artist's core
-    /// discography. Release lookups accept a release-group id and resolve it to a concrete release.
-    /// </summary>
     /// <summary>Resolves a release-group id to its earliest release id, or null when the id isn't a release group either.</summary>
     private static async Task<string?> ResolveReleaseGroupToReleaseAsync(string id) {
         var group = await GetJsonAsync<ReleaseGroupDetail>($"{MbBase}/release-group/{id}?inc=releases&fmt=json");
@@ -142,13 +146,26 @@ internal static partial class MusicBrainzPlugin {
             .FirstOrDefault();
     }
 
+    /// <summary>
+    /// Browses every page of the artist's albums, EPs, and singles as child proposals keyed by
+    /// release-group id. Secondary-typed groups (compilations, live releases, and remixes) are skipped
+    /// so the list remains the artist's core discography.
+    /// </summary>
     private static async Task<IReadOnlyList<EntityMetadataProposal>> AlbumChildrenAsync(string artistId) {
-        var browse = await GetJsonAsync<BrowseReleaseGroupsResponse>(
-            $"{MbBase}/release-group?artist={artistId}&limit=100&fmt=json");
-        var groups = (browse?.ReleaseGroups ?? [])
+        const int pageSize = 100;
+        var browsedGroups = new List<ReleaseGroupItem>();
+        for (var offset = 0; ; offset += pageSize) {
+            var offsetQuery = offset > 0 ? $"&offset={offset}" : string.Empty;
+            var browse = await GetJsonAsync<BrowseReleaseGroupsResponse>(
+                $"{MbBase}/release-group?artist={artistId}&limit={pageSize}&fmt=json{offsetQuery}");
+            var page = browse?.ReleaseGroups ?? [];
+            browsedGroups.AddRange(page);
+            if (page.Length == 0 || browse?.ReleaseGroupCount is not { } total || offset + pageSize >= total) break;
+        }
+
+        var groups = browsedGroups
             .Where(group => !string.IsNullOrWhiteSpace(group.Id))
-            .Where(group => group.PrimaryType is { } type &&
-                (type.Equals("Album", StringComparison.OrdinalIgnoreCase) || type.Equals("EP", StringComparison.OrdinalIgnoreCase)))
+            .Where(group => group.PrimaryType is { } type && ReleaseGroupPrimaryTypes.IsCoreDiscography(type))
             .Where(group => group.SecondaryTypes is not { Length: > 0 })
             .OrderBy(group => group.FirstReleaseDate ?? "9999", StringComparer.Ordinal)
             .ToArray();
@@ -670,7 +687,9 @@ internal static partial class MusicBrainzPlugin {
     private sealed record Label(string? Name);
     private sealed record Tag(string? Name);
     private sealed record ReleaseGroup([property: JsonPropertyName("primary-type")] string? PrimaryType, string? Id);
-    private sealed record BrowseReleaseGroupsResponse([property: JsonPropertyName("release-groups")] ReleaseGroupItem[]? ReleaseGroups);
+    private sealed record BrowseReleaseGroupsResponse(
+        [property: JsonPropertyName("release-group-count")] int? ReleaseGroupCount,
+        [property: JsonPropertyName("release-groups")] ReleaseGroupItem[]? ReleaseGroups);
     private sealed record ReleaseGroupItem(
         string Id, string? Title,
         [property: JsonPropertyName("first-release-date")] string? FirstReleaseDate,

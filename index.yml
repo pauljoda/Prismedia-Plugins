@@ -235,10 +235,10 @@
             placeholder: Album title
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.2.1
-  date: '2026-07-09'
+  version: 1.2.2
+  date: '2026-07-18'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: fe09f6198b5dc7737ff8efd3f2f2f4fb684174af5a885363fc022b39c1f82583
+  sha256: ec47bea4aad17cdace5a214ddac8dab2b07ceed2cfe04708456e3e65fbb6d079
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
