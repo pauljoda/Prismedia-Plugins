@@ -3,7 +3,7 @@
   "apiTags": ["prismedia"],
   "id": "anilist",
   "name": "AniList",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "date": "2026-07-09",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.AniList.dll",

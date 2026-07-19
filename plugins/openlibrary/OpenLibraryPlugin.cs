@@ -53,7 +53,8 @@ internal sealed class OpenLibraryPlugin {
             return IdentifyPluginResult.None();
         }
 
-        var search = await _client.SearchWorksAsync(BuildWorkSearchQuery(request, query), 10);
+        var limit = SearchLimit(request);
+        var search = await _client.SearchWorksAsync(BuildWorkSearchQuery(request, query), limit);
         var docs = search?.Docs ?? [];
         var workCandidates = WorkCandidates(docs, query).ToArray();
         var seriesCandidates = SeriesCandidates(docs, query, PreferImpliedSeries(request, targetKind)).ToArray();
@@ -61,7 +62,7 @@ internal sealed class OpenLibraryPlugin {
             ? seriesCandidates.Concat(workCandidates)
             : workCandidates.Concat(seriesCandidates);
         var candidates = orderedCandidates
-            .Take(12)
+            .Take(limit)
             .ToArray();
         return candidates.Length == 0 ? IdentifyPluginResult.None() : IdentifyPluginResult.ForCandidates(candidates);
     }
@@ -98,7 +99,7 @@ internal sealed class OpenLibraryPlugin {
         }
 
         var birthYear = int.TryParse(SearchField(request, OpenLibraryMetadata.SearchFields.BirthYear), out var parsedBirthYear) ? parsedBirthYear : (int?)null;
-        var authors = ((await _client.SearchAuthorsAsync(query, 10))?.Docs ?? [])
+        var authors = ((await _client.SearchAuthorsAsync(query, SearchLimit(request)))?.Docs ?? [])
             .Where(author => birthYear is null || OpenLibraryMetadata.YearFromDate(author.BirthDate) == birthYear)
             .ToArray();
         var candidates = authors
@@ -108,6 +109,8 @@ internal sealed class OpenLibraryPlugin {
             .ToArray();
         return candidates.Length == 0 ? IdentifyPluginResult.None() : IdentifyPluginResult.ForCandidates(candidates);
     }
+
+    private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 100);
 
     private async Task<EntityMetadataProposal> SeriesProposalAsync(
         string seriesName,

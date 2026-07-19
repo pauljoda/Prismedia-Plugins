@@ -68,7 +68,7 @@ internal static partial class AniListPlugin {
 
         var (title, year) = SearchInput(request);
         if (string.IsNullOrWhiteSpace(title)) return IdentifyPluginResult.None();
-        var results = await SearchAsync(title, year);
+        var results = await SearchAsync(title, year, SearchLimit(request));
         return IdentifyPluginResult.ForCandidates(results.Select(media => new EntitySearchCandidate(new Dictionary<string, string> { [PrimaryIdentityNamespace] = media.Id.ToString() }, Title(media), Year(media.StartDate), StripHtml(media.Description), media.CoverImage?.Large ?? media.CoverImage?.ExtraLarge, media.Popularity)).ToArray());
     }
 
@@ -208,7 +208,7 @@ internal static partial class AniListPlugin {
     private static IEnumerable<EntityMetadataProposal> StudioRelationships(Media media) => (media.Studios?.Nodes ?? []).Where(s => !string.IsNullOrWhiteSpace(s.Name)).Take(5).Select(studio => new EntityMetadataProposal($"anilist:studio:{Slug(studio.Name!)}", PluginId, "studio", 0.7m, "studio", new EntityMetadataPatch(studio.Name, null, new Dictionary<string, string>(), [], [], null, [], new Dictionary<string, string>(), new Dictionary<string, int>(), new Dictionary<string, int>(), null), [], [], [], null, []));
 
     private static async Task<Media> DetailAsync(int id) { var data = await GraphQlAsync<DetailData>(DetailQuery, new { id }); return data.Media ?? throw new InvalidOperationException("AniList media not found."); }
-    private static async Task<IReadOnlyList<Media>> SearchAsync(string search, int? year) { var data = await GraphQlAsync<SearchData>(SearchQuery, new { search, year }); return data.Page?.Media ?? []; }
+    private static async Task<IReadOnlyList<Media>> SearchAsync(string search, int? year, int limit) { var data = await GraphQlAsync<SearchData>(SearchQuery, new { search, year, perPage = limit }); return data.Page?.Media ?? []; }
     private static async Task<T> GraphQlAsync<T>(string query, object variables) {
         using var res = await Http.PostAsJsonAsync(Api, new { query, variables }, PluginHost.JsonOptions);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"AniList API error: {(int)res.StatusCode}");
@@ -246,7 +246,10 @@ internal static partial class AniListPlugin {
       characters(perPage: 25, sort: [ROLE, RELEVANCE]) { edges { node { name { full } } } }
       """;
     private static readonly string DetailQuery = $"query ($id: Int!) {{ Media(id: $id, type: ANIME) {{ {BasicFields} relations {{ edges {{ relationType node {{ {BasicFields} }} }} }} }} }}";
-    private static readonly string SearchQuery = $"query ($search: String!, $year: Int) {{ Page(perPage: 10) {{ media(search: $search, seasonYear: $year, type: ANIME, isAdult: false, sort: [SEARCH_MATCH, POPULARITY_DESC]) {{ {BasicFields} }} }} }}";
+    private static readonly string SearchQuery = $"query ($search: String!, $year: Int, $perPage: Int!) {{ Page(perPage: $perPage) {{ media(search: $search, seasonYear: $year, type: ANIME, isAdult: false, sort: [SEARCH_MATCH, POPULARITY_DESC]) {{ {BasicFields} }} }} }}";
+
+    // AniList caps root Page queries at 50 entries.
+    private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 50);
 
     internal static (string? Title, int? Year) SearchInput(IdentifyPluginRequest request) {
         var title = SearchField(request, request.Entity.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) ? SearchFields.SeriesTitle : SearchFields.Title) ??
@@ -373,7 +376,7 @@ internal sealed record IdentifyPluginRequest(
     bool IncludeStructuralChildren = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
-internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null);
+internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null, int Limit = 25);
 internal sealed record IdentifyMatchHints(IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, string? Title, string? FilePath);
 internal sealed record ImageCandidate(string Kind, string Url, string Source, decimal? Rank, string? Language, int? Width, int? Height);
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);

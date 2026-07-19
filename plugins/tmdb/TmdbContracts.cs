@@ -7,7 +7,8 @@ internal sealed record ScoredResult(TmdbSearchResult Result, decimal Score, int 
 internal sealed record TmdbUrl(string MediaType, int Id);
 
 internal sealed record TmdbSearchResponse(
-    [property: JsonPropertyName("results")] TmdbSearchResult[]? Results);
+    [property: JsonPropertyName("results")] TmdbSearchResult[]? Results,
+    [property: JsonPropertyName("total_pages")] int? TotalPages = null);
 
 internal sealed record TmdbSearchResult(
     [property: JsonPropertyName("id")] int Id,

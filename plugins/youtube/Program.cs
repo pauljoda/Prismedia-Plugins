@@ -45,7 +45,7 @@ internal static partial class YoutubePlugin {
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
         if (SearchField(request, SearchFields.Channel) is { } channel) query = ScopedQuery(channel, query);
 
-        var candidates = await SearchCandidatesAsync(query);
+        var candidates = await SearchCandidatesAsync(query, SearchLimit(request));
         return IdentifyPluginResult.ForCandidates(candidates);
     }
 
@@ -692,7 +692,7 @@ internal static partial class YoutubePlugin {
             relationships);
     }
 
-    private static async Task<IReadOnlyList<EntitySearchCandidate>> SearchCandidatesAsync(string query) {
+    private static async Task<IReadOnlyList<EntitySearchCandidate>> SearchCandidatesAsync(string query, int limit) {
         var payload = new {
             context = new { client = new { clientName = "WEB", clientVersion = ClientVersion } },
             query
@@ -705,7 +705,7 @@ internal static partial class YoutubePlugin {
         var json = await res.Content.ReadFromJsonAsync<JsonElement>(PluginHost.JsonOptions);
         var candidates = new List<EntitySearchCandidate>();
         Walk(json, renderer => {
-            if (candidates.Count >= 10) return;
+            if (candidates.Count >= limit) return;
             if (!renderer.TryGetProperty("videoId", out var idProp)) return;
             var id = idProp.GetString();
             if (!IsValidId(id)) return;
@@ -721,6 +721,8 @@ internal static partial class YoutubePlugin {
         });
         return candidates;
     }
+
+    private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 100);
 
     private static void Walk(JsonElement node, Action<JsonElement> onVideoRenderer) {
         if (node.ValueKind == JsonValueKind.Object) {
@@ -1049,7 +1051,7 @@ internal sealed record IdentifyPluginRequest(
     bool IncludeStructuralChildren = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
-internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null);
+internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null, int Limit = 25);
 internal sealed record IdentifyMatchHints(IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, string? Title, string? FilePath);
 internal sealed record ImageCandidate(string Kind, string Url, string Source, decimal? Rank, string? Language, int? Width, int? Height);
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);

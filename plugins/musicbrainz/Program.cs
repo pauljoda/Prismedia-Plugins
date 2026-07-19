@@ -54,7 +54,7 @@ internal static partial class MusicBrainzPlugin {
         if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await ArtistProposalAsync(id, "external-id", request.IncludeStructuralChildren));
         var query = SearchTitle(request);
         if (string.IsNullOrWhiteSpace(query)) return IdentifyPluginResult.None();
-        var artists = (await SearchAsync<SearchArtistResponse>("artist", BuildArtistSearch(request, query), 10))?.Artists ?? [];
+        var artists = (await SearchAsync<SearchArtistResponse>("artist", BuildArtistSearch(request, query), SearchLimit(request)))?.Artists ?? [];
         // The artist search response carries no images, so enrich each candidate's thumbnail from its
         // url-rels (the same direct-image source the full proposal uses). Bound to the top results so a
         // broad search does not fan out into many extra rate-limited lookups.
@@ -234,7 +234,7 @@ internal static partial class MusicBrainzPlugin {
             if (scoped?.Releases?.FirstOrDefault() is { } match) return IdentifyPluginResult.ForProposal(await ReleaseProposalAsync(match.Id, "parent-context"));
         }
 
-        var releases = await SearchAsync<SearchReleaseResponse>("release", BuildReleaseSearch(request, query), 10);
+        var releases = await SearchAsync<SearchReleaseResponse>("release", BuildReleaseSearch(request, query), SearchLimit(request));
         var candidates = (releases?.Releases ?? []).Select(release => new EntitySearchCandidate(
             new Dictionary<string, string> {
                 [ReleaseIdentityNamespace] = release.Id,
@@ -260,7 +260,7 @@ internal static partial class MusicBrainzPlugin {
             if (scoped?.Recordings?.FirstOrDefault() is { } match) return IdentifyPluginResult.ForProposal(await RecordingProposalAsync(match.Id, "parent-context"));
         }
 
-        var recordings = await SearchAsync<SearchRecordingResponse>("recording", BuildRecordingSearch(request, query), 10);
+        var recordings = await SearchAsync<SearchRecordingResponse>("recording", BuildRecordingSearch(request, query), SearchLimit(request));
         var candidates = (recordings?.Recordings ?? []).Select(recording => new EntitySearchCandidate(
             new Dictionary<string, string> {
                 [RecordingIdentityNamespace] = recording.Id,
@@ -412,6 +412,8 @@ internal static partial class MusicBrainzPlugin {
 
     private static async Task<T?> SearchAsync<T>(string entity, string query, int limit) =>
         await GetJsonAsync<T>($"{MbBase}/{entity}/?query={Uri.EscapeDataString(query)}&fmt=json&limit={limit}");
+
+    private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 100);
 
     private static async Task<T?> GetJsonAsync<T>(string url) {
         var isMusicBrainz = url.StartsWith(MbBase, StringComparison.OrdinalIgnoreCase);
@@ -706,7 +708,7 @@ internal static class PluginHost { public static readonly JsonSerializerOptions 
 internal sealed record IdentifyPluginRequest(int ProtocolVersion, string Action, IReadOnlyDictionary<string, string> Auth, IdentifyEntitySnapshot Entity, IdentifyQuery Query, IdentifyMatchHints Hints, IdentifyStructuralContext? StructuralContext = null, bool IncludeStructuralChildren = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
-internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null);
+internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null, int Limit = 25);
 internal sealed record IdentifyMatchHints(IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, string? Title, string? FilePath);
 internal sealed record ImageCandidate(string Kind, string Url, string Source, decimal? Rank, string? Language, int? Width, int? Height);
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);

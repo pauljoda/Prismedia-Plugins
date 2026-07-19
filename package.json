@@ -5,7 +5,7 @@
   "description": "Community-maintained plugins for Prismedia media library.",
   "scripts": {
     "build": "node scripts/build-plugins.mjs",
-    "test:manifests": "node --test tests/manifest-v2.test.mjs tests/publication-contract.test.mjs",
+    "test:manifests": "node --test tests/manifest-v2.test.mjs tests/publication-contract.test.mjs tests/search-limit-contract.test.mjs",
     "test:publication": "node --test tests/publication-artifacts.test.mjs"
   },
   "devDependencies": {

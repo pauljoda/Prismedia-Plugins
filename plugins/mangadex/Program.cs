@@ -76,7 +76,8 @@ internal static partial class MangaDexPlugin {
             query,
             request.IncludeNsfw,
             SearchYear(request),
-            SearchField(request, SearchFields.Creator));
+            SearchField(request, SearchFields.Creator),
+            SearchLimit(request));
         return IdentifyPluginResult.ForCandidates(results.Select(manga => new EntitySearchCandidate(
             new Dictionary<string, string> { [PrimaryIdentityNamespace] = manga.Id },
             Title(manga, query) ?? manga.Id,
@@ -467,9 +468,9 @@ internal static partial class MangaDexPlugin {
             []);
     }
 
-    private static async Task<IReadOnlyList<MangaResource>> SearchAsync(string title, bool includeNsfw, int? year, string? creator) {
+    private static async Task<IReadOnlyList<MangaResource>> SearchAsync(string title, bool includeNsfw, int? year, string? creator, int limit) {
         var yearQuery = year is null ? string.Empty : $"&year={year.Value}";
-        var url = $"{Api}/manga?title={Uri.EscapeDataString(title)}&limit=10&includes[]=cover_art&includes[]=author&includes[]=artist&order[relevance]=desc{yearQuery}{ContentRatingQuery(includeNsfw)}";
+        var url = $"{Api}/manga?title={Uri.EscapeDataString(title)}&limit={limit}&includes[]=cover_art&includes[]=author&includes[]=artist&order[relevance]=desc{yearQuery}{ContentRatingQuery(includeNsfw)}";
         var results = (await GetJsonAsync<ListEnvelope<MangaResource>>(url))?.Data ?? [];
         return string.IsNullOrWhiteSpace(creator)
             ? results
@@ -477,6 +478,8 @@ internal static partial class MangaDexPlugin {
                 .Any(name => name.Contains(creator, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
     }
+
+    private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 100);
 
     private static async Task<MangaResource?> GetMangaAsync(string id) =>
         (await GetJsonAsync<SingleEnvelope<MangaResource>>($"{Api}/manga/{id}?includes[]=cover_art&includes[]=author&includes[]=artist"))?.Data;
@@ -1092,7 +1095,7 @@ internal static class PluginHost {
 internal sealed record IdentifyPluginRequest(int ProtocolVersion, string Action, IReadOnlyDictionary<string, string> Auth, IdentifyEntitySnapshot Entity, IdentifyQuery Query, IdentifyMatchHints Hints, IdentifyStructuralContext? StructuralContext = null, bool IncludeNsfw = false);
 internal sealed record IdentifyStructuralContext(IReadOnlyList<IdentifyEntitySnapshot> Ancestors, IReadOnlyDictionary<string, int> Positions);
 internal sealed record IdentifyEntitySnapshot(Guid Id, string Kind, string Title, IReadOnlyDictionary<string, string>? ExternalIds = null, IReadOnlyList<string>? Urls = null);
-internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null);
+internal sealed record IdentifyQuery(string? Title, string? Url, IReadOnlyDictionary<string, string>? ExternalIds, bool? RequireChoice = null, IReadOnlyDictionary<string, string>? Fields = null, int Limit = 25);
 internal sealed record IdentifyMatchHints(IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, string? Title, string? FilePath);
 internal sealed record ImageCandidate(string Kind, string Url, string Source, decimal? Rank, string? Language, int? Width, int? Height);
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);

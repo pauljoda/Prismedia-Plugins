@@ -3,10 +3,10 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.10
+  version: 1.1.11
   date: '2026-07-09'
   path: plugins/tmdb/tmdb.zip
-  sha256: 276d28b1fc03d43655835bbba5a6a56edda574e93f1f6daf289d9a1b0a138206
+  sha256: 022b7db87c98a27908c96094a69767af13ce68f26c927d6ecf52fea3ce9e6c19
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -138,10 +138,10 @@
             placeholder: Studio name
 - id: youtube
   name: YouTube Metadata
-  version: 1.2.3
+  version: 1.2.4
   date: '2026-07-09'
   path: plugins/youtube/youtube.zip
-  sha256: 8e276cd65e6feb73c134afecb0237911b36993e9e14406c037983de45d9e1140
+  sha256: c100ec28314edb3dedbe05d90eb12c056791543a8438f84b0fbf00aa41c6e448
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -235,10 +235,10 @@
             placeholder: Album title
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.2.2
+  version: 1.2.3
   date: '2026-07-18'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: ec47bea4aad17cdace5a214ddac8dab2b07ceed2cfe04708456e3e65fbb6d079
+  sha256: 25e9f9f6d76187c95f8b8e1d352a6e186b1754729bf30b6ef59f495f40453461
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -333,10 +333,10 @@
             placeholder: '2024'
 - id: anilist
   name: AniList
-  version: 1.0.2
+  version: 1.0.3
   date: '2026-07-09'
   path: plugins/anilist/anilist.zip
-  sha256: 8778b8a87697c7ffba2b06dd1e537d71df6528d2b498dfe3d1ab51e7e26a1d01
+  sha256: f4bdc8aa24c0be77bba58347edbb934c67d5738c1e406e240b9bb6984aa7ab64
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -394,10 +394,10 @@
             placeholder: '2024'
 - id: mangadex
   name: MangaDex
-  version: 1.1.5
+  version: 1.1.6
   date: '2026-07-09'
   path: plugins/mangadex/mangadex.zip
-  sha256: 99017f6ddf1cc3292736a89ad8f974d3ab7f83e0a829384a82c41813512a9b7a
+  sha256: 0505318eb34b8008d6dbf4fd652ed75823aa9585055c24730c5248c0dc84b914
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -446,10 +446,10 @@
         - mangadexchapter
 - id: openlibrary
   name: Open Library
-  version: 0.3.1
+  version: 0.3.2
   date: '2026-07-09'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: 614423365f7f8fe013167b5b1e2bc0d25ec2a0f6be7bd80c298dd29d9a7758a4
+  sha256: a43a5cbaf6c9d19ec54f5648543e8b2ddc6d1a58a5415d19937ba6d004259491
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
