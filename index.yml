@@ -235,10 +235,10 @@
             placeholder: Album title
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.2.3
-  date: '2026-07-18'
+  version: 1.2.4
+  date: '2026-07-24'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: 25e9f9f6d76187c95f8b8e1d352a6e186b1754729bf30b6ef59f495f40453461
+  sha256: e081df12b644c9089450228f6aa8b733f8f197e8250bcb2f613660595b63cfb9
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -307,6 +307,7 @@
         - lookup-url
         - search
       identityNamespaces:
+        - musicbrainztrack
         - musicbrainzrecording
         - musicbrainz
       search:
@@ -394,10 +395,10 @@
             placeholder: '2024'
 - id: mangadex
   name: MangaDex
-  version: 1.1.6
-  date: '2026-07-09'
+  version: 1.1.7
+  date: '2026-07-24'
   path: plugins/mangadex/mangadex.zip
-  sha256: 0505318eb34b8008d6dbf4fd652ed75823aa9585055c24730c5248c0dc84b914
+  sha256: cf4008cc33f217163718b23a676f2f2a2da8730f7da2c28e1022fd2c1cc0a830
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -446,10 +447,10 @@
         - mangadexchapter
 - id: openlibrary
   name: Open Library
-  version: 0.3.2
-  date: '2026-07-09'
+  version: 0.3.3
+  date: '2026-07-24'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: a43a5cbaf6c9d19ec54f5648543e8b2ddc6d1a58a5415d19937ba6d004259491
+  sha256: b5ae42e29e0217890d84fe4cd25f22670de45917581d7626e0560e8bcba3ed9a
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2

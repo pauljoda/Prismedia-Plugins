@@ -176,12 +176,17 @@ internal static partial class MangaDexPlugin {
             .FirstOrDefault(snapshot => snapshot.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase));
         if (ancestor is null) return null;
         var volumeNumber = NormalizeNumber(
-            TryGetValue(ancestor.ExternalIds, VolumeLocator, out var ancestorVolume) ? ancestorVolume : null) ??
+            TryGetValue(ancestor.ExternalIds, VolumeIdentityNamespace, out var ancestorIdentity) &&
+            TryParseVolumeIdentity(ancestorIdentity, out _, out var ancestorVolume)
+                ? ancestorVolume
+                : TryGetValue(ancestor.ExternalIds, VolumeLocator, out var legacyVolume)
+                    ? legacyVolume
+                    : null) ??
             NumberFromTitle(ancestor.Title);
         if (volumeNumber is null) return null;
         return bookProposal.Children.FirstOrDefault(child =>
             child.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase) &&
-            TryGetValue(child.Patch.ExternalIds, VolumeLocator, out var volume) &&
+            ProposalVolume(child) is { } volume &&
             NormalizeNumber(volume) == volumeNumber);
     }
 
@@ -208,7 +213,7 @@ internal static partial class MangaDexPlugin {
             Patch = bookProposal.Patch with {
                 Title = request.Entity.Title,
                 Description = null,
-                ExternalIds = MangaOnlyExternalIds(bookProposal.Patch.ExternalIds),
+                ExternalIds = new Dictionary<string, string>(),
                 Urls = [],
                 Tags = [],
                 Credits = [],
@@ -221,11 +226,6 @@ internal static partial class MangaDexPlugin {
             Candidates = [],
             Relationships = []
         };
-
-    private static IReadOnlyDictionary<string, string> MangaOnlyExternalIds(IReadOnlyDictionary<string, string> externalIds) =>
-        TryGetValue(externalIds, PrimaryIdentityNamespace, out var mangaId)
-            ? new Dictionary<string, string> { [PrimaryIdentityNamespace] = mangaId }
-            : new Dictionary<string, string>();
 
     private static IEnumerable<EntityMetadataProposal> StructuralDescendants(EntityMetadataProposal proposal) {
         foreach (var child in proposal.Children) {
@@ -243,14 +243,14 @@ internal static partial class MangaDexPlugin {
         if (!volume.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase)) return false;
 
         if (selectedVolume is not null &&
-            TryGetValue(volume.Patch.ExternalIds, VolumeLocator, out var exactVolume)) {
+            ProposalVolume(volume) is { } exactVolume) {
             return exactVolume.Equals(selectedVolume, StringComparison.Ordinal);
         }
 
         var requestedVolume = SearchField(request, "volumeNumber") ?? ExternalId(request, VolumeLocator);
         var requestedVolumeNumber = NormalizeNumber(requestedVolume) ?? NumberFromTitle(request.Entity.Title);
         if (requestedVolumeNumber is not null &&
-            TryGetValue(volume.Patch.ExternalIds, VolumeLocator, out var volumeId) &&
+            ProposalVolume(volume) is { } volumeId &&
             NormalizeNumber(volumeId) == requestedVolumeNumber) {
             return true;
         }
@@ -281,7 +281,7 @@ internal static partial class MangaDexPlugin {
 
         var requestedChapterNumber = SearchField(request, "chapterNumber") ?? ExternalId(request, ChapterNumberLocator);
         if (!string.IsNullOrWhiteSpace(requestedChapterNumber) &&
-            TryGetValue(chapter.Patch.ExternalIds, ChapterNumberLocator, out var proposalChapterNumber) &&
+            ChapterNumberFromTitle(chapter.Patch.Title) is { } proposalChapterNumber &&
             NormalizeChapterNumber(proposalChapterNumber) == NormalizeChapterNumber(requestedChapterNumber)) {
             return true;
         }
@@ -291,7 +291,7 @@ internal static partial class MangaDexPlugin {
         // positional alignment.
         var titleChapterNumber = ChapterNumberFromTitle(request.Entity.Title);
         if (titleChapterNumber is not null &&
-            TryGetValue(chapter.Patch.ExternalIds, ChapterNumberLocator, out var candidateNumber) &&
+            ChapterNumberFromTitle(chapter.Patch.Title) is { } candidateNumber &&
             NormalizeChapterNumber(candidateNumber) == titleChapterNumber) {
             return true;
         }
@@ -314,12 +314,18 @@ internal static partial class MangaDexPlugin {
     }
 
     private static int? ProposalChapterNumber(EntityMetadataProposal chapter) {
-        if (TryGetValue(chapter.Patch.ExternalIds, ChapterNumberLocator, out var value)) {
+        if (ChapterNumberFromTitle(chapter.Patch.Title) is { } value) {
             return PositionNumber(value);
         }
 
         return PositionValue(chapter.Patch.Positions, "chapter", "chapterNumber");
     }
+
+    private static string? ProposalVolume(EntityMetadataProposal proposal) =>
+        TryGetValue(proposal.Patch.ExternalIds, VolumeIdentityNamespace, out var identity) &&
+        TryParseVolumeIdentity(identity, out _, out var volume)
+            ? volume
+            : NumberFromTitle(proposal.Patch.Title);
 
     private static IReadOnlyList<EntityMetadataProposal> BuildChildren(
         MangaResource manga,
@@ -386,9 +392,7 @@ internal static partial class MangaDexPlugin {
                 $"Volume {volume}",
                 VolumeDescription(chapters),
                 new Dictionary<string, string> {
-                    [VolumeIdentityNamespace] = FormatVolumeIdentity(manga.Id, volume),
-                    [PrimaryIdentityNamespace] = manga.Id,
-                    [VolumeLocator] = volume
+                    [VolumeIdentityNamespace] = FormatVolumeIdentity(manga.Id, volume)
                 },
                 [$"{Web}/title/{manga.Id}"],
                 [],
@@ -437,11 +441,8 @@ internal static partial class MangaDexPlugin {
         }
 
         var external = new Dictionary<string, string> {
-            [PrimaryIdentityNamespace] = manga.Id,
             [ChapterIdentityNamespace] = chapter.Id
         };
-        if (!string.IsNullOrWhiteSpace(chapterText)) external[ChapterNumberLocator] = chapterText!;
-        if (NormalizeVolumeValue(chapter.Attributes?.Volume) is string chapterVolume) external[VolumeLocator] = chapterVolume;
 
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:chapter:{chapter.Id}",

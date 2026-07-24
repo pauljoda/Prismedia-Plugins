@@ -5,8 +5,8 @@
   ],
   "id": "musicbrainz",
   "name": "MusicBrainz",
-  "version": "1.2.3",
-  "date": "2026-07-18",
+  "version": "1.2.4",
+  "date": "2026-07-24",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MusicBrainz.dll",
   "compat": {
@@ -57,7 +57,7 @@
         "lookup-url",
         "search"
       ],
-      "identityNamespaces": ["musicbrainzrecording", "musicbrainz"],
+      "identityNamespaces": ["musicbrainztrack", "musicbrainzrecording", "musicbrainz"],
       "search": {
         "fields": [
           { "key": "title", "label": "Track", "type": "text", "required": true, "placeholder": "Track title" },

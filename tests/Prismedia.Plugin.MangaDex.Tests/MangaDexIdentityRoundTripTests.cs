@@ -33,8 +33,9 @@ public sealed class MangaDexIdentityRoundTripTests {
                 Lookup("book-volume", "mangadexvolume", volumeIdentity))).Proposal);
             Assert.Equal(emittedVolume.ProposalId, resolvedVolume.ProposalId);
             Assert.Equal("book-volume", resolvedVolume.TargetKind);
-            Assert.Equal(volumeIdentity, resolvedVolume.Patch.ExternalIds["mangadexvolume"]);
-            Assert.Equal("Vol:Case", resolvedVolume.Patch.ExternalIds["volume"]);
+            Assert.Equal(
+                new Dictionary<string, string> { ["mangadexvolume"] = volumeIdentity },
+                resolvedVolume.Patch.ExternalIds);
 
             var emittedChapter = Assert.Single(emittedVolume.Children);
             var chapterIdentity = emittedChapter.Patch.ExternalIds["mangadexchapter"];
@@ -42,7 +43,9 @@ public sealed class MangaDexIdentityRoundTripTests {
                 Lookup("book-chapter", "mangadexchapter", chapterIdentity))).Proposal);
             Assert.Equal(emittedChapter.ProposalId, resolvedChapter.ProposalId);
             Assert.Equal("book-chapter", resolvedChapter.TargetKind);
-            Assert.Equal(chapterIdentity, resolvedChapter.Patch.ExternalIds["mangadexchapter"]);
+            Assert.Equal(
+                new Dictionary<string, string> { ["mangadexchapter"] = chapterIdentity },
+                resolvedChapter.Patch.ExternalIds);
         } finally {
             MangaDexPlugin.Http = previous;
         }

@@ -10,6 +10,8 @@ public sealed class MusicBrainzIdentityRoundTripTests {
     private const string LaterSingleGroupId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
     private const string ReleaseId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
     private const string RecordingId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+    private const string FirstTrackId = "11111111-1111-1111-1111-111111111111";
+    private const string SecondTrackId = "22222222-2222-2222-2222-222222222222";
 
     [Fact]
     public async Task ReleaseGroupAndRecordingChildrenRoundTripWithoutContext() {
@@ -37,13 +39,28 @@ public sealed class MusicBrainzIdentityRoundTripTests {
             Assert.Equal(groupIdentity, resolvedAlbum.Patch.ExternalIds["musicbrainz"]);
             Assert.Equal(ReleaseId, resolvedAlbum.Patch.ExternalIds["musicbrainzrelease"]);
 
-            var emittedTrack = Assert.Single(resolvedAlbum.Children);
-            var recordingIdentity = emittedTrack.Patch.ExternalIds["musicbrainzrecording"];
+            Assert.Collection(
+                resolvedAlbum.Children,
+                first => Assert.Equal(
+                    MusicBrainzPlugin.FormatTrackIdentity(ReleaseId, FirstTrackId),
+                    first.Patch.ExternalIds["musicbrainztrack"]),
+                second => Assert.Equal(
+                    MusicBrainzPlugin.FormatTrackIdentity(ReleaseId, SecondTrackId),
+                    second.Patch.ExternalIds["musicbrainztrack"]));
+            Assert.All(
+                resolvedAlbum.Children,
+                track => {
+                    Assert.DoesNotContain("musicbrainz", track.Patch.ExternalIds.Keys);
+                    Assert.DoesNotContain("musicbrainzrecording", track.Patch.ExternalIds.Keys);
+                });
+
+            var emittedTrack = resolvedAlbum.Children[0];
+            var trackIdentity = emittedTrack.Patch.ExternalIds["musicbrainztrack"];
             var resolvedTrack = Assert.IsType<EntityMetadataProposal>((await MusicBrainzPlugin.IdentifyAsync(
-                Lookup("audio-track", "musicbrainzrecording", recordingIdentity))).Proposal);
+                Lookup("audio-track", "musicbrainztrack", trackIdentity))).Proposal);
             Assert.Equal(emittedTrack.ProposalId, resolvedTrack.ProposalId);
             Assert.Equal("audio-track", resolvedTrack.TargetKind);
-            Assert.Equal(recordingIdentity, resolvedTrack.Patch.ExternalIds["musicbrainzrecording"]);
+            Assert.Equal(trackIdentity, resolvedTrack.Patch.ExternalIds["musicbrainztrack"]);
         } finally {
             MusicBrainzPlugin.Http = previousHttp;
             MusicBrainzPlugin.MinRequestInterval = previousInterval;
@@ -109,10 +126,16 @@ public sealed class MusicBrainzIdentityRoundTripTests {
             {
               "id": "{{ReleaseId}}", "title": "Fixture Album", "date": "2020-01-01",
               "release-group": { "id": "{{GroupId}}", "primary-type": "Album" },
-              "media": [{ "position": 1, "tracks": [{
-                "position": 1, "title": "Fixture Track", "length": 180000,
-                "recording": { "id": "{{RecordingId}}", "title": "Fixture Track" }
-              }] }]
+              "media": [{ "position": 1, "tracks": [
+                {
+                  "id": "{{FirstTrackId}}", "position": 1, "title": "Fixture Track", "length": 180000,
+                  "recording": { "id": "{{RecordingId}}", "title": "Fixture Track" }
+                },
+                {
+                  "id": "{{SecondTrackId}}", "position": 2, "title": "Fixture Track (Reprise)", "length": 180000,
+                  "recording": { "id": "{{RecordingId}}", "title": "Fixture Track" }
+                }
+              ] }]
             }
             """);
         if (path == $"/ws/2/recording/{RecordingId}") return (HttpStatusCode.OK, $$"""

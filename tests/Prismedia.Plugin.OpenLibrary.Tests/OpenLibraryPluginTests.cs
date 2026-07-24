@@ -149,6 +149,9 @@ public sealed class OpenLibraryPluginTests {
         var proposal = result.Proposal!;
         Assert.Equal("book", proposal.TargetKind);
         Assert.Equal("Book series", proposal.Patch.Classification);
+        Assert.All(
+            proposal.Children,
+            child => Assert.DoesNotContain(OpenLibraryMetadata.SeriesKey, child.Patch.ExternalIds.Keys));
         Assert.Collection(
             proposal.Children,
             child => {

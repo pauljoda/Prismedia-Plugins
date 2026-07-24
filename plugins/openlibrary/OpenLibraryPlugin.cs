@@ -603,7 +603,7 @@ internal sealed class OpenLibraryPlugin {
         var patch = new EntityMetadataPatch(
             doc.Title ?? workId,
             CandidateOverview(doc),
-            WorkExternalIds(doc, seriesName),
+            WorkExternalIds(doc),
             [OpenLibraryMetadata.WorkUrl(workId)],
             OpenLibraryMetadata.Tags(doc.Subjects ?? [], [], [], [], seriesName, null),
             doc.Publishers?.FirstOrDefault(),
@@ -754,13 +754,12 @@ internal sealed class OpenLibraryPlugin {
             .ToArray();
     }
 
-    private static IReadOnlyDictionary<string, string> WorkExternalIds(OpenLibrarySearchDoc doc, string? seriesName = null) {
+    private static IReadOnlyDictionary<string, string> WorkExternalIds(OpenLibrarySearchDoc doc) {
         var workId = OpenLibraryMetadata.WorkIdFromKey(doc.Key)!;
         var ids = new Dictionary<string, string> {
             [OpenLibraryMetadata.PrimaryIdentityNamespace] = workId,
             [OpenLibraryMetadata.WorkIdKey] = workId
         };
-        if (!string.IsNullOrWhiteSpace(seriesName)) ids[OpenLibraryMetadata.SeriesKey] = seriesName!;
         if (doc.Isbns?.FirstOrDefault(Isbn13) is { } isbn13) ids["isbn13"] = isbn13;
         return ids;
     }

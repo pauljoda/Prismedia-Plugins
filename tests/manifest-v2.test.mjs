@@ -20,7 +20,7 @@ const expectedContracts = {
   musicbrainz: {
     "music-artist": { identities: ["musicbrainzartist", "musicbrainz"], fields: ["title", "country", "startYear"] },
     "audio-library": { identities: ["musicbrainzrelease", "musicbrainzreleasegroup", "musicbrainz"], fields: ["title", "artist", "year"] },
-    "audio-track": { identities: ["musicbrainzrecording", "musicbrainz"], fields: ["title", "artist", "album", "year"] },
+    "audio-track": { identities: ["musicbrainztrack", "musicbrainzrecording", "musicbrainz"], fields: ["title", "artist", "album", "year"] },
   },
   openlibrary: {
     book: { identities: ["openlibrary", "openlibrarywork", "openlibraryedition", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "year", "seriesTitle"] },

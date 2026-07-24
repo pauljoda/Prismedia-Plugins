@@ -14,6 +14,7 @@ internal static partial class MusicBrainzPlugin {
     private const string ReleaseIdentityNamespace = "musicbrainzrelease";
     private const string ReleaseGroupIdentityNamespace = "musicbrainzreleasegroup";
     private const string RecordingIdentityNamespace = "musicbrainzrecording";
+    private const string TrackIdentityNamespace = "musicbrainztrack";
     private const string MbBase = "https://musicbrainz.org/ws/2";
     private const string CoverBase = "https://coverartarchive.org";
     private const string CoverThumb = "front-250";
@@ -249,6 +250,13 @@ internal static partial class MusicBrainzPlugin {
     }
 
     private static async Task<IdentifyPluginResult> IdentifyRecordingAsync(IdentifyPluginRequest request) {
+        var trackIdentity = ExternalValue(request, TrackIdentityNamespace);
+        if (!IsExplicitSearch(request) &&
+            TryParseTrackIdentity(trackIdentity, out var occurrenceReleaseId, out var occurrenceId)) {
+            return IdentifyPluginResult.ForProposal(
+                await TrackProposalAsync(occurrenceReleaseId, occurrenceId, "external-id"));
+        }
+
         var id = ExternalId(request) ?? RecordingIdFromUrl(request.Query.Url) ?? FirstUrlId(request.Hints.Urls, RecordingIdFromUrl);
         if (id is not null && !IsExplicitSearch(request)) return IdentifyPluginResult.ForProposal(await RecordingProposalAsync(id, "external-id"));
         var query = SearchTitle(request);
@@ -328,37 +336,92 @@ internal static partial class MusicBrainzPlugin {
     /// dropped by the host (this reason is not "provider-tree"), so no phantom tracks are invented.
     /// </summary>
     private static IReadOnlyList<EntityMetadataProposal> TrackChildren(Release? release) {
+        if (release is null) return [];
         var children = new List<EntityMetadataProposal>();
         var globalIndex = 0;
-        foreach (var medium in (release?.Media ?? []).OrderBy(medium => medium.Position ?? 0)) {
+        foreach (var medium in (release.Media ?? []).OrderBy(medium => medium.Position ?? 0)) {
             foreach (var track in (medium.Tracks ?? []).OrderBy(track => track.Position ?? 0)) {
-                var title = string.IsNullOrWhiteSpace(track.Title) ? track.Recording?.Title : track.Title;
-                if (string.IsNullOrWhiteSpace(title)) { globalIndex++; continue; }
-
-                var recordingId = track.Recording?.Id;
-                var externalIds = new Dictionary<string, string>();
-                var urls = new List<string>();
-                if (!string.IsNullOrWhiteSpace(recordingId)) {
-                    externalIds[PrimaryIdentityNamespace] = recordingId!;
-                    externalIds[RecordingIdentityNamespace] = recordingId!;
-                    urls.Add($"https://musicbrainz.org/recording/{recordingId}");
+                if (TrackProposal(release.Id, track, globalIndex, "track-list") is { } proposal) {
+                    children.Add(proposal);
                 }
-
-                var runtime = track.Length is int ms
-                    ? new Dictionary<string, int> { ["runtimeSeconds"] = ms / 1000 }
-                    : new Dictionary<string, int>();
-                var patch = new EntityMetadataPatch(
-                    title, null, externalIds, urls, [], null, [],
-                    new Dictionary<string, string>(), runtime,
-                    new Dictionary<string, int> { ["sortOrder"] = globalIndex }, null);
-                children.Add(new EntityMetadataProposal(
-                    recordingId is { Length: > 0 } ? $"musicbrainz:recording:{recordingId}" : $"musicbrainz:track:{release!.Id}:{globalIndex}",
-                    PluginId, "audio-track", 0.9m, "track-list", patch, [], [], [], null, []));
                 globalIndex++;
             }
         }
 
         return children;
+    }
+
+    private static async Task<EntityMetadataProposal> TrackProposalAsync(
+        string releaseId,
+        string occurrenceId,
+        string reason) {
+        var release = await GetJsonAsync<Release>(
+            $"{MbBase}/release/{releaseId}?inc=artists+labels+tags+genres+release-groups+recordings&fmt=json")
+            ?? throw new InvalidOperationException($"MusicBrainz release '{releaseId}' was not found.");
+        var indexed = (release.Media ?? [])
+            .OrderBy(medium => medium.Position ?? 0)
+            .SelectMany(medium => (medium.Tracks ?? []).OrderBy(track => track.Position ?? 0))
+            .Select((track, index) => (Track: track, Index: index))
+            .ToArray();
+        var matched = indexed.FirstOrDefault(item =>
+            string.Equals(item.Track.Id, occurrenceId, StringComparison.OrdinalIgnoreCase));
+        if (matched.Track is null &&
+            occurrenceId.StartsWith("position-", StringComparison.Ordinal) &&
+            int.TryParse(occurrenceId["position-".Length..], out var index) &&
+            index >= 0 &&
+            index < indexed.Length) {
+            matched = indexed[index];
+        }
+
+        return matched.Track is not null
+            ? TrackProposal(releaseId, matched.Track, matched.Index, reason)!
+            : throw new InvalidOperationException(
+                $"MusicBrainz track occurrence '{occurrenceId}' was not found on release '{releaseId}'.");
+    }
+
+    private static EntityMetadataProposal? TrackProposal(
+        string releaseId,
+        Track track,
+        int globalIndex,
+        string reason) {
+        var title = string.IsNullOrWhiteSpace(track.Title) ? track.Recording?.Title : track.Title;
+        if (string.IsNullOrWhiteSpace(title)) return null;
+
+        var occurrenceId = !string.IsNullOrWhiteSpace(track.Id)
+            ? track.Id!
+            : $"position-{globalIndex}";
+        var identity = FormatTrackIdentity(releaseId, occurrenceId);
+        var urls = new List<string> { $"https://musicbrainz.org/release/{releaseId}" };
+        if (!string.IsNullOrWhiteSpace(track.Recording?.Id)) {
+            urls.Add($"https://musicbrainz.org/recording/{track.Recording!.Id}");
+        }
+
+        var runtime = track.Length is int ms
+            ? new Dictionary<string, int> { ["runtimeSeconds"] = ms / 1000 }
+            : new Dictionary<string, int>();
+        return new EntityMetadataProposal(
+            $"musicbrainz:track:{releaseId}:{occurrenceId}",
+            PluginId,
+            "audio-track",
+            0.9m,
+            reason,
+            new EntityMetadataPatch(
+                title,
+                null,
+                new Dictionary<string, string> { [TrackIdentityNamespace] = identity },
+                urls,
+                [],
+                null,
+                [],
+                new Dictionary<string, string>(),
+                runtime,
+                new Dictionary<string, int> { ["sortOrder"] = globalIndex },
+                null),
+            [],
+            [],
+            [],
+            null,
+            []);
     }
 
     private static async Task<EntityMetadataProposal> RecordingProposalAsync(string id, string reason) {
@@ -498,6 +561,37 @@ internal static partial class MusicBrainzPlugin {
         }
         return null;
     }
+    private static string? ExternalValue(IdentifyPluginRequest request, string identityNamespace) {
+        foreach (var ids in new[] { request.Query.ExternalIds, request.Entity.ExternalIds, request.Hints.ExternalIds }) {
+            if (TryGetValue(ids, identityNamespace, out var value) && !string.IsNullOrWhiteSpace(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+    internal static string FormatTrackIdentity(string releaseId, string occurrenceId) =>
+        $"{releaseId}:{occurrenceId.Length}:{occurrenceId}";
+    internal static bool TryParseTrackIdentity(
+        string? value,
+        out string releaseId,
+        out string occurrenceId) {
+        releaseId = string.Empty;
+        occurrenceId = string.Empty;
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var releaseSeparator = value.IndexOf(':');
+        if (releaseSeparator <= 0 || !Guid.TryParse(value[..releaseSeparator], out _)) return false;
+        var lengthSeparator = value.IndexOf(':', releaseSeparator + 1);
+        if (lengthSeparator <= releaseSeparator + 1 ||
+            !int.TryParse(value[(releaseSeparator + 1)..lengthSeparator], out var expectedLength) ||
+            expectedLength < 1) {
+            return false;
+        }
+        var encodedOccurrence = value[(lengthSeparator + 1)..];
+        if (encodedOccurrence.Length != expectedLength) return false;
+        releaseId = value[..releaseSeparator];
+        occurrenceId = encodedOccurrence;
+        return true;
+    }
     private static string? FirstUrlId(IReadOnlyList<string> urls, Func<string?, string?> parser) => urls.Select(parser).FirstOrDefault(id => id is not null);
     private static string? ReleaseIdFromUrl(string? url) => UrlId(url, "release") ?? UrlId(url, "release-group");
     private static string? RecordingIdFromUrl(string? url) => UrlId(url, "recording");
@@ -546,7 +640,7 @@ internal static partial class MusicBrainzPlugin {
             ? [PrimaryIdentityNamespace, ArtistIdentityNamespace]
             : kind.Equals("audio-library", StringComparison.OrdinalIgnoreCase)
                 ? [PrimaryIdentityNamespace, ReleaseIdentityNamespace, ReleaseGroupIdentityNamespace]
-                : [PrimaryIdentityNamespace, RecordingIdentityNamespace];
+                : [TrackIdentityNamespace, PrimaryIdentityNamespace, RecordingIdentityNamespace];
 
     private static bool TryGetValue(IReadOnlyDictionary<string, string>? values, string key, out string value) {
         foreach (var pair in values ?? new Dictionary<string, string>()) {
@@ -699,7 +793,7 @@ internal static partial class MusicBrainzPlugin {
         [property: JsonPropertyName("secondary-types")] string[]? SecondaryTypes);
     private sealed record ReleaseGroupDetail(string Id, string? Title, Release[]? Releases);
     private sealed record Medium(string? Format, int? Position, Track[]? Tracks);
-    private sealed record Track(int? Position, string? Number, string? Title, int? Length, Recording? Recording);
+    private sealed record Track(string? Id, int? Position, string? Number, string? Title, int? Length, Recording? Recording);
     private sealed record CoverArtResponse(CoverImage[]? Images);
     private sealed record CoverImage(string? Image, bool? Front);
 }
