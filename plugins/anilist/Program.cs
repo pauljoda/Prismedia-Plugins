@@ -154,8 +154,7 @@ internal static partial class AniListPlugin {
     }
 
     internal static EntityMetadataProposal EpisodeShell(Media media, int episodeNumber, Guid? targetId, int seasonNumber, int sortOrder, string reason) => new($"anilist:{media.Id}:s{seasonNumber}:e{sortOrder}", PluginId, "video-episode", 0.65m, reason, new EntityMetadataPatch($"Episode {sortOrder}", null, new Dictionary<string, string> {
-        [EpisodeIdentityNamespace] = FormatEpisodeIdentity(media.Id, episodeNumber, seasonNumber, sortOrder),
-        [PrimaryIdentityNamespace] = media.Id.ToString()
+        [EpisodeIdentityNamespace] = FormatEpisodeIdentity(media.Id, episodeNumber, seasonNumber, sortOrder)
     }, [], [], null, [], new Dictionary<string, string>(), media.Duration is int duration ? new Dictionary<string, int> { ["runtimeMinutes"] = duration } : new Dictionary<string, int>(), new Dictionary<string, int> { ["seasonNumber"] = seasonNumber, ["episodeNumber"] = sortOrder, ["sortOrder"] = sortOrder }, null), [], [], [], targetId, []);
     private static (Media Media, int EpisodeNumber)? AbsoluteEpisode(IReadOnlyList<Media> parts, int absoluteEpisode) {
         var offset = 0;

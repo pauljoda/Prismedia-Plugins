@@ -65,6 +65,7 @@ public sealed class AniListProposalTests {
         Assert.Equal(7, proposal.Patch.Positions["sortOrder"]);
         Assert.Equal(23, proposal.Patch.Stats["runtimeMinutes"]);
         Assert.Equal("113415:7:1:7", proposal.Patch.ExternalIds["anilistepisode"]);
+        Assert.DoesNotContain("anilist", proposal.Patch.ExternalIds.Keys);
     }
 
     [Fact]
@@ -77,9 +78,9 @@ public sealed class AniListProposalTests {
         Assert.Equal("video-season", proposal.TargetKind);
         Assert.Equal(0, proposal.Patch.Positions["seasonNumber"]);
         Assert.Equal(47, proposal.Children.Count);
-        Assert.Equal("1", proposal.Children[0].Patch.ExternalIds["anilist"]);
+        Assert.DoesNotContain("anilist", proposal.Children[0].Patch.ExternalIds.Keys);
         Assert.Equal(1, proposal.Children[0].Patch.Positions["episodeNumber"]);
-        Assert.Equal("2", proposal.Children[24].Patch.ExternalIds["anilist"]);
+        Assert.DoesNotContain("anilist", proposal.Children[24].Patch.ExternalIds.Keys);
         Assert.Equal(25, proposal.Children[24].Patch.Positions["episodeNumber"]);
         Assert.Equal(25, proposal.Children[24].Patch.Positions["sortOrder"]);
     }
