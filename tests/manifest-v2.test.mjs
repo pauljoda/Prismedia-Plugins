@@ -167,6 +167,31 @@ test("manifest-v2 rejects a missing manifest object", () => {
   assert.throws(() => validateManifest(null, "missing"), /requires an object at root/);
 });
 
+test("manifest-v2 accepts a bounded plugin execution policy", () => {
+  const manifest = validManifest({
+    execution: {
+      maxConcurrentInvocations: 1,
+      minimumStartIntervalMs: 1100,
+    },
+  });
+
+  assert.equal(validateManifest(manifest, "invalid"), manifest);
+});
+
+test("manifest-v2 rejects invalid plugin execution limits", () => {
+  for (const execution of [
+    { maxConcurrentInvocations: 0, minimumStartIntervalMs: 100 },
+    { maxConcurrentInvocations: 65, minimumStartIntervalMs: 100 },
+    { maxConcurrentInvocations: 1, minimumStartIntervalMs: -1 },
+    { maxConcurrentInvocations: 1, minimumStartIntervalMs: 86_400_001 },
+  ]) {
+    assert.throws(
+      () => validateManifest(validManifest({ execution }), "invalid"),
+      /manifest execution/,
+    );
+  }
+});
+
 test("manifest-v2 accepts a safe identity URL format", () => {
   const manifest = validManifest({
     supports: [{

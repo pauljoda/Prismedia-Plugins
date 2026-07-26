@@ -238,7 +238,7 @@
   version: 1.2.4
   date: '2026-07-24'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: e081df12b644c9089450228f6aa8b733f8f197e8250bcb2f613660595b63cfb9
+  sha256: 80c51864da4e3aeedecb28abf49286aa64bad1cd0b4a488c26d047e1a8c3b78b
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -332,6 +332,9 @@
             type: year
             required: false
             placeholder: '2024'
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 1100
 - id: anilist
   name: AniList
   version: 1.0.4
@@ -398,7 +401,7 @@
   version: 1.1.7
   date: '2026-07-24'
   path: plugins/mangadex/mangadex.zip
-  sha256: cf4008cc33f217163718b23a676f2f2a2da8730f7da2c28e1022fd2c1cc0a830
+  sha256: e41654c5d2e251c23475830f5af7cfc3e948c06b6c86d4b63b6a9de40058bc64
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -445,12 +448,15 @@
         - lookup-url
       identityNamespaces:
         - mangadexchapter
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 250
 - id: openlibrary
   name: Open Library
   version: 0.3.3
   date: '2026-07-24'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: b5ae42e29e0217890d84fe4cd25f22670de45917581d7626e0560e8bcba3ed9a
+  sha256: c41e4d7c5df87a010e6df59d1c5496d2e84bd57ce5735376e1417b165cb41c20
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -550,5 +556,8 @@
             type: year
             required: false
             placeholder: '1948'
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 1100
   description: Book, book-series, edition, and author metadata from Open Library
   author: Prismedia Community

@@ -263,6 +263,19 @@ function validateTopLevel(manifest, directoryId) {
   if (typeof manifest.isNsfw !== "boolean") throw new Error(`${pluginId} manifest requires boolean isNsfw`);
   validateCompatibility(manifest.compat, pluginId);
   validateAuth(manifest.auth, pluginId);
+  if (manifest.execution !== undefined) {
+    const execution = requireObject(manifest.execution, "execution", pluginId);
+    if (!Number.isInteger(execution.maxConcurrentInvocations)
+        || execution.maxConcurrentInvocations < 1
+        || execution.maxConcurrentInvocations > 64) {
+      throw new Error(`${pluginId} manifest execution.maxConcurrentInvocations must be an integer from 1 through 64`);
+    }
+    if (!Number.isInteger(execution.minimumStartIntervalMs)
+        || execution.minimumStartIntervalMs < 0
+        || execution.minimumStartIntervalMs > 86_400_000) {
+      throw new Error(`${pluginId} manifest execution.minimumStartIntervalMs must be an integer from 0 through 86400000`);
+    }
+  }
   return pluginId;
 }
 

@@ -35,7 +35,7 @@ test("published index, source manifests, and all six zips agree", () => {
     const packagedManifest = JSON.parse(strFromU8(files["manifest.json"]));
     assert.deepEqual(packagedManifest, manifest, `${pluginId} packaged manifest`);
 
-    for (const field of ["manifestVersion", "apiTags", "id", "name", "version", "date", "runtime", "isNsfw", "compat", "supports"]) {
+    for (const field of ["manifestVersion", "apiTags", "id", "name", "version", "date", "runtime", "isNsfw", "compat", "supports", "execution"]) {
       assert.deepEqual(entry[field], manifest[field], `${pluginId} index field ${field}`);
     }
     assert.equal(entry.path, `plugins/${pluginId}/${pluginId}.zip`);

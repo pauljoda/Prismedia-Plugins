@@ -17,6 +17,10 @@
   },
   "auth": [],
   "isNsfw": false,
+  "execution": {
+    "maxConcurrentInvocations": 1,
+    "minimumStartIntervalMs": 1100
+  },
   "supports": [
     {
       "entityKind": "music-artist",

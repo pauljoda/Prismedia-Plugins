@@ -125,6 +125,10 @@ function indexEntryFromManifest(manifest, id, digest) {
     supports: optionalArray(manifest.supports),
   };
 
+  if (manifest.execution !== undefined) {
+    entry.execution = manifest.execution;
+  }
+
   for (const key of ["description", "author", "capabilities"]) {
     if (manifest[key] !== undefined) {
       entry[key] = manifest[key];
