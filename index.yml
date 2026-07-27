@@ -6,7 +6,7 @@
   version: 1.1.11
   date: '2026-07-09'
   path: plugins/tmdb/tmdb.zip
-  sha256: 022b7db87c98a27908c96094a69767af13ce68f26c927d6ecf52fea3ce9e6c19
+  sha256: c289d9c5490aeeeae9946b27b1ccca9485a85b3cb7975e91cf68e7222975377e
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
