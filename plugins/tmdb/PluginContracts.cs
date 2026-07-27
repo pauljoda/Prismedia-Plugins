@@ -72,7 +72,12 @@ internal sealed record EntityMetadataPatch(
     IReadOnlyDictionary<string, string> Dates,
     IReadOnlyDictionary<string, int> Stats,
     IReadOnlyDictionary<string, int> Positions,
-    string? Classification);
+    string? Classification) {
+    /// <summary>Typed semantic dates understood by Prismedia's release timing and calendar surfaces.</summary>
+    public IReadOnlyList<EntityMetadataDatePatch> DateEntries { get; init; } = [];
+}
+
+internal sealed record EntityMetadataDatePatch(string Type, string Value);
 
 internal sealed record EntityMetadataProposal(
     string ProposalId,

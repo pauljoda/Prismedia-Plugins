@@ -16,8 +16,10 @@ internal sealed class TmdbProposalMapper {
         var studio = detail.ProductionCompanies?.FirstOrDefault()?.Name;
         var dates = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(detail.ReleaseDate)) {
-            dates["release"] = detail.ReleaseDate;
+            dates[TmdbConstants.DateTypes.Release] = detail.ReleaseDate;
         }
+
+        var dateEntries = BuildMovieReleaseDates(detail);
 
         var stats = new Dictionary<string, int>();
         if (detail.Runtime is { } runtime) {
@@ -35,7 +37,9 @@ internal sealed class TmdbProposalMapper {
             dates,
             stats,
             new Dictionary<string, int>(),
-            null);
+            null) {
+            DateEntries = dateEntries
+        };
 
         var relationships = (await BuildPersonRelationshipsAsync(detail.Credits, includeRelationshipDetails)).ToList();
         var studioChild = await BuildStudioChildAsync(detail.ProductionCompanies?.FirstOrDefault(), includeRelationshipDetails);
@@ -54,6 +58,67 @@ internal sealed class TmdbProposalMapper {
             [],
             Relationships: relationships);
     }
+
+    /// <summary>
+    /// Maps TMDB's region-scoped movie release records into Prismedia semantic milestones. A US date is
+    /// preferred when present; otherwise the earliest global date for that milestone is used. Multiple
+    /// theatrical classifications collapse to the earliest theatrical opening.
+    /// </summary>
+    internal static IReadOnlyList<EntityMetadataDatePatch> BuildMovieReleaseDates(TmdbMovieDetail detail) {
+        var rows = (detail.ReleaseDates?.Results ?? [])
+            .SelectMany(region => (region.ReleaseDates ?? []).Select(release => new {
+                region.Region,
+                release.Type,
+                release.ReleaseDate
+            }))
+            .Where(row => !string.IsNullOrWhiteSpace(row.ReleaseDate))
+            .Select(row => new MovieReleaseMilestoneRow(
+                row.Region,
+                row.Type,
+                NormalizeDate(row.ReleaseDate!)))
+            .Where(row => row.Value is not null)
+            .ToArray();
+
+        var entries = new List<EntityMetadataDatePatch>();
+        AddMilestone(entries, rows, TmdbConstants.DateTypes.Premiere, [TmdbConstants.MovieReleaseTypes.Premiere]);
+        AddMilestone(entries, rows, TmdbConstants.DateTypes.TheatricalRelease, [
+            TmdbConstants.MovieReleaseTypes.LimitedTheatrical,
+            TmdbConstants.MovieReleaseTypes.Theatrical
+        ]);
+        AddMilestone(entries, rows, TmdbConstants.DateTypes.DigitalRelease, [TmdbConstants.MovieReleaseTypes.Digital]);
+        AddMilestone(entries, rows, TmdbConstants.DateTypes.PhysicalRelease, [TmdbConstants.MovieReleaseTypes.Physical]);
+        AddMilestone(entries, rows, TmdbConstants.DateTypes.Air, [TmdbConstants.MovieReleaseTypes.Television]);
+
+        if (!string.IsNullOrWhiteSpace(detail.ReleaseDate)) {
+            entries.Add(new EntityMetadataDatePatch(TmdbConstants.DateTypes.Release, detail.ReleaseDate));
+        }
+
+        return entries;
+    }
+
+    private static void AddMilestone(
+        ICollection<EntityMetadataDatePatch> entries,
+        IEnumerable<MovieReleaseMilestoneRow> rows,
+        string dateType,
+        IReadOnlyCollection<int> tmdbTypes) {
+        var candidates = rows.Where(row => tmdbTypes.Contains(row.Type)).ToArray();
+        var regional = candidates.Where(row => string.Equals(
+            row.Region,
+            TmdbConstants.ReleaseRegions.UnitedStates,
+            StringComparison.OrdinalIgnoreCase));
+        var value = regional.Select(row => row.Value).Min(StringComparer.Ordinal)
+            ?? candidates.Select(row => row.Value).Min(StringComparer.Ordinal);
+        if (value is not null) {
+            entries.Add(new EntityMetadataDatePatch(dateType, value));
+        }
+    }
+
+    private static string? NormalizeDate(string value) =>
+        DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+
+    private sealed record MovieReleaseMilestoneRow(string Region, int Type, string? Value);
 
     public async Task<EntityMetadataProposal> TvToProposalAsync(
         TmdbTvDetail detail,

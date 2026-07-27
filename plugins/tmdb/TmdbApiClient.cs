@@ -13,7 +13,7 @@ internal sealed class TmdbApiClient {
 
     public async Task<TmdbMovieDetail> GetMovieAsync(int id) =>
         await FetchAsync<TmdbMovieDetail>($"/movie/{id}", new Dictionary<string, string> {
-            ["append_to_response"] = "credits,images",
+            ["append_to_response"] = "credits,images,release_dates",
             ["include_image_language"] = "en,null"
         });
 

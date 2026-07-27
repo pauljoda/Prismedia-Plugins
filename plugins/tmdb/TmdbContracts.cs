@@ -36,7 +36,19 @@ internal sealed record TmdbMovieDetail(
     [property: JsonPropertyName("runtime")] int? Runtime,
     [property: JsonPropertyName("production_companies")] TmdbNamed[]? ProductionCompanies,
     [property: JsonPropertyName("credits")] TmdbCredits? Credits,
-    [property: JsonPropertyName("images")] TmdbImagesResponse? Images);
+    [property: JsonPropertyName("images")] TmdbImagesResponse? Images,
+    [property: JsonPropertyName("release_dates")] TmdbMovieReleaseDatesResponse? ReleaseDates);
+
+internal sealed record TmdbMovieReleaseDatesResponse(
+    [property: JsonPropertyName("results")] TmdbMovieReleaseRegion[]? Results);
+
+internal sealed record TmdbMovieReleaseRegion(
+    [property: JsonPropertyName("iso_3166_1")] string Region,
+    [property: JsonPropertyName("release_dates")] TmdbMovieReleaseDate[]? ReleaseDates);
+
+internal sealed record TmdbMovieReleaseDate(
+    [property: JsonPropertyName("release_date")] string? ReleaseDate,
+    [property: JsonPropertyName("type")] int Type);
 
 internal sealed record TmdbTvDetail(
     [property: JsonPropertyName("id")] int Id,

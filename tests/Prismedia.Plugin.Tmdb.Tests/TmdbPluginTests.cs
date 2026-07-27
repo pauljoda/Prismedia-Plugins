@@ -8,7 +8,7 @@ public sealed class TmdbPluginTests {
     public async Task MovieLookupReturnsMovieProposalKind() {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/3/movie/1239655", request.RequestUri?.AbsolutePath);
-            Assert.Contains("append_to_response=credits%2Cimages", request.RequestUri?.Query);
+            Assert.Contains("append_to_response=credits%2Cimages%2Crelease_dates", request.RequestUri?.Query);
             return """
                 {
                   "id": 1239655,
@@ -22,7 +22,19 @@ public sealed class TmdbPluginTests {
                   "runtime": 100,
                   "production_companies": [],
                   "credits": { "cast": [], "crew": [] },
-                  "images": { "posters": [], "backdrops": [], "logos": [] }
+                  "images": { "posters": [], "backdrops": [], "logos": [] },
+                  "release_dates": {
+                    "results": [
+                      {
+                        "iso_3166_1": "US",
+                        "release_dates": [
+                          { "release_date": "2025-05-09T00:00:00.000Z", "type": 3 },
+                          { "release_date": "2025-07-08T00:00:00.000Z", "type": 4 },
+                          { "release_date": "2025-08-19T00:00:00.000Z", "type": 5 }
+                        ]
+                      }
+                    ]
+                  }
                 }
                 """;
         }));
@@ -44,6 +56,9 @@ public sealed class TmdbPluginTests {
         Assert.Equal("1239655", result.Proposal.Patch.ExternalIds["tmdb"]);
         Assert.Contains("Comedy", result.Proposal.Patch.Tags);
         Assert.Equal("2025-05-09", result.Proposal.Patch.Dates["release"]);
+        Assert.Contains(result.Proposal.Patch.DateEntries, date => date is { Type: "theatrical-release", Value: "2025-05-09" });
+        Assert.Contains(result.Proposal.Patch.DateEntries, date => date is { Type: "digital-release", Value: "2025-07-08" });
+        Assert.Contains(result.Proposal.Patch.DateEntries, date => date is { Type: "physical-release", Value: "2025-08-19" });
     }
 
     [Fact]
