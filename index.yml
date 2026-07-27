@@ -3,10 +3,10 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.11
-  date: '2026-07-09'
+  version: 1.1.12
+  date: '2026-07-27'
   path: plugins/tmdb/tmdb.zip
-  sha256: c289d9c5490aeeeae9946b27b1ccca9485a85b3cb7975e91cf68e7222975377e
+  sha256: 4023aa1f9e3a4bf72c50b345f5ea345fd074e6980d4a6a4bf907c26ffc87da8a
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2

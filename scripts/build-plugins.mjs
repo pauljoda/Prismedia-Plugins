@@ -15,7 +15,10 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import yaml from "js-yaml";
 import { validateManifest } from "./manifest-contract.mjs";
-import { preserveUnselectedIndexEntry } from "./publication-contract.mjs";
+import {
+  preserveUnselectedIndexEntry,
+  requireVersionBumpForChangedArtifact,
+} from "./publication-contract.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const repoRoot = resolve(dirname(__filename), "..");
@@ -196,8 +199,9 @@ for (const id of orderedIds) {
     buildDotnet(pluginDir);
 
     const zipBuf = zipPlugin(pluginDir);
-    writeFileSync(zipPath, zipBuf);
     const digest = sha256(zipBuf);
+    requireVersionBumpForChangedArtifact(existingById.get(id), manifest, id, digest);
+    writeFileSync(zipPath, zipBuf);
 
     console.log(
       `built ${id} v${manifest.version} (${zipBuf.length} bytes, sha256=${digest.slice(0, 12)}...)`,
