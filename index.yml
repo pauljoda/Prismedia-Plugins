@@ -3,10 +3,10 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.12
-  date: '2026-07-27'
+  version: 1.1.13
+  date: '2026-08-01'
   path: plugins/tmdb/tmdb.zip
-  sha256: 4023aa1f9e3a4bf72c50b345f5ea345fd074e6980d4a6a4bf907c26ffc87da8a
+  sha256: d66b0c2c23b113daf02af8038ba6c90b20e1054d95d2b32163b477e38a8c7378
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -15,7 +15,7 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 2.0.1
+    prismediaMin: 3.0.0
     prismediaMax: null
   supports:
     - entityKind: movie
@@ -47,12 +47,8 @@
         - lookup-url
         - search
       identityNamespaces:
-        - tmdbepisode
         - tmdb
       identityUrls:
-        - identityNamespace: tmdbepisode
-          valuePattern: '{seriesId}:{seasonNumber}:{episodeNumber}'
-          urlTemplate: https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}
         - identityNamespace: tmdb
           valuePattern: '{id}'
           urlTemplate: https://www.themoviedb.org/movie/{id}
@@ -68,6 +64,15 @@
             type: year
             required: false
             placeholder: '2024'
+    - entityKind: video-episode
+      actions:
+        - lookup-id
+      identityNamespaces:
+        - tmdbepisode
+      identityUrls:
+        - identityNamespace: tmdbepisode
+          valuePattern: '{seriesId}:{seasonNumber}:{episodeNumber}'
+          urlTemplate: https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}
     - entityKind: video-series
       actions:
         - lookup-id
@@ -337,10 +342,10 @@
     minimumStartIntervalMs: 1100
 - id: anilist
   name: AniList
-  version: 1.0.4
-  date: '2026-07-24'
+  version: 1.0.5
+  date: '2026-08-01'
   path: plugins/anilist/anilist.zip
-  sha256: 228bed5b8142a0fa70904dba154666a229da0326321ebecab7b494b11e7a5f26
+  sha256: 3c3e413accd35e004942407d641a84892a8416490e047f36ff40f22199e400a1
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -349,9 +354,28 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 2.0.1
+    prismediaMin: 3.0.0
     prismediaMax: null
   supports:
+    - entityKind: movie
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - anilist
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+            placeholder: Anime movie title
+          - key: year
+            label: Year
+            type: year
+            required: false
+            placeholder: '2024'
     - entityKind: video-series
       actions:
         - lookup-id
@@ -382,7 +406,6 @@
         - lookup-url
         - search
       identityNamespaces:
-        - anilistepisode
         - anilist
       search:
         fields:
@@ -396,6 +419,11 @@
             type: year
             required: false
             placeholder: '2024'
+    - entityKind: video-episode
+      actions:
+        - lookup-id
+      identityNamespaces:
+        - anilistepisode
 - id: mangadex
   name: MangaDex
   version: 1.1.7

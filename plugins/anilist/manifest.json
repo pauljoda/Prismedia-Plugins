@@ -3,19 +3,30 @@
   "apiTags": ["prismedia"],
   "id": "anilist",
   "name": "AniList",
-  "version": "1.0.4",
-  "date": "2026-07-24",
+  "version": "1.0.5",
+  "date": "2026-08-01",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.AniList.dll",
   "compat": {
     "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "2.0.1",
+    "prismediaMin": "3.0.0",
     "prismediaMax": null
   },
   "auth": [],
   "isNsfw": false,
   "supports": [
+    {
+      "entityKind": "movie",
+      "actions": ["lookup-id", "lookup-url", "search"],
+      "identityNamespaces": ["anilist"],
+      "search": {
+        "fields": [
+          { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Anime movie title" },
+          { "key": "year", "label": "Year", "type": "year", "required": false, "placeholder": "2024" }
+        ]
+      }
+    },
     {
       "entityKind": "video-series",
       "actions": ["lookup-id", "lookup-url", "search"],
@@ -35,13 +46,18 @@
     {
       "entityKind": "video",
       "actions": ["lookup-id", "lookup-url", "search"],
-      "identityNamespaces": ["anilistepisode", "anilist"],
+      "identityNamespaces": ["anilist"],
       "search": {
         "fields": [
           { "key": "title", "label": "Anime title", "type": "text", "required": true, "placeholder": "Movie or series title" },
           { "key": "year", "label": "Premiere year", "type": "year", "required": false, "placeholder": "2024" }
         ]
       }
+    },
+    {
+      "entityKind": "video-episode",
+      "actions": ["lookup-id"],
+      "identityNamespaces": ["anilistepisode"]
     }
   ]
 }

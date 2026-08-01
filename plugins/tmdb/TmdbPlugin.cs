@@ -11,9 +11,9 @@ internal sealed class TmdbPlugin {
         _handlers = new Dictionary<string, Func<IdentifyPluginRequest, Task<IdentifyPluginResult>>>(StringComparer.OrdinalIgnoreCase) {
             ["video-series"] = IdentifySeriesAsync,
             ["video-season"] = IdentifySeasonAsync,
-            ["movie"] = IdentifyVideoAsync,
-            ["video"] = IdentifyVideoAsync,
-            ["video-episode"] = IdentifyVideoAsync,
+            ["movie"] = IdentifyMovieAsync,
+            ["video"] = IdentifyMovieAsync,
+            ["video-episode"] = IdentifyEpisodeAsync,
             ["person"] = IdentifyPersonAsync,
             ["studio"] = IdentifyStudioAsync
         };
@@ -40,11 +40,7 @@ internal sealed class TmdbPlugin {
             SearchLimit(request)));
     }
 
-    private async Task<IdentifyPluginResult> IdentifyVideoAsync(IdentifyPluginRequest request) {
-        if (TmdbMetadataHelpers.TryEpisodeContext(request, out var seriesId, out var seasonNumber, out var episodeNumber)) {
-            return Proposal(await EpisodeFromContextAsync(seriesId, seasonNumber, episodeNumber));
-        }
-
+    private async Task<IdentifyPluginResult> IdentifyMovieAsync(IdentifyPluginRequest request) {
         var title = SearchTitle(request, TmdbConstants.SearchFields.Title);
         if (ResolveTmdbReference(request, "movie") is { } reference) {
             return Proposal(await _mapper.MovieToProposalAsync(
@@ -60,6 +56,11 @@ internal sealed class TmdbPlugin {
             TmdbMetadataHelpers.SearchYear(request),
             SearchLimit(request)));
     }
+
+    private async Task<IdentifyPluginResult> IdentifyEpisodeAsync(IdentifyPluginRequest request) =>
+        TmdbMetadataHelpers.TryEpisodeContext(request, out var seriesId, out var seasonNumber, out var episodeNumber)
+            ? Proposal(await EpisodeFromContextAsync(seriesId, seasonNumber, episodeNumber))
+            : IdentifyPluginResult.None();
 
     private async Task<IdentifyPluginResult> IdentifySeasonAsync(IdentifyPluginRequest request) {
         var seriesId = TmdbMetadataHelpers.SeriesTmdbIdFromContext(request);

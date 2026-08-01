@@ -310,7 +310,7 @@ public sealed class TmdbPluginTests {
 
         var emittedEpisode = Assert.Single(season.Children);
         var episodeIdentity = emittedEpisode.Patch.ExternalIds["tmdbepisode"];
-        var episodeResult = await plugin.IdentifyAsync(Lookup("video", "tmdbepisode", episodeIdentity));
+        var episodeResult = await plugin.IdentifyAsync(Lookup("video-episode", "tmdbepisode", episodeIdentity));
         var resolvedEpisode = Assert.IsType<EntityMetadataProposal>(episodeResult.Proposal);
         Assert.Equal(emittedEpisode.ProposalId, resolvedEpisode.ProposalId);
         Assert.Equal("video-episode", resolvedEpisode.TargetKind);

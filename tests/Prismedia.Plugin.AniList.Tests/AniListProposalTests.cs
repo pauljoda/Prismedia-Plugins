@@ -37,6 +37,17 @@ public sealed class AniListProposalTests {
     }
 
     [Fact]
+    public void MovieRequestKeepsTheDirectPlayableMovieKind() {
+        var proposal = AniListPlugin.ToProposal(
+            MediaFixture() with { Format = "MOVIE", Episodes = 1 },
+            "movie",
+            Guid.NewGuid(),
+            "external-id");
+
+        Assert.Equal("movie", proposal.TargetKind);
+    }
+
+    [Fact]
     public void SeasonProposalCarriesSeasonPositionAndEpisodeChildren() {
         var media = MediaFixture(episodes: 12);
 
@@ -140,7 +151,7 @@ public sealed class AniListProposalTests {
             var emittedEpisode = emittedSeason.Children[6];
             var episodeIdentity = emittedEpisode.Patch.ExternalIds["anilistepisode"];
             var resolvedEpisode = Assert.IsType<EntityMetadataProposal>((await AniListPlugin.IdentifyAsync(
-                Lookup("video", "anilistepisode", episodeIdentity))).Proposal);
+                Lookup("video-episode", "anilistepisode", episodeIdentity))).Proposal);
             Assert.Equal(emittedEpisode.ProposalId, resolvedEpisode.ProposalId);
             Assert.Equal("video-episode", resolvedEpisode.TargetKind);
             Assert.Equal(episodeIdentity, resolvedEpisode.Patch.ExternalIds["anilistepisode"]);

@@ -18,6 +18,7 @@ const VALID_ENTITY_KINDS = new Set([
   "studio",
   "tag",
   "video",
+  "video-episode",
   "video-season",
   "video-series",
 ]);

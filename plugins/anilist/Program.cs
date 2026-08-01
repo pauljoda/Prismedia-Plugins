@@ -73,7 +73,11 @@ internal static partial class AniListPlugin {
     }
 
     internal static EntityMetadataProposal ToProposal(Media media, string requestedKind, Guid targetId, string reason) {
-        var kind = requestedKind.Equals("video", StringComparison.OrdinalIgnoreCase) && IsMovieLike(media) ? "video" : "video-series";
+        var kind = requestedKind.Equals("movie", StringComparison.OrdinalIgnoreCase)
+            ? "movie"
+            : requestedKind.Equals("video", StringComparison.OrdinalIgnoreCase) && IsMovieLike(media)
+                ? "video"
+                : "video-series";
         var tags = (media.Genres ?? []).Concat((media.Tags ?? []).Where(t => (t.Rank ?? 0) >= 60).Select(t => t.Name)).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().Take(20).Cast<string>().ToArray();
         var dates = new Dictionary<string, string>(); if (DateString(media.StartDate) is { } start) dates["started"] = start; if (DateString(media.EndDate) is { } end) dates["ended"] = end;
         var stats = new Dictionary<string, int>(); if (media.Episodes is int episodes) stats["episodeCount"] = episodes; if (media.Duration is int duration) stats["runtimeMinutes"] = duration; if (media.Popularity is int popularity) stats["popularity"] = popularity;
@@ -231,8 +235,13 @@ internal static partial class AniListPlugin {
     private static int? FirstUrlId(IReadOnlyList<string> urls) => urls.Select(IdFromUrl).FirstOrDefault(id => id is not null);
     private static int? IdFromUrl(string? url) { if (string.IsNullOrWhiteSpace(url)) return null; var match = Regex.Match(url, "anilist\\.co/anime/(\\d+)", RegexOptions.IgnoreCase); return match.Success && int.TryParse(match.Groups[1].Value, out var id) ? id : null; }
     private static bool IsExplicitSearch(IdentifyPluginRequest request) => request.Action.Equals("search", StringComparison.OrdinalIgnoreCase) && (!string.IsNullOrWhiteSpace(request.Query.Title) || request.Query.Fields?.Values.Any(value => !string.IsNullOrWhiteSpace(value)) == true) && string.IsNullOrWhiteSpace(request.Query.Url) && request.Query.ExternalIds is not { Count: > 0 };
-    private static bool IsSupportedKind(string kind) => kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) || kind.Equals("video-season", StringComparison.OrdinalIgnoreCase) || IsEpisodeKind(kind);
-    private static bool IsEpisodeKind(string kind) => kind.Equals("video", StringComparison.OrdinalIgnoreCase) || kind.Equals("video-episode", StringComparison.OrdinalIgnoreCase);
+    private static bool IsSupportedKind(string kind) =>
+        kind.Equals("movie", StringComparison.OrdinalIgnoreCase) ||
+        kind.Equals("video", StringComparison.OrdinalIgnoreCase) ||
+        kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) ||
+        kind.Equals("video-season", StringComparison.OrdinalIgnoreCase) ||
+        IsEpisodeKind(kind);
+    private static bool IsEpisodeKind(string kind) => kind.Equals("video-episode", StringComparison.OrdinalIgnoreCase);
 
     private const string BasicFields = """
       id idMal description format episodes duration status season seasonYear bannerImage averageScore meanScore popularity siteUrl isAdult genres

@@ -8,9 +8,11 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
   anilist: {
+    movie: { identities: ["anilist"], fields: ["title", "year"] },
     "video-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
     "video-season": { identities: ["anilistseason"], fields: [] },
-    video: { identities: ["anilistepisode", "anilist"], fields: ["title", "year"] },
+    video: { identities: ["anilist"], fields: ["title", "year"] },
+    "video-episode": { identities: ["anilistepisode"], fields: [] },
   },
   mangadex: {
     book: { identities: ["mangadex"], fields: ["title", "creator", "year"] },
@@ -29,7 +31,8 @@ const expectedContracts = {
   },
   tmdb: {
     movie: { identities: ["tmdb"], fields: ["title", "year"] },
-    video: { identities: ["tmdbepisode", "tmdb"], fields: ["title", "year"] },
+    video: { identities: ["tmdb"], fields: ["title", "year"] },
+    "video-episode": { identities: ["tmdbepisode"], fields: [] },
     "video-series": { identities: ["tmdb"], fields: ["seriesTitle", "year"] },
     "video-season": { identities: ["tmdbseason"], fields: [] },
     person: { identities: ["tmdb"], fields: ["title"] },
@@ -71,18 +74,16 @@ test("tmdb declares kind-scoped provider identity URLs", () => {
       valuePattern: "{id}",
       urlTemplate: "https://www.themoviedb.org/movie/{id}",
     }],
-    video: [
-      {
-        identityNamespace: "tmdbepisode",
-        valuePattern: "{seriesId}:{seasonNumber}:{episodeNumber}",
-        urlTemplate: "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}",
-      },
-      {
-        identityNamespace: "tmdb",
-        valuePattern: "{id}",
-        urlTemplate: "https://www.themoviedb.org/movie/{id}",
-      },
-    ],
+    video: [{
+      identityNamespace: "tmdb",
+      valuePattern: "{id}",
+      urlTemplate: "https://www.themoviedb.org/movie/{id}",
+    }],
+    "video-episode": [{
+      identityNamespace: "tmdbepisode",
+      valuePattern: "{seriesId}:{seasonNumber}:{episodeNumber}",
+      urlTemplate: "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}",
+    }],
     "video-series": [{
       identityNamespace: "tmdb",
       valuePattern: "{id}",

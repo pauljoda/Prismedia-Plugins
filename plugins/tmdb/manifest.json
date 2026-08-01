@@ -5,14 +5,14 @@
   ],
   "id": "tmdb",
   "name": "The Movie Database",
-  "version": "1.1.12",
-  "date": "2026-07-27",
+  "version": "1.1.13",
+  "date": "2026-08-01",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Tmdb.dll",
   "compat": {
     "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "2.0.1",
+    "prismediaMin": "3.0.0",
     "prismediaMax": null
   },
   "auth": [
@@ -54,13 +54,8 @@
         "lookup-url",
         "search"
       ],
-      "identityNamespaces": ["tmdbepisode", "tmdb"],
+      "identityNamespaces": ["tmdb"],
       "identityUrls": [
-        {
-          "identityNamespace": "tmdbepisode",
-          "valuePattern": "{seriesId}:{seasonNumber}:{episodeNumber}",
-          "urlTemplate": "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}"
-        },
         {
           "identityNamespace": "tmdb",
           "valuePattern": "{id}",
@@ -73,6 +68,20 @@
           { "key": "year", "label": "Year", "type": "year", "required": false, "placeholder": "2024" }
         ]
       }
+    },
+    {
+      "entityKind": "video-episode",
+      "actions": [
+        "lookup-id"
+      ],
+      "identityNamespaces": ["tmdbepisode"],
+      "identityUrls": [
+        {
+          "identityNamespace": "tmdbepisode",
+          "valuePattern": "{seriesId}:{seasonNumber}:{episodeNumber}",
+          "urlTemplate": "https://www.themoviedb.org/tv/{seriesId}/season/{seasonNumber}/episode/{episodeNumber}"
+        }
+      ]
     },
     {
       "entityKind": "video-series",
