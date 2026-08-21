@@ -5,14 +5,14 @@
   ],
   "id": "mangadex",
   "name": "MangaDex",
-  "version": "1.1.7",
-  "date": "2026-07-24",
+  "version": "2.0.0",
+  "date": "2026-08-21",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MangaDex.dll",
   "compat": {
     "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "2.0.1",
+    "prismediaMin": "3.5.0",
     "prismediaMax": null
   },
   "auth": [],
@@ -23,7 +23,7 @@
   },
   "supports": [
     {
-      "entityKind": "book",
+      "entityKind": "comic-series",
       "actions": [
         "lookup-id",
         "lookup-url",
@@ -39,14 +39,14 @@
       }
     },
     {
-      "entityKind": "book-volume",
+      "entityKind": "comic-volume",
       "actions": [
         "lookup-id"
       ],
       "identityNamespaces": ["mangadexvolume"]
     },
     {
-      "entityKind": "book-chapter",
+      "entityKind": "comic-installment",
       "actions": [
         "lookup-id",
         "lookup-url"

@@ -25,14 +25,15 @@ public sealed class MangaDexIdentityRoundTripTests {
         MangaDexPlugin.Http = http;
         try {
             var root = Assert.IsType<EntityMetadataProposal>((await MangaDexPlugin.IdentifyAsync(
-                Lookup("book", "mangadex", MangaId))).Proposal);
+                Lookup("comic-series", "mangadex", MangaId))).Proposal);
+            Assert.Equal("comic-series", root.TargetKind);
             var emittedVolume = Assert.Single(root.Children);
             var volumeIdentity = emittedVolume.Patch.ExternalIds["mangadexvolume"];
 
             var resolvedVolume = Assert.IsType<EntityMetadataProposal>((await MangaDexPlugin.IdentifyAsync(
-                Lookup("book-volume", "mangadexvolume", volumeIdentity))).Proposal);
+                Lookup("comic-volume", "mangadexvolume", volumeIdentity))).Proposal);
             Assert.Equal(emittedVolume.ProposalId, resolvedVolume.ProposalId);
-            Assert.Equal("book-volume", resolvedVolume.TargetKind);
+            Assert.Equal("comic-volume", resolvedVolume.TargetKind);
             Assert.Equal(
                 new Dictionary<string, string> { ["mangadexvolume"] = volumeIdentity },
                 resolvedVolume.Patch.ExternalIds);
@@ -40,15 +41,28 @@ public sealed class MangaDexIdentityRoundTripTests {
             var emittedChapter = Assert.Single(emittedVolume.Children);
             var chapterIdentity = emittedChapter.Patch.ExternalIds["mangadexchapter"];
             var resolvedChapter = Assert.IsType<EntityMetadataProposal>((await MangaDexPlugin.IdentifyAsync(
-                Lookup("book-chapter", "mangadexchapter", chapterIdentity))).Proposal);
+                Lookup("comic-installment", "mangadexchapter", chapterIdentity))).Proposal);
             Assert.Equal(emittedChapter.ProposalId, resolvedChapter.ProposalId);
-            Assert.Equal("book-chapter", resolvedChapter.TargetKind);
+            Assert.Equal("comic-installment", resolvedChapter.TargetKind);
             Assert.Equal(
                 new Dictionary<string, string> { ["mangadexchapter"] = chapterIdentity },
                 resolvedChapter.Patch.ExternalIds);
+            Assert.Equal("2024-01-02", resolvedChapter.Patch.Dates["published"]);
+            Assert.Equal(20, resolvedChapter.Patch.Stats["pageCount"]);
         } finally {
             MangaDexPlugin.Http = previous;
         }
+    }
+
+    [Theory]
+    [InlineData("book")]
+    [InlineData("book-volume")]
+    [InlineData("book-chapter")]
+    public async Task ProseBookKindsAreNotClaimed(string kind) {
+        var result = await MangaDexPlugin.IdentifyAsync(Lookup(kind, "mangadex", MangaId));
+
+        Assert.Null(result.Proposal);
+        Assert.Empty(result.Candidates);
     }
 
     private static IdentifyPluginRequest Lookup(string kind, string identityNamespace, string value) {

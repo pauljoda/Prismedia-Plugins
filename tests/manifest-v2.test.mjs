@@ -15,9 +15,9 @@ const expectedContracts = {
     "video-episode": { identities: ["anilistepisode"], fields: [] },
   },
   mangadex: {
-    book: { identities: ["mangadex"], fields: ["title", "creator", "year"] },
-    "book-volume": { identities: ["mangadexvolume"], fields: [] },
-    "book-chapter": { identities: ["mangadexchapter"], fields: [] },
+    "comic-series": { identities: ["mangadex"], fields: ["title", "creator", "year"] },
+    "comic-volume": { identities: ["mangadexvolume"], fields: [] },
+    "comic-installment": { identities: ["mangadexchapter"], fields: [] },
   },
   musicbrainz: {
     "music-artist": { identities: ["musicbrainzartist", "musicbrainz"], fields: ["title", "country", "startYear"] },

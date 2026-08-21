@@ -23,6 +23,12 @@ internal static partial class MangaDexPlugin {
     private const string Uploads = "https://uploads.mangadex.org";
     private const string DefaultLanguage = "en";
 
+    private static class EntityKinds {
+        public const string ComicSeries = "comic-series";
+        public const string ComicVolume = "comic-volume";
+        public const string ComicInstallment = "comic-installment";
+    }
+
     private static class SearchFields {
         public const string Title = "title";
         public const string SeriesTitle = "seriesTitle";
@@ -30,12 +36,12 @@ internal static partial class MangaDexPlugin {
         public const string Year = "year";
     }
 
-    static MangaDexPlugin() => Http.DefaultRequestHeaders.UserAgent.ParseAdd("Prismedia-MangaDex-Plugin/1.1");
+    static MangaDexPlugin() => Http.DefaultRequestHeaders.UserAgent.ParseAdd("Prismedia-MangaDex-Plugin/2.0");
 
     public static async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
-        if (!request.Entity.Kind.Equals("book", StringComparison.OrdinalIgnoreCase) &&
-            !request.Entity.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase) &&
-            !request.Entity.Kind.Equals("book-chapter", StringComparison.OrdinalIgnoreCase)) {
+        if (!request.Entity.Kind.Equals(EntityKinds.ComicSeries, StringComparison.OrdinalIgnoreCase) &&
+            !request.Entity.Kind.Equals(EntityKinds.ComicVolume, StringComparison.OrdinalIgnoreCase) &&
+            !request.Entity.Kind.Equals(EntityKinds.ComicInstallment, StringComparison.OrdinalIgnoreCase)) {
             return IdentifyPluginResult.None();
         }
 
@@ -103,7 +109,7 @@ internal static partial class MangaDexPlugin {
         var chapters = await GetChaptersAsync(manga.Id, request.IncludeNsfw, PreferredLanguage(request));
         var aggregate = await GetAggregateAsync(manga.Id, PreferredLanguage(request));
         var children = BuildChildren(manga, chapters, aggregate, covers, selectedChapterId, PreferredLanguage(request)).ToArray();
-        var images = BookImages(manga, covers).ToArray();
+        var images = SeriesImages(manga, covers).ToArray();
         var attrs = manga.Attributes;
         var external = new Dictionary<string, string> { [PrimaryIdentityNamespace] = manga.Id };
         var urls = new[] { $"{Web}/title/{manga.Id}" };
@@ -113,7 +119,7 @@ internal static partial class MangaDexPlugin {
         var proposal = new EntityMetadataProposal(
             $"mangadex:{manga.Id}",
             PluginId,
-            "book",
+            EntityKinds.ComicSeries,
             0.9m,
             reason,
             new EntityMetadataPatch(
@@ -133,47 +139,47 @@ internal static partial class MangaDexPlugin {
             images,
             children,
             [],
-            request.Entity.Kind.Equals("book", StringComparison.OrdinalIgnoreCase) ? request.Entity.Id : null,
+            request.Entity.Kind.Equals(EntityKinds.ComicSeries, StringComparison.OrdinalIgnoreCase) ? request.Entity.Id : null,
             []);
         return ScopedProposalForRequest(proposal, request, selectedVolume);
     }
 
     private static EntityMetadataProposal ScopedProposalForRequest(
-        EntityMetadataProposal bookProposal,
+        EntityMetadataProposal seriesProposal,
         IdentifyPluginRequest request,
         string? selectedVolume = null) {
-        if (request.Entity.Kind.Equals("book", StringComparison.OrdinalIgnoreCase)) {
-            return bookProposal;
+        if (request.Entity.Kind.Equals(EntityKinds.ComicSeries, StringComparison.OrdinalIgnoreCase)) {
+            return seriesProposal;
         }
 
-        if (request.Entity.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase)) {
-            var volume = bookProposal.Children.FirstOrDefault(child => MatchesVolumeRequest(child, request, selectedVolume));
+        if (request.Entity.Kind.Equals(EntityKinds.ComicVolume, StringComparison.OrdinalIgnoreCase)) {
+            var volume = seriesProposal.Children.FirstOrDefault(child => MatchesVolumeRequest(child, request, selectedVolume));
             return volume is null
-                ? ScopedFallback(bookProposal, request, "book-volume")
+                ? ScopedFallback(seriesProposal, request, EntityKinds.ComicVolume)
                 : volume with { TargetEntityId = request.Entity.Id };
         }
 
-        if (request.Entity.Kind.Equals("book-chapter", StringComparison.OrdinalIgnoreCase)) {
+        if (request.Entity.Kind.Equals(EntityKinds.ComicInstallment, StringComparison.OrdinalIgnoreCase)) {
             // Chapters are matched inside their parent volume whenever the ancestors identify
             // one; chapter numbers restart per volume on many titles, so a global search would
             // bind "the volume's first chapter" to the series-wide chapter 1.
-            var volumeScope = VolumeNodeForChapterRequest(bookProposal, request);
-            var candidates = (volumeScope?.Children ?? StructuralDescendants(bookProposal).ToArray())
-                .Where(child => child.TargetKind.Equals("book-chapter", StringComparison.OrdinalIgnoreCase))
+            var volumeScope = VolumeNodeForChapterRequest(seriesProposal, request);
+            var candidates = (volumeScope?.Children ?? StructuralDescendants(seriesProposal).ToArray())
+                .Where(child => child.TargetKind.Equals(EntityKinds.ComicInstallment, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             var chapter = candidates.FirstOrDefault(child => MatchesChapterRequest(child, request))
                 ?? (volumeScope is null ? null : RelativeChapterInVolume(candidates, request));
             return chapter is null
-                ? ScopedFallback(bookProposal, request, "book-chapter")
+                ? ScopedFallback(seriesProposal, request, EntityKinds.ComicInstallment)
                 : chapter with { TargetEntityId = request.Entity.Id };
         }
 
-        return bookProposal;
+        return seriesProposal;
     }
 
-    private static EntityMetadataProposal? VolumeNodeForChapterRequest(EntityMetadataProposal bookProposal, IdentifyPluginRequest request) {
+    private static EntityMetadataProposal? VolumeNodeForChapterRequest(EntityMetadataProposal seriesProposal, IdentifyPluginRequest request) {
         var ancestor = request.StructuralContext?.Ancestors
-            .FirstOrDefault(snapshot => snapshot.Kind.Equals("book-volume", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(snapshot => snapshot.Kind.Equals(EntityKinds.ComicVolume, StringComparison.OrdinalIgnoreCase));
         if (ancestor is null) return null;
         var volumeNumber = NormalizeNumber(
             TryGetValue(ancestor.ExternalIds, VolumeIdentityNamespace, out var ancestorIdentity) &&
@@ -184,8 +190,8 @@ internal static partial class MangaDexPlugin {
                     : null) ??
             NumberFromTitle(ancestor.Title);
         if (volumeNumber is null) return null;
-        return bookProposal.Children.FirstOrDefault(child =>
-            child.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase) &&
+        return seriesProposal.Children.FirstOrDefault(child =>
+            child.TargetKind.Equals(EntityKinds.ComicVolume, StringComparison.OrdinalIgnoreCase) &&
             ProposalVolume(child) is { } volume &&
             NormalizeNumber(volume) == volumeNumber);
     }
@@ -201,16 +207,16 @@ internal static partial class MangaDexPlugin {
 
     // No upstream node matched this volume/chapter, so the proposal only identifies the
     // container title: it keeps the local entity's own name and the manga id, but none of the
-    // book's dates, urls, or text — those describe the title, not this child — and a low
+    // series' dates, urls, or text — those describe the title, not this child — and a low
     // confidence so review surfaces it and auto-identify never applies it.
-    private static EntityMetadataProposal ScopedFallback(EntityMetadataProposal bookProposal, IdentifyPluginRequest request, string targetKind) =>
-        bookProposal with {
-            ProposalId = $"{bookProposal.ProposalId}:{targetKind}:{request.Entity.Id}",
+    private static EntityMetadataProposal ScopedFallback(EntityMetadataProposal seriesProposal, IdentifyPluginRequest request, string targetKind) =>
+        seriesProposal with {
+            ProposalId = $"{seriesProposal.ProposalId}:{targetKind}:{request.Entity.Id}",
             TargetKind = targetKind,
             TargetEntityId = request.Entity.Id,
             Confidence = 0.3m,
             MatchReason = "scoped-fallback",
-            Patch = bookProposal.Patch with {
+            Patch = seriesProposal.Patch with {
                 Title = request.Entity.Title,
                 Description = null,
                 ExternalIds = new Dictionary<string, string>(),
@@ -240,7 +246,7 @@ internal static partial class MangaDexPlugin {
         EntityMetadataProposal volume,
         IdentifyPluginRequest request,
         string? selectedVolume = null) {
-        if (!volume.TargetKind.Equals("book-volume", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!volume.TargetKind.Equals(EntityKinds.ComicVolume, StringComparison.OrdinalIgnoreCase)) return false;
 
         if (selectedVolume is not null &&
             ProposalVolume(volume) is { } exactVolume) {
@@ -385,7 +391,7 @@ internal static partial class MangaDexPlugin {
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:volume:{volume}",
             PluginId,
-            "book-volume",
+            EntityKinds.ComicVolume,
             0.8m,
             "volume-map",
             new EntityMetadataPatch(
@@ -447,7 +453,7 @@ internal static partial class MangaDexPlugin {
         return new EntityMetadataProposal(
             $"mangadex:{manga.Id}:chapter:{chapter.Id}",
             PluginId,
-            "book-chapter",
+            EntityKinds.ComicInstallment,
             selectedChapterId == chapter.Id ? 0.9m : 0.7m,
             "chapter-feed",
             new EntityMetadataPatch(
@@ -608,7 +614,7 @@ internal static partial class MangaDexPlugin {
         }
     }
 
-    private static IEnumerable<ImageCandidate> BookImages(MangaResource manga, IReadOnlyList<CoverResource> covers) {
+    private static IEnumerable<ImageCandidate> SeriesImages(MangaResource manga, IReadOnlyList<CoverResource> covers) {
         var ordered = OrderedCovers(manga, covers).ToArray();
         var primary = ordered.FirstOrDefault();
         if (primary is not null) {
