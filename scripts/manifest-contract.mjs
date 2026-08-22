@@ -7,7 +7,6 @@ const VALID_ENTITY_KINDS = new Set([
   "book",
   "book-author",
   "book-chapter",
-  "book-page",
   "book-volume",
   "collection",
   "comic-installment",

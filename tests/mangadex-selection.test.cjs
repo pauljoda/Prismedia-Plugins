@@ -14,14 +14,14 @@ test("MangaDex manifest declares the Prismedia dotnet-process contract", () => {
   assert.equal(manifest.runtime, "dotnet-process");
   assert.equal(manifest.entry, "dist/Prismedia.Plugin.MangaDex.dll");
   assert.deepEqual(manifest.supports.map(({ entityKind, actions, identityNamespaces }) => ({ entityKind, actions, identityNamespaces })), [
-    { entityKind: "book", actions: ["lookup-id", "lookup-url", "search"], identityNamespaces: ["mangadex"] },
-    { entityKind: "book-volume", actions: ["lookup-id"], identityNamespaces: ["mangadexvolume"] },
-    { entityKind: "book-chapter", actions: ["lookup-id", "lookup-url"], identityNamespaces: ["mangadexchapter"] },
+    { entityKind: "comic-series", actions: ["lookup-id", "lookup-url", "search"], identityNamespaces: ["mangadex"] },
+    { entityKind: "comic-volume", actions: ["lookup-id"], identityNamespaces: ["mangadexvolume"] },
+    { entityKind: "comic-installment", actions: ["lookup-id", "lookup-url"], identityNamespaces: ["mangadexchapter"] },
   ]);
   assert.deepEqual(manifest.supports[0].search.fields.map((field) => field.key), ["title", "creator", "year"]);
 });
 
-test("MangaDex process returns a Prismedia none result for empty book input", () => {
+test("MangaDex process returns a Prismedia none result for empty comic input", () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "prismedia-mangadex-test-"));
   const requestPath = path.join(tempDir, "request.json");
 
@@ -33,7 +33,7 @@ test("MangaDex process returns a Prismedia none result for empty book input", ()
       auth: {},
       entity: {
         id: "00000000-0000-0000-0000-000000000001",
-        kind: "book",
+        kind: "comic-series",
         title: "",
       },
       query: { title: null, url: null, externalIds: null },
@@ -84,7 +84,7 @@ liveTest("MangaDex process accepts Bad Ending Party when aggregate volumes is em
       auth: {},
       entity: {
         id: "00000000-0000-0000-0000-000000000001",
-        kind: "book",
+        kind: "comic-series",
         title: "Bad Ending Party",
       },
       query: {
@@ -113,7 +113,7 @@ liveTest("MangaDex process accepts Bad Ending Party when aggregate volumes is em
   }
 });
 
-liveTest("MangaDex process scopes zero-based book chapter sort order to MangaDex chapter numbers", { timeout: 30_000 }, () => {
+liveTest("MangaDex process scopes zero-based comic installment sort order to MangaDex chapter numbers", { timeout: 30_000 }, () => {
   const title = "Blonde Gal with Huge Tits Treats Me Like a Manslut";
   const mangaId = "a27a0cc2-5cc8-4247-b305-3019f493a40f";
   const cases = [
@@ -140,7 +140,7 @@ liveTest("MangaDex process scopes zero-based book chapter sort order to MangaDex
       auth: {},
       entity: {
         id: "00000000-0000-0000-0000-000000000001",
-        kind: "book-chapter",
+        kind: "comic-installment",
         title: testCase.currentTitle,
       },
       query: { title: testCase.currentTitle, url: null, externalIds: null },
@@ -149,7 +149,7 @@ liveTest("MangaDex process scopes zero-based book chapter sort order to MangaDex
         ancestors: [
           {
             id: "00000000-0000-0000-0000-000000000002",
-            kind: "book",
+            kind: "comic-series",
             title,
             externalIds: { mangadex: mangaId },
             urls: [`https://mangadex.org/title/${mangaId}`],
@@ -165,7 +165,7 @@ liveTest("MangaDex process scopes zero-based book chapter sort order to MangaDex
     assert.equal(response.result.type, "proposal");
 
     const proposal = response.result.proposal;
-    assert.equal(proposal.targetKind, "book-chapter");
+    assert.equal(proposal.targetKind, "comic-installment");
     assert.equal(proposal.patch.title, testCase.expectedTitle);
     assert.equal(proposal.patch.externalIds.mangadexchapter, testCase.expectedChapterId);
     assert.equal(proposal.patch.externalIds.chapternumber, String(testCase.sortOrder + 1));
@@ -189,7 +189,7 @@ liveTest("MangaDex process hydrates cover-only volumes with matching feed chapte
       auth: {},
       entity: {
         id: "00000000-0000-0000-0000-000000000001",
-        kind: "book",
+        kind: "comic-series",
         title: "Blonde Gal with Huge Tits Treats Me Like a Manslut",
       },
       query: {
