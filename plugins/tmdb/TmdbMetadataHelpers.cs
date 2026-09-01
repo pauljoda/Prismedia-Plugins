@@ -29,7 +29,7 @@ internal static class TmdbMetadataHelpers {
 
     public static string Normalize(string value) =>
         Regex.Replace(
-            Regex.Replace(value.ToLowerInvariant(), @"[!?.""'`]", ""),
+            Regex.Replace(value.ToLowerInvariant(), @"[!?""'`]", ""),
             @"[^a-z0-9\s]+",
             " ")
             .Trim();

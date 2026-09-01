@@ -239,6 +239,32 @@ public sealed class TmdbPluginTests {
     }
 
     [Fact]
+    public async Task DottedMovieTitleUsesWordBoundariesInTmdbQuery() {
+        using var http = new HttpClient(new StubHandler(request => {
+            Assert.Equal("/3/search/movie", request.RequestUri?.AbsolutePath);
+            Assert.Contains("query=10%20cloverfield%20lane", request.RequestUri?.Query);
+            return """
+                {
+                  "results": [
+                    { "id": 333371, "title": "10 Cloverfield Lane", "media_type": "movie", "adult": false }
+                  ]
+                }
+                """;
+        }));
+        var plugin = new TmdbPlugin(new TmdbApiClient(http, "test-key"));
+
+        var result = await plugin.IdentifyAsync(new IdentifyPluginRequest(
+            "search",
+            new Dictionary<string, string>(),
+            new IdentifyEntitySnapshot(Guid.NewGuid(), "movie", "10.Cloverfield.Lane"),
+            new IdentifyQuery("10.Cloverfield.Lane", null, null),
+            new IdentifyMatchHints(new Dictionary<string, string>(), [], "10.Cloverfield.Lane", null)));
+
+        var candidate = Assert.Single(result.Candidates);
+        Assert.Equal(1m, candidate.Confidence);
+    }
+
+    [Fact]
     public async Task NsfwMovieSearchRequestsAdultAndKeepsAdultResults() {
         using var http = new HttpClient(new StubHandler(request => {
             Assert.Equal("/3/search/movie", request.RequestUri?.AbsolutePath);
