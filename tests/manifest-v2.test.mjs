@@ -7,6 +7,7 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
+  opds: {},
   anilist: {
     movie: { identities: ["anilist"], fields: ["title", "year"] },
     "video-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
@@ -335,4 +336,17 @@ test("manifest-v2 identity URLs preserve every captured identity component", () 
     }],
   });
   assert.equal(validateManifest(repeated, "invalid"), repeated);
+});
+
+
+test("integration-only manifests are independently versioned and do not need metadata support", () => {
+  const manifest = validManifest({ supports: [], integration: { protocolVersion: 1, settings: [],
+    capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["book"] }] } });
+  assert.equal(validateManifest(manifest), manifest);
+  for (const integration of [
+    { ...manifest.integration, protocolVersion: 9 },
+    { ...manifest.integration, capabilities: [{ kind: "catalog-discovery", operations: ["submit"], entityKinds: ["book"] }] },
+    { ...manifest.integration, capabilities: [...manifest.integration.capabilities, ...manifest.integration.capabilities] },
+  ]) assert.throws(() => validateManifest({ ...manifest, integration }));
+  assert.throws(() => validateManifest({ ...manifest, integration: undefined }), /non-empty supports/);
 });

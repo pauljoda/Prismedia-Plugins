@@ -132,7 +132,7 @@ function indexEntryFromManifest(manifest, id, digest) {
     entry.execution = manifest.execution;
   }
 
-  for (const key of ["description", "author", "capabilities"]) {
+  for (const key of ["description", "author", "capabilities", "integration"]) {
     if (manifest[key] !== undefined) {
       entry[key] = manifest[key];
     }

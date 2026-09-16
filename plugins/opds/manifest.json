@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 2,
+  "apiTags": ["prismedia"],
+  "id": "opds",
+  "name": "OPDS Catalogs",
+  "version": "1.0.0",
+  "date": "2026-09-16",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Opds.dll",
+  "compat": { "pluginApiMin": "2.0.0", "pluginApiMax": null, "prismediaMin": "3.8.0", "prismediaMax": null },
+  "auth": [
+    { "key": "username", "label": "Username", "required": false, "url": null },
+    { "key": "password", "label": "Password", "required": false, "url": null },
+    { "key": "token", "label": "Bearer token", "required": false, "url": null }
+  ],
+  "isNsfw": false,
+  "supports": [],
+  "integration": {
+    "protocolVersion": 1,
+    "capabilities": [
+      { "kind": "catalog-discovery", "operations": ["browse", "search"], "entityKinds": ["book", "comic-installment"] },
+      { "kind": "acquisition-source", "operations": ["resolve"], "entityKinds": ["book", "comic-installment"] }
+    ],
+    "settings": []
+  }
+}

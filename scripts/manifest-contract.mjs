@@ -237,6 +237,37 @@ function validateIdentityUrls(value, namespaces, pluginId, entityKind) {
   }
 }
 
+const INTEGRATION_OPERATIONS = {
+  "catalog-discovery": ["search", "browse", "inspect"],
+  "acquisition-source": ["resolve"],
+  "transfer-executor": ["submit", "find-submission", "get-job", "cancel", "list-artifacts", "authorize-artifact", "acknowledge"],
+  "external-manager": ["lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed"],
+  "connected-library": ["search-library", "get-library-item"],
+};
+
+function validateIntegration(integration, auth, pluginId) {
+  requireObject(integration, "integration", pluginId);
+  if (integration.protocolVersion !== 1) throw new Error(`${pluginId} integration protocolVersion must be 1`);
+  const capabilities = requireArray(integration.capabilities, "integration.capabilities", pluginId);
+  if (capabilities.length > 8) throw new Error(`${pluginId} has too many integration capabilities`);
+  requireUnique(capabilities.map(item => item.kind), "integration capabilities", pluginId);
+  for (const capability of capabilities) {
+    const allowed = INTEGRATION_OPERATIONS[capability.kind];
+    if (!allowed) throw new Error(`${pluginId} declares an unknown integration capability`);
+    const operations = requireArray(capability.operations, "integration operations", pluginId);
+    requireUnique(operations, "integration operations", pluginId);
+    if (operations.some(operation => !allowed.includes(operation))) throw new Error(`${pluginId} declares an operation outside its capability`);
+    const kinds = requireArray(capability.entityKinds, "integration entityKinds", pluginId);
+    requireUnique(kinds, "integration entityKinds", pluginId);
+    if (kinds.some(kind => !VALID_ENTITY_KINDS.has(kind))) throw new Error(`${pluginId} declares an unknown integration entity kind`);
+  }
+  const settings = requireArray(integration.settings, "integration.settings", pluginId, { allowEmpty: true });
+  if (settings.length > 32) throw new Error(`${pluginId} has too many connection settings`);
+  if (settings.length) validateSearch({ fields: settings }, pluginId, "connection");
+  if (settings.some(field => auth.some(credential => credential.key === field.key)))
+    throw new Error(`${pluginId} cannot declare a credential as a nonsecret setting`);
+}
+
 function validateTopLevel(manifest, directoryId) {
   requireObject(manifest, "root", directoryId);
   const pluginId = requireString(manifest.id, "id", directoryId);
@@ -284,7 +315,8 @@ function validateTopLevel(manifest, directoryId) {
 
 export function validateManifest(manifest, directoryId = manifest?.id ?? "unknown") {
   const pluginId = validateTopLevel(manifest, directoryId);
-  const supports = requireArray(manifest.supports, "supports", pluginId);
+  if (manifest.integration != null) validateIntegration(manifest.integration, manifest.auth, pluginId);
+  const supports = requireArray(manifest.supports, "supports", pluginId, { allowEmpty: Boolean(manifest.integration) });
   requireUnique(supports.map((support) => support?.entityKind), "entity kind declarations", pluginId);
   for (const support of supports) {
     const kind = support?.entityKind;

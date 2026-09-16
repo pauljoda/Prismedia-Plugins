@@ -589,3 +589,37 @@
     minimumStartIntervalMs: 1100
   description: Book, book-series, edition, and author metadata from Open Library
   author: Prismedia Community
+- id: opds
+  name: OPDS Catalogs
+  version: 1.0.0
+  date: '2026-09-16'
+  path: plugins/opds/opds.zip
+  sha256: 8332cd2eb13147c0be733caf682ae235d738146115ca531ec0f702ea80dce55b
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - browse
+          - search
+        entityKinds:
+          - book
+          - comic-installment
+      - kind: acquisition-source
+        operations:
+          - resolve
+        entityKinds:
+          - book
+          - comic-installment
+    settings: []
