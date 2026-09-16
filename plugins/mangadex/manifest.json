@@ -5,14 +5,14 @@
   ],
   "id": "mangadex",
   "name": "MangaDex",
-  "version": "2.0.0",
-  "date": "2026-08-21",
+  "version": "2.1.0",
+  "date": "2026-09-16",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MangaDex.dll",
   "compat": {
     "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "3.5.0",
+    "prismediaMin": "3.8.0",
     "prismediaMax": null
   },
   "auth": [],
@@ -29,12 +29,32 @@
         "lookup-url",
         "search"
       ],
-      "identityNamespaces": ["mangadex"],
+      "identityNamespaces": [
+        "mangadex"
+      ],
       "search": {
         "fields": [
-          { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Manga title" },
-          { "key": "creator", "label": "Creator", "type": "text", "required": false, "placeholder": "Author or artist" },
-          { "key": "year", "label": "Year", "type": "year", "required": false, "placeholder": "2024" }
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "text",
+            "required": true,
+            "placeholder": "Manga title"
+          },
+          {
+            "key": "creator",
+            "label": "Creator",
+            "type": "text",
+            "required": false,
+            "placeholder": "Author or artist"
+          },
+          {
+            "key": "year",
+            "label": "Year",
+            "type": "year",
+            "required": false,
+            "placeholder": "2024"
+          }
         ]
       }
     },
@@ -43,7 +63,9 @@
       "actions": [
         "lookup-id"
       ],
-      "identityNamespaces": ["mangadexvolume"]
+      "identityNamespaces": [
+        "mangadexvolume"
+      ]
     },
     {
       "entityKind": "comic-installment",
@@ -51,7 +73,9 @@
         "lookup-id",
         "lookup-url"
       ],
-      "identityNamespaces": ["mangadexchapter"]
+      "identityNamespaces": [
+        "mangadexchapter"
+      ]
     }
   ]
 }
