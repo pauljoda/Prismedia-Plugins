@@ -6,10 +6,16 @@ Connect an existing Radarr 6.x instance through its API v3. Configure the applic
 
 - Browse/search existing movies by title or metadata ID.
 - Inspect exact final file associations and read existing profile/root-folder choices.
-- Preserve combined-episode associations and specials in Sonarr.
 - Check the selected holding's metadata identity before trusting a reused remote item ID.
+- Observe monitoring, profile, and a previously acknowledged search command for one exact movie.
+- Apply explicit monitoring/profile fields using Radarr's partial movie-editor API, preserving omitted fields and file paths.
+- Submit one `MoviesSearch` command for the selected movie without changing monitoring.
 
-This package currently performs GET requests only. It does not add holdings, change monitoring, issue searches, import files, or delete anything. File presence is reported by the external application; a local mapping and verified access are required before Prismedia can play those bytes.
+The host must persist ownership and dispatch intent before invoking a mutation. The operation ID is host correlation; Radarr does not provide an idempotency guarantee for it. The adapter never retries a write. A lost or malformed write response remains uncertain; it must not be treated as a definite rejection or automatically resubmitted. Read-only reconciliation can observe configuration and an already known command reference.
+
+Command references include both the numeric ID and original queue timestamp. Missing history, reused IDs, changed command coverage, and unknown execution outcomes remain unverified. A completed search can find no releases and never establishes file availability. A local mapping and verified access are still required before Prismedia can play reported files.
+
+The adapter checks pinned TMDB/other identities, the reviewed managed path, and relevant configuration before writing. These checks are not an upstream compare-and-swap transaction: concurrent changes in another client can still race. It does not add movies, move files, import files, or issue deletions.
 
 Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
 
@@ -19,6 +25,6 @@ Control reads have an 8 MiB response limit and 20-second per-request deadline. R
 
 ## Verification
 
-`dotnet test tests/Prismedia.Plugin.Arr.Tests` covers both adapters. Live reads were validated against Radarr 6.1.1.10360 and Sonarr 4.0.17.2952. Broader minor-version support depends on the same API v3 resource shapes.
+`dotnet test tests/Prismedia.Plugin.Arr.Tests` covers both adapters, exact mutation scopes, preserve semantics, lost responses, and command identity reuse. Live reads were validated against Radarr 6.1.1.10360 and Sonarr 4.0.17.2952. Mutation semantics were checked against the [versioned movie editor](https://github.com/Radarr/Radarr/blob/v6.1.1.10360/src/Radarr.Api.V3/Movies/MovieEditorController.cs) and command APIs. Broader minor-version support depends on the same API v3 resource shapes.
 
 Official APIs: [Radarr](https://radarr.video/docs/api/), [Sonarr](https://sonarr.tv/docs/api/).

@@ -62,6 +62,16 @@ public sealed class ManagerLibraryTests {
     }
 
     [Fact]
+    public async Task SonarrDoesNotAdvertiseOrExecuteUnimplementedControls() {
+        using var fixture = new Fixture(sonarr: true);
+        var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
+        var manager = Assert.Single(probe.Capabilities, capability => capability.Kind == ManagerProtocol.ExternalManager);
+        Assert.Equal(ManagerProtocol.Options, Assert.Single(manager.Operations));
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Configure, new { }));
+        Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+    }
+
+    [Fact]
     public async Task WrongApplicationOrUnsupportedServerVersionIsRejected() {
         using var fixture = new Fixture();
         fixture.Responses["system/status"] = new { appName = "Sonarr", version = "4.0.17.2952" };

@@ -5,7 +5,7 @@
   ],
   "id": "radarr",
   "name": "Radarr",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "date": "2026-09-16",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Radarr.dll",
@@ -41,7 +41,10 @@
       {
         "kind": "external-manager",
         "operations": [
-          "manager-options"
+          "manager-options",
+          "reconcile-managed",
+          "configure-managed",
+          "request-managed"
         ],
         "entityKinds": [
           "movie"

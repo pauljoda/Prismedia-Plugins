@@ -6,10 +6,11 @@ using Prismedia.Plugin.Integrations;
 
 namespace Prismedia.Plugin.Arr;
 
-/// <summary>Common read-only manager protocol, with concrete adapters translating each application's library model.</summary>
+/// <summary>Common manager protocol, with concrete adapters declaring and translating only their supported controls.</summary>
 internal abstract class ArrLibrary(ArrClient client, string appName, int supportedMajor, string kind) {
     protected ArrClient Client => client;
     protected string Kind => kind;
+    protected virtual IReadOnlyList<string> ControlOperations => [];
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) {
         var status = await client.GetAsync<ArrStatus>("system/status", cancellationToken);
         if (status.AppName != appName || !Version.TryParse(status.Version, out var version) || version.Major != supportedMajor)
@@ -18,7 +19,7 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
         if (request.Connection.ExpectedInstanceId is not null) throw new IntegrationFailure("This application does not report a persistent installation ID. Reconnect it with its current identity policy.");
         if (request.Operation == IntegrationOperations.Probe) return new ProbeResult(null, appName, status.Version, [
             new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem], [kind]),
-            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options], [kind])
+            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, .. ControlOperations], [kind])
         ]);
         if (request.Operation == ManagerProtocol.SearchLibrary) {
             var input = Input<ManagedLibraryQuery>(request);
@@ -54,8 +55,10 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
             return new ManagerOptions(profiles.Select(profile => new ManagerChoice(Id(profile.Id), profile.Name)).ToArray(),
                 roots.Select(root => new ManagerRootChoice(Id(root.Id), root.Path, root.Accessible)).ToArray());
         }
-        throw new IntegrationFailure("This operation is not implemented by the installed adapter.");
+        return await DispatchControlAsync(request, cancellationToken);
     }
+    protected virtual Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken cancellationToken) =>
+        throw new IntegrationFailure("This operation is not implemented by the installed adapter.");
     protected abstract Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken);
     protected abstract Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken);
     protected static string Id(int id) => id > 0 ? id.ToString(CultureInfo.InvariantCulture) : throw new IntegrationFailure("The application returned an invalid item identity.");
@@ -65,7 +68,7 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
         if (!string.IsNullOrWhiteSpace(imdbId)) result[ManagerProtocol.Imdb] = imdbId;
         return result;
     }
-    private static T Input<T>(IntegrationRequest request) => request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
+    protected static T Input<T>(IntegrationRequest request) => request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
 }
 
 // Typed records below are the single decode boundary for the external API v3 wire vocabulary.
