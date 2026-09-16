@@ -18,6 +18,7 @@ public static class IntegrationOperations {
     public const string Inspect = "inspect";
     public const string Submit = "submit";
     public const string FindSubmission = "find-submission";
+    public const string CancelSubmission = "cancel-submission";
     public const string GetJob = "get-job";
     public const string Cancel = "cancel";
     public const string ListArtifacts = "list-artifacts";

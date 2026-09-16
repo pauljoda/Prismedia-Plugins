@@ -12,6 +12,7 @@ internal static class ArchiverWire {
     internal const string Inspect = "inspect";
     internal const string Submit = "submit";
     internal const string Cancel = "cancel";
+    internal const string CancelOperation = "cancel-operation";
     internal const string Artifacts = "artifacts";
     internal const string Retention = "retention";
     internal const string Receipts = "receipts";
@@ -41,3 +42,5 @@ internal sealed record ReceiptRequest(Guid ReceiptId, string ManifestRevision, I
 internal sealed record ReceiptResult(string JobId, Guid ReceiptId, bool Accepted);
 /// <summary>Opaque adapter selection wraps Archiver identity plus the explicit negotiated output format.</summary>
 internal sealed record PinnedSelection(string Id, string Format);
+
+internal sealed record OperationCancellation(string InstanceId, Guid ClientOperationId, bool PreventedAcceptance, JobSnapshot? Job);

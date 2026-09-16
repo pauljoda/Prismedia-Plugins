@@ -65,7 +65,7 @@ public sealed class ArchiverContractTests {
             new SubmitTransferInput(operation, "https://source.test/comic", pinned, "revision", ["issue"], 1, 1000)), default);
     }
     private static IntegrationRequest Request<T>(string operation, T input) => new(IntegrationProtocol.Name, 1, Guid.NewGuid(), operation, Connection(), JsonSerializer.SerializeToElement(input, IntegrationProtocol.Json));
-    private static SystemInfo System() => new(Instance, "1.0", "fixture", [ArchiverWire.Inspect, ArchiverWire.Submit, ArchiverWire.Cancel, ArchiverWire.Artifacts, ArchiverWire.Retention, ArchiverWire.Receipts], [ArchiverWire.Profile], 1, 1000, 7, 30);
+    private static SystemInfo System() => new(Instance, "1.0", "fixture", [ArchiverWire.Inspect, ArchiverWire.Submit, ArchiverWire.Cancel, ArchiverWire.CancelOperation, ArchiverWire.Artifacts, ArchiverWire.Retention, ArchiverWire.Receipts], [ArchiverWire.Profile], 1, 1000, 7, 30);
     private static HttpResponseMessage Json<T>(T value) => new(HttpStatusCode.OK) { Content = new StringContent(JsonSerializer.Serialize(value, IntegrationProtocol.Json)) };
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> action) : HttpMessageHandler {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(action(request));

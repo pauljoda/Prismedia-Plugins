@@ -625,10 +625,10 @@
     settings: []
 - id: archiver
   name: The Archiver (executor API)
-  version: 1.0.0
+  version: 1.1.0
   date: '2026-09-16'
   path: plugins/archiver/archiver.zip
-  sha256: b073018c4a2dc3d2db4178d89e1daf19d7eae203fadbea86595155600f6a8fa9
+  sha256: 5cc06de1c8aa646f2583a97c9ea7625501e65fe50f118c59c827428b6064f529
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -659,6 +659,7 @@
           - authorize-artifact
           - renew-retention
           - acknowledge
+          - cancel-submission
         entityKinds:
           - book
           - comic-installment

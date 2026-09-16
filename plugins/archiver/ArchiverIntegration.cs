@@ -8,7 +8,7 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
     private static readonly Capability[] Capabilities = [
         new(IntegrationCapabilities.Discovery, [IntegrationOperations.Inspect], [MediaKinds.Book, MediaKinds.Comic]),
         new(IntegrationCapabilities.TransferExecutor, [IntegrationOperations.Submit, IntegrationOperations.FindSubmission,
-            IntegrationOperations.GetJob, IntegrationOperations.Cancel, IntegrationOperations.ListArtifacts,
+            IntegrationOperations.GetJob, IntegrationOperations.Cancel, IntegrationOperations.CancelSubmission, IntegrationOperations.ListArtifacts,
             IntegrationOperations.AuthorizeArtifact, IntegrationOperations.RenewRetention, IntegrationOperations.Acknowledge], [MediaKinds.Book, MediaKinds.Comic])
     ];
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) {
@@ -16,7 +16,7 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
             ?? throw new IntegrationFailure("The Archiver did not return its identity.");
         if (string.IsNullOrWhiteSpace(system.InstanceId) || system.InstanceId.Length > 512 || !Version.TryParse(system.ApiVersion, out var version) || version.Major != 1
             || system.OutputProfiles?.Contains(ArchiverWire.Profile) != true || system.MaximumItems < 1 || system.MaximumBytes < 1
-            || new[] { ArchiverWire.Inspect, ArchiverWire.Submit, ArchiverWire.Cancel, ArchiverWire.Artifacts, ArchiverWire.Retention, ArchiverWire.Receipts }
+            || new[] { ArchiverWire.Inspect, ArchiverWire.Submit, ArchiverWire.Cancel, ArchiverWire.CancelOperation, ArchiverWire.Artifacts, ArchiverWire.Retention, ArchiverWire.Receipts }
                 .Any(capability => system.Capabilities?.Contains(capability) != true))
             throw new IntegrationFailure("This server does not support the required Archiver executor API v1 publication profile.");
         if (connection.ExpectedInstanceId is not null && connection.ExpectedInstanceId != system.InstanceId)
@@ -52,6 +52,11 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
             case IntegrationOperations.FindSubmission: {
                 var input = Input<FindTransferInput>(request);
                 return new { job = await client.SendAsync<JobSnapshot>(HttpMethod.Get, $"operations/{input.ClientOperationId}", null, cancellationToken, allowMissing: true) };
+            }
+            case IntegrationOperations.CancelSubmission: {
+                var input = Input<FindTransferInput>(request);
+                return await client.SendAsync<OperationCancellation>(HttpMethod.Post, $"operations/{input.ClientOperationId}/cancel", null, cancellationToken)
+                    ?? throw new IntegrationFailure("The executor did not confirm its operation cancellation fence.");
             }
             case IntegrationOperations.GetJob:
             case IntegrationOperations.Cancel: {

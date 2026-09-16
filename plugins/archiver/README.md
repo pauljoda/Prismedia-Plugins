@@ -14,6 +14,7 @@ enable discovery and transfer execution and test the connection. Use Prismedia's
 - One EPUB/PDF book or CBZ comic through the negotiated `single-publication` profile.
 - Persistent installation identity and same-operation recovery after uncertain POSTs.
 - Authoritative job snapshots, remote cancellation, immutable paged manifests.
+- Atomic operation cancellation prevents late acceptance after a timed-out submission.
 - Authenticated same-origin artifact retrieval with exact sizes and SHA-256 evidence.
 - Renewable retention and independently retryable import receipts.
 
