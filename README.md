@@ -16,6 +16,7 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 
 | Plugin | Version | Runtime | Capabilities | NSFW | Description |
 |---|---|---|---|---|---|
+| [Google Books](./plugins/googlebooks) | 1.0.0 | .NET process | `book`, `book-volume` lookup/search | No | Edition-specific metadata with reviewed title and ISBN searches |
 | [TMDB](./plugins/tmdb) | 1.1.13 | .NET process | `movie`, `video`, `video-episode`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |
 | [YouTube Metadata](./plugins/youtube) | 1.2.4 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
 | [MusicBrainz](./plugins/musicbrainz) | 1.2.3 | .NET process | `music-artist`, `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
@@ -43,15 +44,15 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
         └── <id>.zip              # Distributable bundle (committed)
 ```
 
-Each plugin directory is self-contained — plugins do not import from one another, and the `.zip` is the unit a client downloads and runs.
+Plugins do not import from one another. Some projects source-link shared protocol code at build time; the published `.zip` contains the complete runtime a client downloads and runs.
 
 ---
 
 ## Installing a plugin
 
-Open Prismedia → **Settings → Plugins → Browse community registry**, then enable any plugin from the list. The client fetches `index.yml` from this repository, verifies the SHA-256 of the downloaded `.zip` against the registry, and runs the plugin in its sandboxed runtime.
+Open Prismedia → **Settings → Plugins → Browse community registry**, then enable any plugin from the list. The client fetches `index.yml` from this repository, verifies the SHA-256 of the downloaded `.zip` against the registry, and runs the plugin as a child process. Process time and output limits do not provide an operating-system sandbox; install code you trust.
 
-Some plugins (TMDB) require an API key from the upstream service. Prismedia prompts for these on first use; the keys are stored in your local Prismedia keychain and passed to the plugin request as `auth` values.
+Some plugins, including TMDB and Google Books, require an API key from the upstream service. Configure credentials in Prismedia; it passes the required values to the plugin request as `auth` values.
 
 For step-by-step screenshots and troubleshooting, see the [Prismedia plugin docs](https://pauljoda.github.io/Prismedia/docs/plugins/overview).
 

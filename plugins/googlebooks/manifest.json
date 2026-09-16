@@ -1,0 +1,123 @@
+{
+  "manifestVersion": 2,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "googlebooks",
+  "name": "Google Books",
+  "version": "1.0.0",
+  "date": "2026-09-16",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.GoogleBooks.dll",
+  "compat": {
+    "pluginApiMin": "2.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "3.8.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "apiKey",
+      "label": "Google Books API key",
+      "required": true,
+      "url": "https://console.cloud.google.com/apis/credentials"
+    }
+  ],
+  "isNsfw": false,
+  "execution": {
+    "maxConcurrentInvocations": 1,
+    "minimumStartIntervalMs": 300
+  },
+  "description": "Edition-specific book metadata with reviewed title and ISBN searches",
+  "author": "Prismedia Community",
+  "supports": [
+    {
+      "entityKind": "book",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ],
+      "identityNamespaces": [
+        "googlebooks",
+        "isbn",
+        "isbn10",
+        "isbn13"
+      ],
+      "identityUrls": [
+        {
+          "identityNamespace": "googlebooks",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://books.google.com/books?id={id}"
+        }
+      ],
+      "search": {
+        "fields": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "author",
+            "label": "Author",
+            "type": "text",
+            "required": false
+          },
+          {
+            "key": "language",
+            "label": "Language code",
+            "type": "text",
+            "required": false,
+            "placeholder": "en"
+          }
+        ]
+      }
+    },
+    {
+      "entityKind": "book-volume",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ],
+      "identityNamespaces": [
+        "googlebooks",
+        "isbn",
+        "isbn10",
+        "isbn13"
+      ],
+      "identityUrls": [
+        {
+          "identityNamespace": "googlebooks",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://books.google.com/books?id={id}"
+        }
+      ],
+      "search": {
+        "fields": [
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "author",
+            "label": "Author",
+            "type": "text",
+            "required": false
+          },
+          {
+            "key": "language",
+            "label": "Language code",
+            "type": "text",
+            "required": false,
+            "placeholder": "en"
+          }
+        ]
+      }
+    }
+  ]
+}

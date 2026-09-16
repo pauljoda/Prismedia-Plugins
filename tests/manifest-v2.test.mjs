@@ -8,6 +8,10 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
   archiver: {},
+  googlebooks: {
+    book: { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
+    "book-volume": { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
+  },
   opds: {},
   radarr: {},
   sonarr: {},

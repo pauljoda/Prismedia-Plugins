@@ -728,3 +728,83 @@
         entityKinds:
           - video-series
     settings: []
+- id: googlebooks
+  name: Google Books
+  version: 1.0.0
+  date: '2026-09-16'
+  path: plugins/googlebooks/googlebooks.zip
+  sha256: b3c1608653867440ad9b0fb0143f037633c8ed903c93189fbe205760fc284888
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports:
+    - entityKind: book
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - googlebooks
+        - isbn
+        - isbn10
+        - isbn13
+      identityUrls:
+        - identityNamespace: googlebooks
+          valuePattern: '{id}'
+          urlTemplate: https://books.google.com/books?id={id}
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+          - key: author
+            label: Author
+            type: text
+            required: false
+          - key: language
+            label: Language code
+            type: text
+            required: false
+            placeholder: en
+    - entityKind: book-volume
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - googlebooks
+        - isbn
+        - isbn10
+        - isbn13
+      identityUrls:
+        - identityNamespace: googlebooks
+          valuePattern: '{id}'
+          urlTemplate: https://books.google.com/books?id={id}
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+          - key: author
+            label: Author
+            type: text
+            required: false
+          - key: language
+            label: Language code
+            type: text
+            required: false
+            placeholder: en
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 300
+  description: Edition-specific book metadata with reviewed title and ISBN searches
+  author: Prismedia Community
