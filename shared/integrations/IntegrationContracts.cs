@@ -15,11 +15,21 @@ public static class IntegrationOperations {
     public const string Browse = "browse";
     public const string Search = "search";
     public const string Resolve = "resolve";
+    public const string Inspect = "inspect";
+    public const string Submit = "submit";
+    public const string FindSubmission = "find-submission";
+    public const string GetJob = "get-job";
+    public const string Cancel = "cancel";
+    public const string ListArtifacts = "list-artifacts";
+    public const string AuthorizeArtifact = "authorize-artifact";
+    public const string RenewRetention = "renew-retention";
+    public const string Acknowledge = "acknowledge";
 }
 /// <summary>Independent connected-application capability families.</summary>
 public static class IntegrationCapabilities {
     public const string Discovery = "catalog-discovery";
     public const string AcquisitionSource = "acquisition-source";
+    public const string TransferExecutor = "transfer-executor";
 }
 /// <summary>Prismedia entity kinds supported by publication catalogs.</summary>
 public static class MediaKinds {

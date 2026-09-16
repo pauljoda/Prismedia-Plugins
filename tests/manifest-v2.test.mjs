@@ -7,6 +7,7 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
+  archiver: {},
   opds: {},
   anilist: {
     movie: { identities: ["anilist"], fields: ["title", "year"] },
