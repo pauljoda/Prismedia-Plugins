@@ -9,6 +9,8 @@ const pluginsRoot = resolve("plugins");
 const expectedContracts = {
   archiver: {},
   opds: {},
+  radarr: {},
+  sonarr: {},
   anilist: {
     movie: { identities: ["anilist"], fields: ["title", "year"] },
     "video-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },

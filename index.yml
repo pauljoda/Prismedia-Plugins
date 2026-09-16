@@ -664,3 +664,67 @@
           - book
           - comic-installment
     settings: []
+- id: radarr
+  name: Radarr
+  version: 1.0.0
+  date: '2026-09-16'
+  path: plugins/radarr/radarr.zip
+  sha256: 48219d283e6622693d13ae2c47cd74111fa22a3da88c87e62af3237b04d5047a
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+        entityKinds:
+          - movie
+      - kind: external-manager
+        operations:
+          - manager-options
+        entityKinds:
+          - movie
+    settings: []
+- id: sonarr
+  name: Sonarr
+  version: 1.0.0
+  date: '2026-09-16'
+  path: plugins/sonarr/sonarr.zip
+  sha256: bedcf6529328904160ab13e1f6424a02493530fee4a09893289f53e093088462
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+        entityKinds:
+          - video-series
+      - kind: external-manager
+        operations:
+          - manager-options
+        entityKinds:
+          - video-series
+    settings: []

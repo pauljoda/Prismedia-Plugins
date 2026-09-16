@@ -241,7 +241,7 @@ const INTEGRATION_OPERATIONS = {
   "catalog-discovery": ["search", "browse", "inspect"],
   "acquisition-source": ["resolve"],
   "transfer-executor": ["submit", "find-submission", "cancel-submission", "get-job", "cancel", "list-artifacts", "authorize-artifact", "renew-retention", "acknowledge"],
-  "external-manager": ["lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed"],
+  "external-manager": ["manager-options", "lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed"],
   "connected-library": ["search-library", "get-library-item"],
 };
 
