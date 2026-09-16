@@ -666,10 +666,10 @@
     settings: []
 - id: radarr
   name: Radarr
-  version: 1.1.0
+  version: 1.1.1
   date: '2026-09-16'
   path: plugins/radarr/radarr.zip
-  sha256: c982fe2b3f7def5c332a96be56f398981a11529da3ae516b4ada466a1d050d65
+  sha256: 4cd09d9c296ba81987ce16882d70f907949520821c2df0384571d06b0d11ba0d
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2

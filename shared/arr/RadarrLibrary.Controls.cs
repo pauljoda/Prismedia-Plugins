@@ -48,7 +48,7 @@ internal sealed partial class RadarrLibrary {
         // The editor endpoint changes only supplied fields. No paths, tags, availability settings,
         // file moves or deletions are included. A response failure after this point is uncertain.
         try {
-            var updated = await Client.WriteAsync<Movie[]>(HttpMethod.Put, "movie/editor", new MovieEdit([movie.Id], input.Changes.Monitored,
+            var updated = await Client.WriteAsync<MovieEditAcknowledgement[]>(HttpMethod.Put, "movie/editor", new MovieEdit([movie.Id], input.Changes.Monitored,
                 input.Changes.ProfileId is null ? null : ParseId(input.Changes.ProfileId)), token);
             if (updated.Length != 1 || updated[0].Id != movie.Id)
                 throw new IntegrationFailure("The configuration response did not confirm the selected movie. Reconcile its state before another change.");
@@ -117,6 +117,8 @@ internal sealed partial class RadarrLibrary {
 
     // Typed records are the single external API v3 encode/decode boundary.
     private sealed record MovieEdit(int[] MovieIds, bool? Monitored, int? QualityProfileId);
+    // Editor responses omit read-only fields such as hasFile. Confirm identities here, then read the complete movie again.
+    private sealed record MovieEditAcknowledgement(int Id);
     private sealed record MoviesSearch(string Name, int[] MovieIds);
     private sealed record ArrCommand(int Id, string Name, string Status, string Result, DateTimeOffset Queued, MoviesSearch? Body);
 }

@@ -178,7 +178,8 @@ public sealed class ManagerControlTests {
                 if (body.TryGetProperty("qualityProfileId", out var profile)) Profile = profile.GetInt32();
             } else Assert.Equal("command", path);
             if (LoseResponse) throw new HttpRequestException("Simulated response loss after acceptance");
-            return Response(path == "movie/editor" ? new[] { Movie() } : Command(), HttpStatusCode.Accepted);
+            // Radarr 6 editor replies omit hasFile; only the subsequent authoritative GET has that field.
+            return Response(path == "movie/editor" ? new[] { new { id = 1, monitored = Monitored, qualityProfileId = Profile, movieFileId = 0 } } : Command(), HttpStatusCode.Accepted);
         }
         private static HttpResponseMessage Response(object value, HttpStatusCode status = HttpStatusCode.OK) =>
             new(status) { Content = new StringContent(JsonSerializer.Serialize(value, IntegrationProtocol.Json)) };
