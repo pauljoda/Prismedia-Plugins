@@ -126,6 +126,7 @@ internal sealed partial class RadarrLibrary {
 /// <summary>External command names and states owned by the supported API v3 versions.</summary>
 internal static class ArrCommands {
     internal const string MoviesSearch = "MoviesSearch";
+    internal const string EpisodeSearch = "EpisodeSearch";
     internal const string Queued = "queued";
     internal const string Started = "started";
     internal const string Completed = "completed";

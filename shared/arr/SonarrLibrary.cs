@@ -1,9 +1,10 @@
+using System.Text.Json.Serialization;
 using Prismedia.Plugin.Integrations;
 
 namespace Prismedia.Plugin.Arr;
 
 /// <summary>Sonarr series holdings with exact episode-to-file associations, including specials and combined episodes.</summary>
-internal sealed class SonarrLibrary(ArrClient client) : ArrLibrary(client, "Sonarr", 4, ManagerProtocol.Series) {
+internal sealed partial class SonarrLibrary(ArrClient client) : ArrLibrary(client, "Sonarr", 4, ManagerProtocol.Series) {
     protected override async Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken) =>
         (await Client.GetAsync<Series[]>("series", cancellationToken)).Select(Summary).ToArray();
     protected override async Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken) {
@@ -26,8 +27,9 @@ internal sealed class SonarrLibrary(ArrClient client) : ArrLibrary(client, "Sona
     }
     private ManagedLibraryItem Summary(Series series) => new(Id(series.Id), Kind, series.Title, series.Year,
         Identities(ManagerProtocol.Tvdb, series.TvdbId, series.ImdbId), series.Monitored, Id(series.QualityProfileId), series.Statistics?.EpisodeFileCount);
-    private sealed record Series(int Id, string Title, int Year, int TvdbId, string? ImdbId, bool Monitored, int QualityProfileId, string Path, SeriesStatistics? Statistics);
+    private sealed record Series(int Id, string Title, int Year, int TvdbId, string? ImdbId, [property: JsonRequired] bool Monitored, int QualityProfileId, string Path, SeriesStatistics? Statistics);
     private sealed record SeriesStatistics(int EpisodeFileCount);
     private sealed record EpisodeFile(int Id, int SeriesId, string Path, long Size, DateTimeOffset? DateAdded);
-    private sealed record Episode(int Id, int SeriesId, string Title, int SeasonNumber, int EpisodeNumber, int? AbsoluteEpisodeNumber, int EpisodeFileId, bool HasFile);
+    private sealed record Episode(int Id, int SeriesId, string Title, int SeasonNumber, int EpisodeNumber, int? AbsoluteEpisodeNumber, int EpisodeFileId, bool HasFile,
+        [property: JsonRequired] bool Monitored);
 }

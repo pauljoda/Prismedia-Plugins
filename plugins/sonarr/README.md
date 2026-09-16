@@ -8,8 +8,15 @@ Connect an existing Sonarr 4.x instance through its API v3. Configure the applic
 - Inspect exact final file associations and read existing profile/root-folder choices.
 - Preserve combined-episode associations and specials in Sonarr.
 - Check the selected holding's metadata identity before trusting a reused remote item ID.
+- Read current configuration for exact pinned episode IDs and numbering.
+- Change only those episode monitoring flags when the parent series is already monitored.
+- Request one explicit `EpisodeSearch` and observe its exact command ID and original queue timestamp.
 
-This package currently performs GET requests only. It does not add holdings, change monitoring, issue searches, import files, or delete anything. File presence is reported by the external application; a local mapping and verified access are required before Prismedia can play those bytes.
+Prismedia must reserve the finite episode scope and persist each dispatch fence before a mutation. The adapter never enables series monitoring or changes its series-wide quality profile. Searches can target selected episodes while the parent series is unmonitored; they do not change any monitoring flags. File presence is reported by the external application; a local mapping and verified access are required before Prismedia can play those bytes.
+
+Monitoring uses `PUT episode/monitor` with exact episode IDs and one explicit flag. Search uses `POST command` with `EpisodeSearch` and exact episode IDs. The adapter preserves unrelated episodes, parent settings, paths, and files. It does not add series, move or delete files, or execute full-series searches. Changed identities, coordinates, reviewed folders, profiles, or relevant monitoring values require fresh review.
+
+Sonarr provides no idempotency key or atomic conditional mutation for these endpoints. Writes are never retried by the adapter, and a timeout or invalid reply after dispatch is uncertain. The host can reconcile desired flags by reading but cannot infer a lost search's command ID from similar history. Command completion is independent of downloads or local byte availability. Missing history or command-ID reuse stays unknown.
 
 Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
 
@@ -22,3 +29,5 @@ Control reads have an 8 MiB response limit and 20-second per-request deadline. R
 `dotnet test tests/Prismedia.Plugin.Arr.Tests` covers both adapters. Live reads were validated against Radarr 6.1.1.10360 and Sonarr 4.0.17.2952. Broader minor-version support depends on the same API v3 resource shapes.
 
 Official APIs: [Radarr](https://radarr.video/docs/api/), [Sonarr](https://sonarr.tv/docs/api/).
+
+The finite monitoring and search payloads follow the supported version's [episode controller](https://github.com/Sonarr/Sonarr/blob/v4.0.17.2952/src/Sonarr.Api.V3/Episodes/EpisodeController.cs) and [episode search command](https://github.com/Sonarr/Sonarr/blob/v4.0.17.2952/src/NzbDrone.Core/IndexerSearch/EpisodeSearchCommand.cs).

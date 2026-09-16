@@ -701,10 +701,10 @@
     settings: []
 - id: sonarr
   name: Sonarr
-  version: 1.0.0
+  version: 1.1.0
   date: '2026-09-16'
   path: plugins/sonarr/sonarr.zip
-  sha256: bedcf6529328904160ab13e1f6424a02493530fee4a09893289f53e093088462
+  sha256: 396e4451483dfca81c9e664846d20785978ab42527fb5106c8b384caa170eabb
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -728,6 +728,9 @@
       - kind: external-manager
         operations:
           - manager-options
+          - reconcile-managed
+          - configure-managed
+          - request-managed
         entityKinds:
           - video-series
     settings: []

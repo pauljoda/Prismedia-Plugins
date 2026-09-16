@@ -62,12 +62,12 @@ public sealed class ManagerLibraryTests {
     }
 
     [Fact]
-    public async Task SonarrDoesNotAdvertiseOrExecuteUnimplementedControls() {
+    public async Task SonarrAdvertisesOnlyImplementedFiniteControls() {
         using var fixture = new Fixture(sonarr: true);
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
         var manager = Assert.Single(probe.Capabilities, capability => capability.Kind == ManagerProtocol.ExternalManager);
-        Assert.Equal(ManagerProtocol.Options, Assert.Single(manager.Operations));
-        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Configure, new { }));
+        Assert.Equal(new[] { ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request }.Order(), manager.Operations.Order());
+        Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Configure, new { })).Outcome);
         Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
     }
 
@@ -91,7 +91,7 @@ public sealed class ManagerLibraryTests {
     }
 
     private static object Movie(int id, bool hasFile = false) => new { id, title = "Movie " + id, year = 2024, tmdbId = 1000 + id, qualityProfileId = 1, monitored = false, hasFile, movieFileId = hasFile ? 11 : 0, path = "/library/movie" };
-    private static object Episode(int id, int season, int number, int fileId) => new { id, seriesId = 1, title = "Episode " + id, seasonNumber = season, episodeNumber = number, absoluteEpisodeNumber = number, episodeFileId = fileId, hasFile = true };
+    private static object Episode(int id, int season, int number, int fileId) => new { id, seriesId = 1, title = "Episode " + id, seasonNumber = season, episodeNumber = number, absoluteEpisodeNumber = number, episodeFileId = fileId, hasFile = true, monitored = false };
 
     private sealed class Fixture : HttpMessageHandler {
         internal Dictionary<string, object> Responses { get; } = [];

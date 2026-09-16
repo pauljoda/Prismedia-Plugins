@@ -23,7 +23,8 @@ public sealed record ManagedControlScope(ManagedItemInput Item, IReadOnlyList<Ma
 /// <summary>Current monitoring of one selected target.</summary>
 public sealed record ManagedTargetMonitoring(ManagedControlTarget Target, bool Monitored);
 /// <summary>Controls supported faithfully for this exact scope.</summary>
-public sealed record ManagedControlCapabilities(bool CanSearch, bool CanChangeMonitoring, bool CanChangeProfile);
+public sealed record ManagedControlCapabilities(bool CanSearch, bool CanChangeMonitoring, bool CanChangeProfile,
+    string? MonitoringUnavailableReason = null);
 /// <summary>Command history is separate from available source files.</summary>
 public sealed record ManagedCommandSnapshot(ManagedCommandReference Reference, string Status, string? Problem = null);
 /// <summary>Queue time fences transient numeric command ID reuse across restarts.</summary>
