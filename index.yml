@@ -481,10 +481,10 @@
     minimumStartIntervalMs: 250
 - id: openlibrary
   name: Open Library
-  version: 0.3.3
-  date: '2026-07-24'
+  version: 0.3.4
+  date: '2026-09-16'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: c41e4d7c5df87a010e6df59d1c5496d2e84bd57ce5735376e1417b165cb41c20
+  sha256: 0abecb55517760540d55f8a02ff4ea773f05c72a3913f437e05193aed6308361
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
