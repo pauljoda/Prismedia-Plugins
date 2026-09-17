@@ -5,6 +5,7 @@ Connect an existing Radarr 6.x instance through its API v3. Configure the applic
 ## Implemented
 
 - Browse/search existing movies by title or metadata ID.
+- Expose bounded overview, genres, runtime, certification, and public poster/fanart remote URLs for read-only holding presentation. Authenticated, local-only, and credential-bearing cover URLs are omitted.
 - Inspect exact final file associations and read existing profile/root-folder choices.
 - Check the selected holding's metadata identity before trusting a reused remote item ID.
 - Observe monitoring, profile, and a previously acknowledged search command for one exact movie.

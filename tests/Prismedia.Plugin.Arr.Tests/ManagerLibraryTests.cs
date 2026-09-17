@@ -15,6 +15,7 @@ public sealed class ManagerLibraryTests {
         var page = Assert.IsType<ManagedLibraryPage>(await fixture.Call(ManagerProtocol.SearchLibrary, new ManagedLibraryQuery(ManagerProtocol.Movie, null, null, 1)));
         Assert.Equal("1", Assert.Single(page.Items).RemoteId);
         Assert.Equal("1001", page.Items[0].ExternalIds[ManagerProtocol.Tmdb]);
+        Assert.Null(page.Items[0].Presentation);
         var second = Assert.IsType<ManagedLibraryPage>(await fixture.Call(ManagerProtocol.SearchLibrary, new ManagedLibraryQuery(ManagerProtocol.Movie, null, page.NextCursor, 1)));
         Assert.Equal("2", Assert.Single(second.Items).RemoteId);
         Assert.Null(second.NextCursor);
@@ -28,6 +29,116 @@ public sealed class ManagerLibraryTests {
         fixture.Responses["movie/1"] = Movie(1);
         await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem,
             new ManagedItemInput(ManagerProtocol.Movie, "1", new Dictionary<string, string> { [ManagerProtocol.Tmdb] = "9999" })));
+    }
+
+    [Fact]
+    public async Task RadarrMapsOptionalPresentationForListAndDetail() {
+        using var fixture = new Fixture();
+        var movie = new {
+            id = 1, title = "Movie 1", year = 2024, tmdbId = 1001, qualityProfileId = 1, monitored = true, hasFile = false, movieFileId = 0, path = "/library/movie",
+            overview = "A quiet overview.",
+            images = new[] {
+                new { coverType = "poster", remoteUrl = "https://image.example/poster.jpg", url = "/MediaCover/1/poster.jpg" },
+                new { coverType = "fanart", remoteUrl = "https://image.example/fanart.jpg", url = "/MediaCover/1/fanart.jpg" },
+                new { coverType = "banner", remoteUrl = "https://image.example/banner.jpg", url = "/MediaCover/1/banner.jpg" },
+            },
+            genres = new[] { " Drama ", "Drama", "Mystery" }, runtime = 123, certification = "PG-13",
+        };
+        fixture.Responses["movie"] = new[] { movie };
+        fixture.Responses["movie/1"] = movie;
+
+        var page = Assert.IsType<ManagedLibraryPage>(await fixture.Call(ManagerProtocol.SearchLibrary, new ManagedLibraryQuery(ManagerProtocol.Movie, null, null, 10)));
+        var listed = Assert.Single(page.Items).Presentation;
+        Assert.NotNull(listed);
+        Assert.Equal("A quiet overview.", listed.Overview);
+        Assert.Equal("https://image.example/poster.jpg", listed.PosterUrl);
+        Assert.Equal("https://image.example/fanart.jpg", listed.BackdropUrl);
+        Assert.Equal(new[] { "Drama", "Mystery" }, listed.Genres);
+        Assert.Equal(123, listed.RuntimeMinutes);
+        Assert.Equal("PG-13", listed.ContentRating);
+
+        var snapshot = Assert.IsType<ManagedItemSnapshot>(await fixture.Call(ManagerProtocol.GetLibraryItem,
+            new ManagedItemInput(ManagerProtocol.Movie, "1", new Dictionary<string, string> { [ManagerProtocol.Tmdb] = "1001" })));
+        Assert.Equal(listed.Overview, snapshot.Item.Presentation?.Overview);
+        Assert.Equal(listed.PosterUrl, snapshot.Item.Presentation?.PosterUrl);
+        Assert.Equal(listed.BackdropUrl, snapshot.Item.Presentation?.BackdropUrl);
+        Assert.Equal(listed.Genres, snapshot.Item.Presentation?.Genres);
+        Assert.Equal(listed.RuntimeMinutes, snapshot.Item.Presentation?.RuntimeMinutes);
+        Assert.Equal(listed.ContentRating, snapshot.Item.Presentation?.ContentRating);
+    }
+
+    [Fact]
+    public async Task SonarrMapsOptionalPresentationForListAndDetail() {
+        using var fixture = new Fixture(sonarr: true);
+        var series = new {
+            id = 1, title = "Series", year = 2024, tvdbId = 1001, qualityProfileId = 1, monitored = true, path = "/library/series",
+            statistics = new { episodeFileCount = 0 }, overview = "Series overview", images = new[] {
+                new { coverType = "poster", remoteUrl = "https://image.example/series-poster.jpg", url = "/MediaCover/1/poster.jpg" },
+                new { coverType = "fanart", remoteUrl = "https://image.example/series-fanart.jpg", url = "/MediaCover/1/fanart.jpg" },
+            }, genres = new[] { "Sci-Fi" }, runtime = 48, certification = "TV-14",
+        };
+        fixture.Responses["series"] = new[] { series };
+        fixture.Responses["series/1"] = series;
+        fixture.Responses["episodefile?seriesId=1"] = Array.Empty<object>();
+        fixture.Responses["episode?seriesId=1"] = Array.Empty<object>();
+
+        var page = Assert.IsType<ManagedLibraryPage>(await fixture.Call(ManagerProtocol.SearchLibrary, new ManagedLibraryQuery(ManagerProtocol.Series, null, null, 10)));
+        Assert.Equal("https://image.example/series-fanart.jpg", Assert.Single(page.Items).Presentation?.BackdropUrl);
+
+        var snapshot = Assert.IsType<ManagedItemSnapshot>(await fixture.Call(ManagerProtocol.GetLibraryItem,
+            new ManagedItemInput(ManagerProtocol.Series, "1", new Dictionary<string, string> { [ManagerProtocol.Tvdb] = "1001" })));
+        Assert.Equal("Series overview", snapshot.Item.Presentation?.Overview);
+        Assert.Equal(48, snapshot.Item.Presentation?.RuntimeMinutes);
+    }
+
+    [Fact]
+    public async Task UnsafeOrLocalArtworkIsIgnoredWithoutBreakingTheHolding() {
+        using var fixture = new Fixture();
+        fixture.Responses["movie"] = new[] { new {
+            id = 1, title = "Movie 1", year = 2024, tmdbId = 1001, qualityProfileId = 1, monitored = false, hasFile = false, movieFileId = 0, path = "/library/movie",
+            overview = "Still available", images = new[] {
+                new { coverType = "poster", remoteUrl = "https://image.example/poster.jpg?token=secret", url = "/MediaCover/1/poster.jpg" },
+                new { coverType = "fanart", remoteUrl = "https://user:secret@image.example/fanart.jpg", url = "/MediaCover/1/fanart.jpg" },
+                new { coverType = "banner", remoteUrl = "https://image.example/banner.jpg", url = "/MediaCover/1/banner.jpg" },
+                new { coverType = "fanart", remoteUrl = "javascript:alert(1)", url = "/MediaCover/1/fanart-2.jpg" },
+            }, genres = Array.Empty<string>(), runtime = 0, certification = " ",
+        } };
+
+        var page = Assert.IsType<ManagedLibraryPage>(await fixture.Call(ManagerProtocol.SearchLibrary, new ManagedLibraryQuery(ManagerProtocol.Movie, null, null, 10)));
+        var presentation = Assert.Single(page.Items).Presentation;
+        Assert.NotNull(presentation);
+        Assert.Equal("Still available", presentation.Overview);
+        Assert.Null(presentation.PosterUrl);
+        Assert.Null(presentation.BackdropUrl);
+        Assert.Null(presentation.Genres);
+        Assert.Null(presentation.RuntimeMinutes);
+        Assert.Null(presentation.ContentRating);
+    }
+
+    [Fact]
+    public async Task OutOfRangeOptionalPresentationFieldsAreNormalizedToSafeBounds() {
+        using var fixture = new Fixture();
+        var genres = Enumerable.Range(1, 70).Select(index => $"Genre {index}").ToArray();
+        fixture.Responses["movie"] = new[] { new {
+            id = 1, title = "Movie 1", year = 2024, tmdbId = 1001, qualityProfileId = 1, monitored = false, hasFile = false, movieFileId = 0, path = "/library/movie",
+            overview = new string('o', 32_769), images = new object?[] {
+                null,
+                new { coverType = "poster", remoteUrl = "https://image.example/" + new string('p', 8_190), url = "/MediaCover/1/poster.jpg" },
+                new { coverType = "fanart", remoteUrl = "https://image.example/fanart.jpg\\unsafe", url = "/MediaCover/1/fanart.jpg" },
+            }, genres, runtime = 10_081, certification = new string('R', 129),
+        } };
+
+        var page = Assert.IsType<ManagedLibraryPage>(await fixture.Call(ManagerProtocol.SearchLibrary, new ManagedLibraryQuery(ManagerProtocol.Movie, null, null, 10)));
+        var presentation = Assert.Single(page.Items).Presentation;
+        Assert.NotNull(presentation);
+        Assert.Null(presentation.Overview);
+        Assert.Null(presentation.PosterUrl);
+        Assert.Null(presentation.BackdropUrl);
+        Assert.Equal(64, presentation.Genres?.Count);
+        Assert.Equal(presentation.Genres?.Count, presentation.Genres?.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(presentation.Genres!, genre => Assert.InRange(genre.Length, 1, 128));
+        Assert.Null(presentation.RuntimeMinutes);
+        Assert.Null(presentation.ContentRating);
     }
 
     [Fact]

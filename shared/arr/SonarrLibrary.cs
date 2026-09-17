@@ -26,8 +26,10 @@ internal sealed partial class SonarrLibrary(ArrClient client) : ArrLibrary(clien
         return new(Summary(series) with { RemoteFileCount = files.Length }, series.Path, mapped, DateTimeOffset.UtcNow);
     }
     private ManagedLibraryItem Summary(Series series) => new(Id(series.Id), Kind, series.Title, series.Year,
-        Identities(ManagerProtocol.Tvdb, series.TvdbId, series.ImdbId), series.Monitored, Id(series.QualityProfileId), series.Statistics?.EpisodeFileCount);
-    private sealed record Series(int Id, string Title, int Year, int TvdbId, string? ImdbId, [property: JsonRequired] bool Monitored, int QualityProfileId, string Path, SeriesStatistics? Statistics);
+        Identities(ManagerProtocol.Tvdb, series.TvdbId, series.ImdbId), series.Monitored, Id(series.QualityProfileId), series.Statistics?.EpisodeFileCount,
+        ArrPresentation.Map(series.Overview, series.Images, series.Genres, series.Runtime, series.Certification));
+    private sealed record Series(int Id, string Title, int Year, int TvdbId, string? ImdbId, [property: JsonRequired] bool Monitored, int QualityProfileId, string Path, SeriesStatistics? Statistics,
+        string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null);
     private sealed record SeriesStatistics(int EpisodeFileCount);
     private sealed record EpisodeFile(int Id, int SeriesId, string Path, long Size, DateTimeOffset? DateAdded);
     private sealed record Episode(int Id, int SeriesId, string Title, int SeasonNumber, int EpisodeNumber, int? AbsoluteEpisodeNumber, int EpisodeFileId, bool HasFile,

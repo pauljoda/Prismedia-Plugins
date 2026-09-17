@@ -18,7 +18,12 @@ public static class ManagerProtocol {
 public sealed record ManagedLibraryQuery(string EntityKind, string? Query, string? Cursor, int Limit);
 /// <summary>Remote file counts do not establish local availability.</summary>
 public sealed record ManagedLibraryItem(string RemoteId, string EntityKind, string Title, int? Year,
-    IReadOnlyDictionary<string, string> ExternalIds, bool Monitored, string? ProfileId, int? RemoteFileCount);
+    IReadOnlyDictionary<string, string> ExternalIds, bool Monitored, string? ProfileId, int? RemoteFileCount,
+    ManagedLibraryPresentation? Presentation = null);
+/// <summary>Optional remote metadata used to enrich a connected-library holding without changing its identity.</summary>
+public sealed record ManagedLibraryPresentation(string? Overview = null, string? PosterUrl = null,
+    string? BackdropUrl = null, IReadOnlyList<string>? Genres = null, int? RuntimeMinutes = null,
+    string? ContentRating = null);
 /// <summary>One bounded page of existing holdings.</summary>
 public sealed record ManagedLibraryPage(IReadOnlyList<ManagedLibraryItem> Items, string? NextCursor = null);
 /// <summary>Stable metadata identities fence reuse of an application's numeric item ID.</summary>
