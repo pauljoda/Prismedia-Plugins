@@ -504,10 +504,10 @@
     minimumStartIntervalMs: 250
 - id: openlibrary
   name: Open Library
-  version: 0.3.4
-  date: '2026-09-16'
+  version: 0.3.5
+  date: '2026-09-17'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: 0abecb55517760540d55f8a02ff4ea773f05c72a3913f437e05193aed6308361
+  sha256: 7f5ae4db802628d00f92a58bc436facb478bfcd889c9f205be48307c33a230f2
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -516,7 +516,7 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 2.0.1
+    prismediaMin: 3.8.0
     prismediaMax: null
   supports:
     - entityKind: book

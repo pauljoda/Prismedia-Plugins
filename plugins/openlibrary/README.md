@@ -29,6 +29,10 @@ because it has a cover or richer metadata.
 
 An exact edition takes precedence when the request also carries its work ID. Conflicting
 work/edition/ISBN evidence and missing editions fail without falling back to title search.
-An explicit new work selection ignores old stored edition hints. Existing saved metadata
-is not purged by this change. See Open Library
+An explicit new work selection ignores old stored edition hints. If it supersedes a stored
+edition ID, the review includes that exact ID's removal under **Provider IDs**. Accepting
+that field unlinks only the old Open Library edition; ISBNs, other providers, and saved
+URLs remain intact. Later lookups prefer stored Open Library IDs over stale URL or ISBN
+hints. Deselecting Provider IDs preserves the existing identities. This behavior requires
+Prismedia 3.8.0 or later; omitted metadata fields remain unchanged. See Open Library
 [Works and Editions](https://openlibrary.org/dev/docs/api/books#learnings-about-works-v-editions).

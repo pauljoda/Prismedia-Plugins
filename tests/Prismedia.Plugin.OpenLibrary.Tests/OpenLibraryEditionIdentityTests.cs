@@ -41,9 +41,34 @@ public sealed class OpenLibraryEditionIdentityTests {
     [Fact]
     public async Task ExplicitWorkSelectionDoesNotReuseAnOldStoredEdition() {
         var proposal = await LookupAsync(new Dictionary<string, string> { [OpenLibraryMetadata.WorkIdKey] = "OL9W" },
-            new Dictionary<string, string> { [OpenLibraryMetadata.WorkIdKey] = "OL1W", [OpenLibraryMetadata.EditionIdKey] = "OL2M" });
+            new Dictionary<string, string> {
+                [OpenLibraryMetadata.WorkIdKey] = "OL1W",
+                [OpenLibraryMetadata.EditionIdKey] = "OL2M",
+                ["isbn13"] = "9780140328721"
+            });
         Assert.Equal("OL9W", proposal.Patch.ExternalIds[OpenLibraryMetadata.WorkIdKey]);
         Assert.False(proposal.Patch.ExternalIds.ContainsKey(OpenLibraryMetadata.EditionIdKey));
+        var retired = Assert.Single(proposal.Patch.RetiredExternalIds);
+        Assert.Equal(OpenLibraryMetadata.EditionIdKey, retired.Namespace);
+        Assert.Equal("OL2M", retired.Value);
+        Assert.DoesNotContain(proposal.Patch.RetiredExternalIds, identity => identity.Namespace == "isbn13");
+    }
+
+    [Fact]
+    public async Task AcceptedWorkIdentityWinsOverAStaleEditionUrlAndSharedIsbn() {
+        var proposal = await LookupAsync(
+            new Dictionary<string, string>(),
+            new Dictionary<string, string> {
+                [OpenLibraryMetadata.PrimaryIdentityNamespace] = "OL9W",
+                [OpenLibraryMetadata.WorkIdKey] = "OL9W",
+                ["isbn13"] = "9780140328721"
+            },
+            ["https://openlibrary.org/books/OL2M"]);
+
+        Assert.Equal("OL9W", proposal.Patch.ExternalIds[OpenLibraryMetadata.WorkIdKey]);
+        Assert.False(proposal.Patch.ExternalIds.ContainsKey(OpenLibraryMetadata.EditionIdKey));
+        Assert.False(proposal.Patch.ExternalIds.ContainsKey("isbn13"));
+        Assert.Empty(proposal.Patch.RetiredExternalIds);
     }
 
     [Fact]
@@ -61,12 +86,13 @@ public sealed class OpenLibraryEditionIdentityTests {
     }
 
     private static async Task<EntityMetadataProposal> LookupAsync(IReadOnlyDictionary<string, string> requested,
-        IReadOnlyDictionary<string, string>? stored = null) {
+        IReadOnlyDictionary<string, string>? stored = null,
+        IReadOnlyList<string>? storedUrls = null) {
         using var http = new HttpClient(new Handler());
         var plugin = new OpenLibraryPlugin(new OpenLibraryApiClient(http, TimeSpan.Zero));
         var request = new IdentifyPluginRequest(2, "lookup-id", new Dictionary<string, string>(),
-            new IdentifyEntitySnapshot(Guid.NewGuid(), "book", "Example", stored),
-            new IdentifyQuery(null, null, requested), new IdentifyMatchHints(stored ?? new Dictionary<string, string>(), [], "Example", null),
+            new IdentifyEntitySnapshot(Guid.NewGuid(), "book", "Example", stored, storedUrls),
+            new IdentifyQuery(null, null, requested), new IdentifyMatchHints(stored ?? new Dictionary<string, string>(), storedUrls ?? [], "Example", null),
             IncludeRelationshipDetails: false, IncludeStructuralChildren: false);
         return Assert.IsType<EntityMetadataProposal>((await plugin.IdentifyAsync(request)).Proposal);
     }

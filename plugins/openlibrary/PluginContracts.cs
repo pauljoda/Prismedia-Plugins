@@ -76,7 +76,10 @@ internal sealed record EntityMetadataPatch(
     string? Classification) {
     public int? Rating { get; init; }
     public EntityMetadataFlagsPatch? Flags { get; init; }
+    public IReadOnlyList<ExternalIdentityRetirement> RetiredExternalIds { get; init; } = [];
 }
+
+internal sealed record ExternalIdentityRetirement(string Namespace, string Value);
 
 internal sealed record EntityMetadataProposal(
     string ProposalId,

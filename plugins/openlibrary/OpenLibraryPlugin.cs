@@ -34,14 +34,15 @@ internal sealed class OpenLibraryPlugin {
         }
 
         if (await ResolveWorkLookupAsync(request) is { } lookup && !IsExplicitSearch(request)) {
-            return IdentifyPluginResult.ForProposal(await BookProposalAsync(
+            var proposal = await BookProposalAsync(
                 lookup.WorkId,
                 targetKind,
                 request.Entity.Id,
                 lookup.MatchReason,
                 lookup.Edition,
                 request.IncludeRelationshipDetails,
-                request.IncludeStructuralChildren));
+                request.IncludeStructuralChildren);
+            return IdentifyPluginResult.ForProposal(WithSupersededEditionRetirement(proposal, request));
         }
 
         if (await SeriesChildProposalAsync(request, targetKind) is { } seriesChildProposal) {
@@ -69,14 +70,15 @@ internal sealed class OpenLibraryPlugin {
 
     private async Task<IdentifyPluginResult> IdentifyBookVolumeAsync(IdentifyPluginRequest request) {
         if (await ResolveWorkLookupAsync(request) is { } lookup && !IsExplicitSearch(request)) {
-            return IdentifyPluginResult.ForProposal(await BookProposalAsync(
+            var proposal = await BookProposalAsync(
                 lookup.WorkId,
                 "book-volume",
                 request.Entity.Id,
                 lookup.MatchReason,
                 lookup.Edition,
                 request.IncludeRelationshipDetails,
-                request.IncludeStructuralChildren));
+                request.IncludeStructuralChildren);
+            return IdentifyPluginResult.ForProposal(WithSupersededEditionRetirement(proposal, request));
         }
 
         if (await SeriesChildProposalAsync(request, "book-volume") is { } seriesChildProposal) {
@@ -535,9 +537,19 @@ internal sealed class OpenLibraryPlugin {
         var explicitEdition = EditionIdFromIds(request.Query.ExternalIds) ?? OpenLibraryMetadata.EditionIdFromUrl(request.Query.Url);
         var explicitIsbn = OpenLibraryMetadata.Isbn(request.Query.ExternalIds) ?? OpenLibraryMetadata.IsbnFromUrl(request.Query.Url);
         var hasExplicitIdentity = explicitWork is not null || explicitEdition is not null || explicitIsbn is not null;
-        var workId = hasExplicitIdentity ? explicitWork : ResolveWorkId(request);
-        var editionId = hasExplicitIdentity ? explicitEdition : ResolveEditionId(request);
-        var isbn = hasExplicitIdentity ? explicitIsbn : ResolveIsbn(request);
+        var storedWork = ResolveStoredWorkId(request);
+        var storedEdition = ResolveStoredEditionId(request);
+        var workId = hasExplicitIdentity
+            ? explicitWork
+            : storedWork ?? (storedEdition is null ? ResolveStoredWorkUrl(request) : null);
+        var editionId = hasExplicitIdentity
+            ? explicitEdition
+            : storedEdition ?? (storedWork is null ? ResolveStoredEditionUrl(request) : null);
+        var isbn = hasExplicitIdentity
+            ? explicitIsbn
+            : storedWork is null && storedEdition is null && workId is null && editionId is null
+                ? ResolveStoredIsbn(request)
+                : null;
         if (editionId is null && isbn is null) return workId is null ? null : new WorkLookup(workId, "external-id", null);
 
         var edition = editionId is not null
@@ -555,6 +567,26 @@ internal sealed class OpenLibraryPlugin {
         if (workId is null && works.Length != 1)
             throw new InvalidOperationException("The requested edition does not identify exactly one work.");
         return new WorkLookup(workId ?? works[0]!, editionId is not null ? "edition-id" : "isbn", edition);
+    }
+
+    private static EntityMetadataProposal WithSupersededEditionRetirement(
+        EntityMetadataProposal proposal,
+        IdentifyPluginRequest request) {
+        var previousEdition = EditionIdFromIds(request.Entity.ExternalIds)
+            ?? EditionIdFromIds(request.Hints.ExternalIds);
+        var acceptedEdition = EditionIdFromIds(proposal.Patch.ExternalIds);
+        if (previousEdition is null || string.Equals(previousEdition, acceptedEdition, StringComparison.Ordinal)) {
+            return proposal;
+        }
+
+        return proposal with {
+            Patch = proposal.Patch with {
+                RetiredExternalIds = [
+                    .. proposal.Patch.RetiredExternalIds,
+                    new ExternalIdentityRetirement(OpenLibraryMetadata.EditionIdKey, previousEdition)
+                ]
+            }
+        };
     }
 
     private static string NormalizeIsbn(string value) => new(value.Where(character => character != '-' && !char.IsWhiteSpace(character)).Select(char.ToUpperInvariant).ToArray());
@@ -814,34 +846,38 @@ internal sealed class OpenLibraryPlugin {
         OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.SeriesKey) ??
         OpenLibraryMetadata.SeriesFromProviderId(OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.PrimaryIdentityNamespace));
 
-    private static string? ResolveWorkId(IdentifyPluginRequest request) =>
-        WorkIdFromIds(request.Query.ExternalIds) ??
-        OpenLibraryMetadata.WorkIdFromUrl(request.Query.Url) ??
-        request.Hints.Urls.Select(OpenLibraryMetadata.WorkIdFromUrl).FirstOrDefault(id => id is not null) ??
+    private static string? ResolveStoredWorkId(IdentifyPluginRequest request) =>
         WorkIdFromIds(request.Entity.ExternalIds) ??
         WorkIdFromIds(request.Hints.ExternalIds);
+
+    private static string? ResolveStoredWorkUrl(IdentifyPluginRequest request) =>
+        (request.Entity.Urls ?? []).Concat(request.Hints.Urls)
+            .Select(OpenLibraryMetadata.WorkIdFromUrl)
+            .FirstOrDefault(id => id is not null);
 
     private static string? WorkIdFromIds(IReadOnlyDictionary<string, string>? ids) {
         var value = OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.WorkIdKey, OpenLibraryMetadata.PrimaryIdentityNamespace);
         return OpenLibraryMetadata.WorkIdFromKey(value);
     }
 
-    private static string? ResolveEditionId(IdentifyPluginRequest request) =>
-        EditionIdFromIds(request.Query.ExternalIds) ??
-        OpenLibraryMetadata.EditionIdFromUrl(request.Query.Url) ??
-        request.Hints.Urls.Select(OpenLibraryMetadata.EditionIdFromUrl).FirstOrDefault(id => id is not null) ??
+    private static string? ResolveStoredEditionId(IdentifyPluginRequest request) =>
         EditionIdFromIds(request.Entity.ExternalIds) ??
         EditionIdFromIds(request.Hints.ExternalIds);
+
+    private static string? ResolveStoredEditionUrl(IdentifyPluginRequest request) =>
+        (request.Entity.Urls ?? []).Concat(request.Hints.Urls)
+            .Select(OpenLibraryMetadata.EditionIdFromUrl)
+            .FirstOrDefault(id => id is not null);
 
     private static string? EditionIdFromIds(IReadOnlyDictionary<string, string>? ids) =>
         OpenLibraryMetadata.EditionIdFromKey(OpenLibraryMetadata.OpenLibraryId(ids, OpenLibraryMetadata.EditionIdKey, OpenLibraryMetadata.PrimaryIdentityNamespace));
 
-    private static string? ResolveIsbn(IdentifyPluginRequest request) =>
-        OpenLibraryMetadata.Isbn(request.Query.ExternalIds) ??
-        OpenLibraryMetadata.IsbnFromUrl(request.Query.Url) ??
-        request.Hints.Urls.Select(OpenLibraryMetadata.IsbnFromUrl).FirstOrDefault(id => id is not null) ??
+    private static string? ResolveStoredIsbn(IdentifyPluginRequest request) =>
         OpenLibraryMetadata.Isbn(request.Entity.ExternalIds) ??
-        OpenLibraryMetadata.Isbn(request.Hints.ExternalIds);
+        OpenLibraryMetadata.Isbn(request.Hints.ExternalIds) ??
+        (request.Entity.Urls ?? []).Concat(request.Hints.Urls)
+            .Select(OpenLibraryMetadata.IsbnFromUrl)
+            .FirstOrDefault(id => id is not null);
 
     private static string? ResolveAuthorId(IdentifyPluginRequest request) =>
         AuthorIdFromIds(request.Query.ExternalIds) ??
