@@ -32,3 +32,7 @@ Control reads have an 8 MiB response limit and 20-second per-request deadline. R
 `dotnet test tests/Prismedia.Plugin.Arr.Tests` covers both adapters, exact mutation scopes, preserve semantics, lost responses, and command identity reuse. Live reads were validated against Radarr 6.1.1.10360 and Sonarr 4.0.17.2952. Mutation semantics were checked against the [versioned movie editor](https://github.com/Radarr/Radarr/blob/v6.1.1.10360/src/Radarr.Api.V3/Movies/MovieEditorController.cs) and command APIs. Broader minor-version support depends on the same API v3 resource shapes.
 
 Official APIs: [Radarr](https://radarr.video/docs/api/), [Sonarr](https://sonarr.tv/docs/api/).
+
+## Ownership handoff inspection
+
+The read-only `inspect-managed-release` operation checks the exact holding and finite monitoring scope before and after activity inspection. It requires a complete empty download queue, including unknown items, and terminal command states. Download-client health problems also block release: an unavailable client can make an empty queue incomplete. Health and queue APIs are observations, not a remote lock or a guarantee against a newly started download. Keep the selected scope unmonitored and avoid starting work directly during the host's handoff.

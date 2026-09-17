@@ -17,6 +17,7 @@ public sealed class ManagerReleaseTests {
         Assert.All(observed.State.Targets, target => Assert.False(target.Monitored));
         Assert.Equal(2, fixture.QueueReads);
         Assert.Equal(2, fixture.HoldingReads);
+        Assert.Equal(2, fixture.HealthReads);
         Assert.All(fixture.Methods, method => Assert.Equal(HttpMethod.Get, method));
         Assert.Contains(television ? "includeUnknownSeriesItems=true" : "includeUnknownMovieItems=true", fixture.QueuePath);
     }
@@ -73,9 +74,38 @@ public sealed class ManagerReleaseTests {
         Assert.True(Assert.Single((await fixture.Inspect()).State.Targets).Monitored);
     }
 
+    [Theory]
+    [InlineData(false, ArrHealth.DownloadClientCheck)]
+    [InlineData(true, ArrHealth.DownloadClientCheck)]
+    [InlineData(false, ArrHealth.DownloadClientStatusCheck)]
+    [InlineData(true, ArrHealth.DownloadClientStatusCheck)]
+    public async Task DownloadClientHealthProblemsInvalidateAnOtherwiseEmptyQueue(bool television, string source) {
+        using var fixture = new Fixture(television) { HealthSource = source };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Inspect());
+        Assert.Contains("download client", error.Message);
+        Assert.All(fixture.Methods, method => Assert.Equal(HttpMethod.Get, method));
+    }
+
+    [Fact]
+    public async Task DownloadClientFailureDuringInspectionInvalidatesEarlierEvidence() {
+        using var fixture = new Fixture(false) { FailHealthAfterFirstRead = true };
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Inspect());
+        Assert.Equal(2, fixture.HealthReads);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MissingHealthSourceIsIncompleteEvidence(bool nullEntry) {
+        using var fixture = new Fixture(false) { InvalidHealth = true, NullHealthEntry = nullEntry };
+        await Assert.ThrowsAnyAsync<Exception>(() => fixture.Inspect());
+    }
+
     private sealed class Fixture(bool television) : HttpMessageHandler {
-        internal int QueueCount, QueueReads, HoldingReads;
+        internal int QueueCount, QueueReads, HoldingReads, HealthReads;
         internal bool GrowQueue, OmitQueueCount, OmitQueueRecords, InconsistentQueue, DuplicateCommands, ChangeMonitoring, Monitored;
+        internal bool FailHealthAfterFirstRead, InvalidHealth, NullHealthEntry;
+        internal string? HealthSource;
         internal string CommandStatus = ArrCommands.Completed, QueuePath = "";
         internal List<HttpMethod> Methods = [];
         internal async Task<ManagedReleaseObservation> Inspect() {
@@ -110,6 +140,11 @@ public sealed class ManagerReleaseTests {
                 if (!OmitQueueCount) page["totalRecords"] = count;
                 if (!OmitQueueRecords) page["records"] = count > 0 || InconsistentQueue ? new[] { new { id = 8 } } : [];
                 value = page;
+            } else if (path == "health") {
+                HealthReads++;
+                var source = FailHealthAfterFirstRead && HealthReads > 1 ? ArrHealth.DownloadClientStatusCheck : HealthSource;
+                value = InvalidHealth ? (NullHealthEntry ? new object?[] { null } : new object[] { new { } })
+                    : source is null ? Array.Empty<object>() : new object[] { new { source } };
             } else if (path == "command") {
                 var command = new { id = 5, status = CommandStatus };
                 value = DuplicateCommands ? new[] { command, command } : [command];

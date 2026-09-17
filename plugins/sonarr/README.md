@@ -31,3 +31,7 @@ Control reads have an 8 MiB response limit and 20-second per-request deadline. R
 Official APIs: [Radarr](https://radarr.video/docs/api/), [Sonarr](https://sonarr.tv/docs/api/).
 
 The finite monitoring and search payloads follow the supported version's [episode controller](https://github.com/Sonarr/Sonarr/blob/v4.0.17.2952/src/Sonarr.Api.V3/Episodes/EpisodeController.cs) and [episode search command](https://github.com/Sonarr/Sonarr/blob/v4.0.17.2952/src/NzbDrone.Core/IndexerSearch/EpisodeSearchCommand.cs).
+
+## Ownership handoff inspection
+
+The read-only `inspect-managed-release` operation checks the exact holding and finite monitoring scope before and after activity inspection. It requires a complete empty download queue, including unknown items, and terminal command states. Download-client health problems also block release: an unavailable client can make an empty queue incomplete. Health and queue APIs are observations, not a remote lock or a guarantee against a newly started download. Keep the selected scope unmonitored and avoid starting work directly during the host's handoff.

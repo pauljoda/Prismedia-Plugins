@@ -5,7 +5,7 @@
   ],
   "id": "sonarr",
   "name": "Sonarr",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "date": "2026-09-16",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Sonarr.dll",

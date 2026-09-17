@@ -8,6 +8,7 @@ internal static class ArrReleaseInspector {
     internal static async Task<ManagedReleaseObservation> InspectAsync(ArrClient client,
         Func<CancellationToken, Task<ManagedControlState>> readScope, bool television, CancellationToken token) {
         var before = await readScope(token);
+        await RequireDownloadVisibilityAsync(client, token);
         var queuePath = television ? "queue?page=1&pageSize=100&includeUnknownSeriesItems=true"
             : "queue?page=1&pageSize=100&includeUnknownMovieItems=true";
         var emptyBefore = await QueueEmptyAsync(client, queuePath, token);
@@ -17,11 +18,20 @@ internal static class ArrReleaseInspector {
             throw new IntegrationFailure("The manager returned incomplete or inconsistent command activity.");
         var idle = commands.All(command => command.Status is ArrCommands.Completed or ArrCommands.Failed or ArrCommands.Aborted or ArrCommands.Cancelled);
         var emptyAfter = await QueueEmptyAsync(client, queuePath, token);
+        await RequireDownloadVisibilityAsync(client, token);
         var after = await readScope(token);
         if (before.Path != after.Path || before.Item.ProfileId != after.Item.ProfileId || before.Item.Monitored != after.Item.Monitored
             || !before.Targets.SequenceEqual(after.Targets))
             throw new IntegrationFailure("The managed scope changed during release inspection. Review its settings again.");
         return new(after, emptyBefore && emptyAfter, idle);
+    }
+
+    private static async Task RequireDownloadVisibilityAsync(ArrClient client, CancellationToken token) {
+        var issues = await client.GetAsync<ActivityHealth[]>("health", token);
+        if (issues.Length > 10000 || issues.Any(issue => issue is null || string.IsNullOrWhiteSpace(issue.Source)))
+            throw new IntegrationFailure("The manager returned incomplete health evidence.");
+        if (issues.Any(issue => issue.Source is ArrHealth.DownloadClientCheck or ArrHealth.DownloadClientStatusCheck))
+            throw new IntegrationFailure("The manager reports a download client problem. Restore its connection and health before reviewing ownership release.");
     }
 
     private static async Task<bool> QueueEmptyAsync(ArrClient client, string path, CancellationToken token) {
@@ -38,4 +48,5 @@ internal static class ArrReleaseInspector {
         [property: JsonRequired] int TotalRecords, [property: JsonRequired] ActivityQueueItem[] Records);
     private sealed record ActivityQueueItem([property: JsonRequired] int Id);
     private sealed record ActivityCommand([property: JsonRequired] int Id, [property: JsonRequired] string Status);
+    private sealed record ActivityHealth([property: JsonRequired] string Source);
 }
