@@ -5,7 +5,7 @@
   ],
   "id": "sonarr",
   "name": "Sonarr",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "date": "2026-09-17",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Sonarr.dll",
@@ -24,6 +24,8 @@
     }
   ],
   "isNsfw": false,
+  "description": "Adopt or create exact Sonarr series scopes and request selected episodes",
+  "author": "Prismedia Community",
   "supports": [],
   "integration": {
     "protocolVersion": 1,
@@ -42,6 +44,8 @@
         "kind": "external-manager",
         "operations": [
           "manager-options",
+          "lookup-managed",
+          "ensure-managed",
           "reconcile-managed",
           "configure-managed",
           "request-managed",
