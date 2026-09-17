@@ -689,10 +689,10 @@
     settings: []
 - id: radarr
   name: Radarr
-  version: 1.2.0
+  version: 1.3.0
   date: '2026-09-16'
   path: plugins/radarr/radarr.zip
-  sha256: b7c5301cfaaec7f9aa29311890ea40cb69a7229595b1baadfc5348be9a365e6a
+  sha256: 714a4756c3d9314b5906409dbb4c5c2e4ae9c6b50d45994fad11e7397387c13a
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -721,15 +721,16 @@
           - reconcile-managed
           - configure-managed
           - request-managed
+          - inspect-managed-release
         entityKinds:
           - movie
     settings: []
 - id: sonarr
   name: Sonarr
-  version: 1.1.0
+  version: 1.2.0
   date: '2026-09-16'
   path: plugins/sonarr/sonarr.zip
-  sha256: 396e4451483dfca81c9e664846d20785978ab42527fb5106c8b384caa170eabb
+  sha256: 76d157181a482e34bda762d41f0dd0da4cda9627fd5f8b5b1502fe4b3bb939ca
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -756,6 +757,7 @@
           - reconcile-managed
           - configure-managed
           - request-managed
+          - inspect-managed-release
         entityKinds:
           - video-series
     settings: []

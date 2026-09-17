@@ -3,11 +3,13 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class SonarrLibrary {
-    protected override IReadOnlyList<string> ControlOperations => [ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request];
+    protected override IReadOnlyList<string> ControlOperations => [ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerRelease.Inspect];
     protected override async Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken token) => request.Operation switch {
         ManagerControls.Reconcile => await ReconcileAsync(Input<ReconcileManagedInput>(request), token),
         ManagerControls.Configure => await ConfigureAsync(Input<ConfigureManagedInput>(request), token),
         ManagerControls.Request => await RequestAsync(Input<RequestManagedInput>(request), token),
+        ManagerRelease.Inspect => await ArrReleaseInspector.InspectAsync(Client,
+            ct => ReconcileAsync(new(Input<InspectManagedReleaseInput>(request).Scope), ct), true, token),
         _ => throw new IntegrationFailure("This operation is not implemented by the installed adapter.")
     };
 

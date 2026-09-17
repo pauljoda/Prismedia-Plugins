@@ -66,7 +66,7 @@ public sealed class ManagerLibraryTests {
         using var fixture = new Fixture(sonarr: true);
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
         var manager = Assert.Single(probe.Capabilities, capability => capability.Kind == ManagerProtocol.ExternalManager);
-        Assert.Equal(new[] { ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request }.Order(), manager.Operations.Order());
+        Assert.Equal(new[] { ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerRelease.Inspect }.Order(), manager.Operations.Order());
         Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Configure, new { })).Outcome);
         Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
     }

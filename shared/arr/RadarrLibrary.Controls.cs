@@ -3,7 +3,7 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class RadarrLibrary {
-    protected override IReadOnlyList<string> ControlOperations => [ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup, ManagerCreation.Ensure];
+    protected override IReadOnlyList<string> ControlOperations => [ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup, ManagerCreation.Ensure, ManagerRelease.Inspect];
 
     protected override async Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken token) => request.Operation switch {
         ManagerControls.Reconcile => await ReconcileAsync(Input<ReconcileManagedInput>(request), token),
@@ -11,6 +11,8 @@ internal sealed partial class RadarrLibrary {
         ManagerControls.Request => await RequestAsync(Input<RequestManagedInput>(request), token),
         ManagerCreation.Lookup => await LookupAsync(Input<ManagedLookupInput>(request), token),
         ManagerCreation.Ensure => await EnsureAsync(Input<EnsureManagedInput>(request), token),
+        ManagerRelease.Inspect => await ArrReleaseInspector.InspectAsync(Client,
+            ct => ReconcileAsync(new(Input<InspectManagedReleaseInput>(request).Scope), ct), false, token),
         _ => throw new IntegrationFailure("This operation is not implemented by the installed adapter.")
     };
 
