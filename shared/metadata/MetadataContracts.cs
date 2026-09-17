@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Prismedia.Plugin.Metadata;
 
 internal sealed record IdentifyPluginRequest(
@@ -62,6 +64,8 @@ internal sealed record CreditPatch(string Name, string Role, string? Character, 
 
 internal sealed record EntityMetadataFlagsPatch(bool? IsFavorite, bool? IsNsfw, bool? IsOrganized);
 
+internal sealed record EntityPosition(string Code, int Value, string? Label = null);
+
 internal sealed record EntityMetadataPatch(
     string? Title,
     string? Description,
@@ -76,6 +80,10 @@ internal sealed record EntityMetadataPatch(
     string? Classification) {
     public int? Rating { get; init; }
     public EntityMetadataFlagsPatch? Flags { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<EntityPosition>? PositionEntries { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? AlternativeTitles { get; init; }
 }
 
 internal sealed record EntityMetadataProposal(

@@ -839,3 +839,91 @@
     minimumStartIntervalMs: 300
   description: Edition-specific book metadata with reviewed title and ISBN searches
   author: Prismedia Community
+- id: metron
+  name: Metron
+  version: 1.0.0
+  date: '2026-09-17'
+  path: plugins/metron/metron.zip
+  sha256: 8c382ba1ecb7eab60af070b2f8246140509d02dffacc43e0bbb22a9e39df7db1
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports:
+    - entityKind: comic-series
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - metronseries
+      identityUrls:
+        - identityNamespace: metronseries
+          valuePattern: '{id}'
+          urlTemplate: https://metron.cloud/api/series/{id}/
+      search:
+        fields:
+          - key: seriesTitle
+            label: Series title
+            type: text
+            required: true
+          - key: year
+            label: Series start year
+            type: year
+            required: false
+          - key: volume
+            label: Run volume
+            type: number
+            required: false
+          - key: publisher
+            label: Publisher
+            type: text
+            required: false
+          - key: language
+            label: Language code
+            type: text
+            required: false
+    - entityKind: comic-installment
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - metronissue
+      identityUrls:
+        - identityNamespace: metronissue
+          valuePattern: '{id}'
+          urlTemplate: https://metron.cloud/api/issue/{id}/
+      search:
+        fields:
+          - key: seriesTitle
+            label: Series title
+            type: text
+            required: true
+          - key: issueNumber
+            label: Exact issue designation
+            type: text
+            required: true
+          - key: year
+            label: Series start year
+            type: year
+            required: false
+          - key: volume
+            label: Run volume
+            type: number
+            required: false
+          - key: publisher
+            label: Publisher
+            type: text
+            required: false
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 3100
+  description: Western comic series and issue metadata with exact issue designations and reviewed run matching
+  author: Prismedia Community

@@ -7,6 +7,10 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
+  metron: {
+    "comic-series": { identities: ["metronseries"], fields: ["seriesTitle", "year", "volume", "publisher", "language"] },
+    "comic-installment": { identities: ["metronissue"], fields: ["seriesTitle", "issueNumber", "year", "volume", "publisher"] },
+  },
   archiver: {},
   googlebooks: {
     book: { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },

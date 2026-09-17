@@ -17,6 +17,7 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 | Plugin | Version | Runtime | Capabilities | NSFW | Description |
 |---|---|---|---|---|---|
 | [Google Books](./plugins/googlebooks) | 1.0.0 | .NET process | `book`, `book-volume` lookup/search | No | Edition-specific metadata with reviewed title and ISBN searches |
+| [Metron](./plugins/metron) | 1.0.0 | .NET process | `comic-series` lookup/search/cascade, `comic-installment` lookup/search | No | Western comic runs and exact issue designations with creator credits and cross-provider identities |
 | [TMDB](./plugins/tmdb) | 1.1.13 | .NET process | `movie`, `video`, `video-episode`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |
 | [YouTube Metadata](./plugins/youtube) | 1.2.4 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
 | [MusicBrainz](./plugins/musicbrainz) | 1.2.3 | .NET process | `music-artist`, `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
