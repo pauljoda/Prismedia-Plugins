@@ -666,10 +666,10 @@
     settings: []
 - id: radarr
   name: Radarr
-  version: 1.1.1
+  version: 1.2.0
   date: '2026-09-16'
   path: plugins/radarr/radarr.zip
-  sha256: 4cd09d9c296ba81987ce16882d70f907949520821c2df0384571d06b0d11ba0d
+  sha256: b7c5301cfaaec7f9aa29311890ea40cb69a7229595b1baadfc5348be9a365e6a
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -693,6 +693,8 @@
       - kind: external-manager
         operations:
           - manager-options
+          - lookup-managed
+          - ensure-managed
           - reconcile-managed
           - configure-managed
           - request-managed

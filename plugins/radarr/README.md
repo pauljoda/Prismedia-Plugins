@@ -10,12 +10,16 @@ Connect an existing Radarr 6.x instance through its API v3. Configure the applic
 - Observe monitoring, profile, and a previously acknowledged search command for one exact movie.
 - Apply explicit monitoring/profile fields using Radarr's partial movie-editor API, preserving omitted fields and file paths.
 - Submit one `MoviesSearch` command for the selected movie without changing monitoring.
+- Look up an exact TMDB identity and distinguish an existing holding from a metadata candidate.
+- Add a missing movie with the selected profile and reviewed root, initially unmonitored with search and collection monitoring disabled. Existing holdings retain their configuration.
 
 The host must persist ownership and dispatch intent before invoking a mutation. The operation ID is host correlation; Radarr does not provide an idempotency guarantee for it. The adapter never retries a write. A lost or malformed write response remains uncertain; it must not be treated as a definite rejection or automatically resubmitted. Read-only reconciliation can observe configuration and an already known command reference.
 
 Command references include both the numeric ID and original queue timestamp. Missing history, reused IDs, changed command coverage, and unknown execution outcomes remain unverified. A completed search can find no releases and never establishes file availability. A local mapping and verified access are still required before Prismedia can play reported files.
 
-The adapter checks pinned TMDB/other identities, the reviewed managed path, and relevant configuration before writing. These checks are not an upstream compare-and-swap transaction: concurrent changes in another client can still race. It does not add movies, move files, import files, or issue deletions.
+The adapter checks pinned TMDB/other identities, the reviewed managed path, and relevant configuration before writing. These checks are not an upstream compare-and-swap transaction: concurrent changes in another client can still race. File organization, import, and deletion remain outside this adapter's operations.
+
+Creation uses a separate `ensure-managed` operation. It first resolves the exact identity, validates the chosen profile/root, and adds only a missing movie. New movies use Radarr's released-availability policy; monitoring and search require later explicit controls. A fresh movie read verifies the acknowledged identity, root, and initial settings. If a response is lost, use `lookup-managed` to reconcile; an absent lookup result does not prove that an earlier POST failed. The host must retain an uncertain creation instead of automatically repeating it.
 
 Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
 

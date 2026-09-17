@@ -5,7 +5,7 @@
   ],
   "id": "radarr",
   "name": "Radarr",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "date": "2026-09-16",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Radarr.dll",
@@ -42,6 +42,8 @@
         "kind": "external-manager",
         "operations": [
           "manager-options",
+          "lookup-managed",
+          "ensure-managed",
           "reconcile-managed",
           "configure-managed",
           "request-managed"
