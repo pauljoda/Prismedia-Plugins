@@ -1001,3 +1001,39 @@
     settings: []
     anonymousArtifactOrigins:
       - https://upload.wikimedia.org
+- id: suwayomi
+  name: Suwayomi Sources
+  version: 1.0.1
+  date: '2026-09-17'
+  path: plugins/suwayomi/suwayomi.zip
+  sha256: c8736cc0fc7b94a12406c97328b2a83f4372ace3988df076514d33d5568d07ff
+  runtime: dotnet-process
+  isNsfw: true
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  description: Browse installed Suwayomi manga sources and acquire one exact chapter as a CBZ
+  author: Prismedia Community
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - browse
+          - search
+        entityKinds:
+          - comic-installment
+      - kind: acquisition-source
+        operations:
+          - request-source
+          - observe-source
+          - resolve
+        entityKinds:
+          - comic-installment
+    settings: []

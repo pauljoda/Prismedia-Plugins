@@ -1,0 +1,28 @@
+{
+  "manifestVersion": 2,
+  "apiTags": ["prismedia"],
+  "id": "suwayomi",
+  "name": "Suwayomi Sources",
+  "version": "1.0.1",
+  "date": "2026-09-17",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Suwayomi.dll",
+  "compat": { "pluginApiMin": "2.0.0", "pluginApiMax": null, "prismediaMin": "3.8.0", "prismediaMax": null },
+  "auth": [
+    { "key": "username", "label": "Username", "required": false, "url": null },
+    { "key": "password", "label": "Password", "required": false, "url": null },
+    { "key": "token", "label": "Bearer token", "required": false, "url": null }
+  ],
+  "isNsfw": true,
+  "description": "Browse installed Suwayomi manga sources and acquire one exact chapter as a CBZ",
+  "author": "Prismedia Community",
+  "supports": [],
+  "integration": {
+    "protocolVersion": 1,
+    "capabilities": [
+      { "kind": "catalog-discovery", "operations": ["browse", "search"], "entityKinds": ["comic-installment"] },
+      { "kind": "acquisition-source", "operations": ["request-source", "observe-source", "resolve"], "entityKinds": ["comic-installment"] }
+    ],
+    "settings": []
+  }
+}

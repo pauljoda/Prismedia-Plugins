@@ -239,7 +239,7 @@ function validateIdentityUrls(value, namespaces, pluginId, entityKind) {
 
 const INTEGRATION_OPERATIONS = {
   "catalog-discovery": ["search", "browse", "inspect"],
-  "acquisition-source": ["resolve"],
+  "acquisition-source": ["resolve", "request-source", "observe-source"],
   "transfer-executor": ["submit", "find-submission", "cancel-submission", "get-job", "cancel", "list-artifacts", "authorize-artifact", "renew-retention", "acknowledge"],
   "external-manager": ["manager-options", "lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed", "inspect-managed-release"],
   "connected-library": ["search-library", "get-library-item"],

@@ -15,6 +15,8 @@ public static class IntegrationOperations {
     public const string Browse = "browse";
     public const string Search = "search";
     public const string Resolve = "resolve";
+    public const string RequestSource = "request-source";
+    public const string ObserveSource = "observe-source";
     public const string Inspect = "inspect";
     public const string Submit = "submit";
     public const string FindSubmission = "find-submission";
@@ -42,6 +44,7 @@ public static class MediaKinds {
 /// <summary>Separates full downloads from loans, checkout, previews, and external workflows.</summary>
 public static class AcquisitionAccess {
     public const string Download = "download";
+    public const string Request = "request";
     public const string Borrow = "borrow";
     public const string Purchase = "purchase";
     public const string Sample = "sample";
@@ -72,7 +75,7 @@ public sealed record CatalogAttribution(string SourceUrl, string? Creator, strin
 /// <summary>A navigable container or a publication with explicitly classified acquisition choices.</summary>
 public sealed record CatalogItem(SourceSelection Selection, bool IsContainer, CatalogPublication Publication, IReadOnlyList<CatalogOffer> Offers);
 /// <summary>One bounded result page and an optional adapter-owned continuation cursor.</summary>
-public sealed record CatalogPage(string Title, IReadOnlyList<CatalogItem> Items, string? NextCursor = null);
+public sealed record CatalogPage(string Title, IReadOnlyList<CatalogItem> Items, string? NextCursor = null, bool? CanSearch = null);
 /// <summary>Exact source item and offer selected for revalidation before acquisition.</summary>
 public sealed record ResolveOfferInput(SourceSelection Selection, string OfferId);
 /// <summary>Server-only byte retrieval instructions; credentials must never reach browser responses.</summary>

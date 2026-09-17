@@ -21,6 +21,7 @@ const expectedContracts = {
   opds: {},
   radarr: {},
   sonarr: {},
+  suwayomi: {},
   anilist: {
     "comic-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
     movie: { identities: ["anilist"], fields: ["title", "year"] },
