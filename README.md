@@ -20,7 +20,7 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 | [TMDB](./plugins/tmdb) | 1.1.13 | .NET process | `movie`, `video`, `video-episode`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |
 | [YouTube Metadata](./plugins/youtube) | 1.2.4 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
 | [MusicBrainz](./plugins/musicbrainz) | 1.2.3 | .NET process | `music-artist`, `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
-| [AniList](./plugins/anilist) | 1.0.5 | .NET process | `movie`, `video-series`, `video-season`, `video-episode`, `video` lookup/search/cascade | No | Anime identification (TV, movies, OVAs) via the AniList GraphQL API |
+| [AniList](./plugins/anilist) | 1.1.0 | .NET process | Anime lookup/search/cascade; `comic-series` lookup/search | No | Anime and manga work metadata via the AniList GraphQL API |
 | [MangaDex](./plugins/mangadex) | 2.0.0 | .NET process | `comic-series` lookup/search/cascade, `comic-volume` and `comic-installment` lookup | No | Serialized manga title, volume, and chapter metadata via MangaDex |
 | [Open Library](./plugins/openlibrary) | 0.3.2 | .NET process | `book` lookup/search/cascade, `book-volume` and `person` lookup/search | No | Prose book, book-series, edition, cover, and author metadata via Open Library |
 

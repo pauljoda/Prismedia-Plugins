@@ -342,10 +342,10 @@
     minimumStartIntervalMs: 1100
 - id: anilist
   name: AniList
-  version: 1.0.5
-  date: '2026-08-01'
+  version: 1.1.0
+  date: '2026-09-17'
   path: plugins/anilist/anilist.zip
-  sha256: 3c3e413accd35e004942407d641a84892a8416490e047f36ff40f22199e400a1
+  sha256: 58e0bf92615d5db0a1976585b60f0ac7b4167046e5cc334b9ca5643f335baaaf
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -354,7 +354,7 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 3.0.0
+    prismediaMin: 3.8.0
     prismediaMax: null
   supports:
     - entityKind: movie
@@ -424,6 +424,29 @@
         - lookup-id
       identityNamespaces:
         - anilistepisode
+    - entityKind: comic-series
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - anilist
+      search:
+        fields:
+          - key: seriesTitle
+            label: Manga title
+            type: text
+            required: true
+            placeholder: Manga title
+          - key: year
+            label: Publication year
+            type: year
+            required: false
+            placeholder: '2024'
+      identityUrls:
+        - identityNamespace: anilist
+          valuePattern: '{id}'
+          urlTemplate: https://anilist.co/manga/{id}
 - id: mangadex
   name: MangaDex
   version: 2.1.0

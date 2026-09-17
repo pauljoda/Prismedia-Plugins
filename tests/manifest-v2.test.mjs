@@ -16,6 +16,7 @@ const expectedContracts = {
   radarr: {},
   sonarr: {},
   anilist: {
+    "comic-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
     movie: { identities: ["anilist"], fields: ["title", "year"] },
     "video-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
     "video-season": { identities: ["anilistseason"], fields: [] },

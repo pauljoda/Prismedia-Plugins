@@ -13,6 +13,7 @@ internal static partial class AniListPlugin {
     private const string EpisodeIdentityNamespace = "anilistepisode";
     private const string MalIdentityNamespace = "mal";
     private const string Api = "https://graphql.anilist.co";
+    private const int MaxResponseBytes = 8 * 1024 * 1024;
 
     private static class SearchFields {
         public const string Title = "title";
@@ -21,6 +22,7 @@ internal static partial class AniListPlugin {
     }
 
     public static async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
+        if (request.Entity.Kind.Equals(MangaCodes.Kind, StringComparison.OrdinalIgnoreCase)) return await IdentifyMangaAsync(request);
         if (!IsSupportedKind(request.Entity.Kind)) return IdentifyPluginResult.None();
 
         if (IsEpisodeKind(request.Entity.Kind) &&
@@ -213,9 +215,22 @@ internal static partial class AniListPlugin {
     private static async Task<Media> DetailAsync(int id) { var data = await GraphQlAsync<DetailData>(DetailQuery, new { id }); return data.Media ?? throw new InvalidOperationException("AniList media not found."); }
     private static async Task<IReadOnlyList<Media>> SearchAsync(string search, int? year, int limit) { var data = await GraphQlAsync<SearchData>(SearchQuery, new { search, year, perPage = limit }); return data.Page?.Media ?? []; }
     private static async Task<T> GraphQlAsync<T>(string query, object variables) {
-        using var res = await Http.PostAsJsonAsync(Api, new { query, variables }, PluginHost.JsonOptions);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var message = new HttpRequestMessage(HttpMethod.Post, Api) {
+            Content = JsonContent.Create(new { query, variables }, options: PluginHost.JsonOptions)
+        };
+        using var res = await Http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         if (!res.IsSuccessStatusCode) throw new InvalidOperationException($"AniList API error: {(int)res.StatusCode}");
-        var envelope = await res.Content.ReadFromJsonAsync<GraphQlEnvelope<T>>(PluginHost.JsonOptions);
+        if (res.Content.Headers.ContentLength > MaxResponseBytes) throw new InvalidOperationException("AniList response exceeds the metadata size limit.");
+        await using var stream = await res.Content.ReadAsStreamAsync(timeout.Token);
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        int count;
+        while ((count = await stream.ReadAsync(chunk, timeout.Token)) > 0) {
+            if (buffer.Length + count > MaxResponseBytes) throw new InvalidOperationException("AniList response exceeds the metadata size limit.");
+            buffer.Write(chunk, 0, count);
+        }
+        var envelope = JsonSerializer.Deserialize<GraphQlEnvelope<T>>(buffer.GetBuffer().AsSpan(0, (int)buffer.Length), PluginHost.JsonOptions);
         if (envelope is null) throw new InvalidOperationException("AniList returned no data.");
         if (envelope.Errors is { Length: > 0 }) throw new InvalidOperationException(string.Join("; ", envelope.Errors.Select(e => e.Message)));
         var data = envelope.Data;
@@ -260,7 +275,7 @@ internal static partial class AniListPlugin {
     private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 50);
 
     internal static (string? Title, int? Year) SearchInput(IdentifyPluginRequest request) {
-        var title = SearchField(request, request.Entity.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) ? SearchFields.SeriesTitle : SearchFields.Title) ??
+        var title = SearchField(request, request.Entity.Kind.Equals("video-series", StringComparison.OrdinalIgnoreCase) || request.Entity.Kind.Equals(MangaCodes.Kind, StringComparison.OrdinalIgnoreCase) ? SearchFields.SeriesTitle : SearchFields.Title) ??
             SearchField(request, SearchFields.Title, SearchFields.SeriesTitle) ??
             request.Query.Title ??
             request.Hints.Title ??
@@ -355,7 +370,7 @@ internal static partial class AniListPlugin {
     internal sealed record DetailData(Media? Media);
     internal sealed record SearchData(Page? Page);
     internal sealed record Page(Media[]? Media);
-    internal sealed record Media(int Id, int? IdMal, MediaTitle? Title, string? Description, string? Format, int? Episodes, int? Duration, FuzzyDate? StartDate, FuzzyDate? EndDate, Image? CoverImage, string? BannerImage, int? Popularity, string[]? Genres, MediaTag[]? Tags, StudioConnection? Studios, string? SiteUrl, CharacterConnection? Characters, MediaRelationConnection? Relations = null);
+    internal sealed record Media(int Id, int? IdMal, MediaTitle? Title, string? Description, string? Format, int? Episodes, int? Duration, FuzzyDate? StartDate, FuzzyDate? EndDate, Image? CoverImage, string? BannerImage, int? Popularity, string[]? Genres, MediaTag[]? Tags, StudioConnection? Studios, string? SiteUrl, CharacterConnection? Characters, MediaRelationConnection? Relations = null, string? Type = null, int? Chapters = null, int? Volumes = null, bool? IsAdult = null, StaffConnection? Staff = null);
     internal sealed record MediaTitle(string? Romaji, string? English, string? Native);
     internal sealed record FuzzyDate(int? Year, int? Month, int? Day);
     internal sealed record Image(string? ExtraLarge, string? Large, string? Medium, string? Color);
@@ -390,7 +405,7 @@ internal sealed record ImageCandidate(string Kind, string Url, string Source, de
 internal sealed record EntitySearchCandidate(IReadOnlyDictionary<string, string> ExternalIds, string Title, int? Year, string? Overview, string? PosterUrl, decimal? Popularity);
 internal sealed record CreditPatch(string Name, string Role, string? Character, int? SortOrder);
 internal sealed record EntityMetadataFlagsPatch(bool? IsFavorite, bool? IsNsfw, bool? IsOrganized);
-internal sealed record EntityMetadataPatch(string? Title, string? Description, IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, IReadOnlyList<string> Tags, string? Studio, IReadOnlyList<CreditPatch> Credits, IReadOnlyDictionary<string, string> Dates, IReadOnlyDictionary<string, int> Stats, IReadOnlyDictionary<string, int> Positions, string? Classification) { public int? Rating { get; init; } public EntityMetadataFlagsPatch? Flags { get; init; } }
+internal sealed record EntityMetadataPatch(string? Title, string? Description, IReadOnlyDictionary<string, string> ExternalIds, IReadOnlyList<string> Urls, IReadOnlyList<string> Tags, string? Studio, IReadOnlyList<CreditPatch> Credits, IReadOnlyDictionary<string, string> Dates, IReadOnlyDictionary<string, int> Stats, IReadOnlyDictionary<string, int> Positions, string? Classification) { public int? Rating { get; init; } public EntityMetadataFlagsPatch? Flags { get; init; } public IReadOnlyList<string>? AlternativeTitles { get; init; } }
 internal sealed record EntityMetadataProposal(string ProposalId, string Provider, string TargetKind, decimal? Confidence, string? MatchReason, EntityMetadataPatch Patch, IReadOnlyList<ImageCandidate> Images, IReadOnlyList<EntityMetadataProposal> Children, IReadOnlyList<EntitySearchCandidate> Candidates, Guid? TargetEntityId = null, IReadOnlyList<EntityMetadataProposal>? Relationships = null);
 internal sealed record IdentifyPluginResult(string Type, EntityMetadataProposal? Proposal, IReadOnlyList<EntitySearchCandidate> Candidates) { public static IdentifyPluginResult ForProposal(EntityMetadataProposal proposal) => new("proposal", proposal, []); public static IdentifyPluginResult ForCandidates(IReadOnlyList<EntitySearchCandidate> candidates) => new("candidates", null, candidates); public static IdentifyPluginResult None() => new("none", null, []); }
 internal sealed record IdentifyPluginResponse(bool Ok, IdentifyPluginResult? Result, string? Error);
