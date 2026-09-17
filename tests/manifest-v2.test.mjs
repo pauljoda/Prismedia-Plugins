@@ -12,6 +12,7 @@ const expectedContracts = {
     "comic-installment": { identities: ["metronissue"], fields: ["seriesTitle", "issueNumber", "year", "volume", "publisher"] },
   },
   archiver: {},
+  kapowarr: {},
   googlebooks: {
     book: { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
     "book-volume": { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },

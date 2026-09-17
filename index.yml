@@ -933,3 +933,35 @@
     minimumStartIntervalMs: 3100
   description: Western comic series and issue metadata with exact issue designations and reviewed run matching
   author: Prismedia Community
+- id: kapowarr
+  name: Kapowarr
+  version: 1.0.0
+  date: '2026-09-17'
+  path: plugins/kapowarr/kapowarr.zip
+  sha256: 11cb9eace75b14d36b669af820ac5277662522c719a1c6199ba95e8e8b418076
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+        entityKinds:
+          - comic-series
+      - kind: external-manager
+        operations:
+          - manager-options
+        entityKinds:
+          - comic-series
+    settings: []

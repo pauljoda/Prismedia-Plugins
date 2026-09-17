@@ -25,7 +25,7 @@ public sealed record ManagedLibraryPage(IReadOnlyList<ManagedLibraryItem> Items,
 public sealed record ManagedItemInput(string EntityKind, string RemoteId, IReadOnlyDictionary<string, string> ExpectedExternalIds);
 /// <summary>Exact content targets represented by a remote file, including combined episodes.</summary>
 public sealed record ManagedFileTarget(string RemoteId, string EntityKind, string Title,
-    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null);
+    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);
 /// <summary>File evidence uses the external server's path namespace and is not a byte-transfer authorization.</summary>
 public sealed record ManagedLibraryFile(string RemoteId, string Path, long SizeBytes, DateTimeOffset? AddedAt, IReadOnlyList<ManagedFileTarget> Targets);
 /// <summary>Current remote item and its exact final file associations.</summary>
