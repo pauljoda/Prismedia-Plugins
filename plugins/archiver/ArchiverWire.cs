@@ -2,6 +2,11 @@ namespace Prismedia.Plugin.Archiver;
 
 /// <summary>Archiver API v1 scalar vocabulary; translated at the adapter boundary.</summary>
 internal static class ArchiverWire {
+    internal const string Image = "image";
+    internal const string ImageProfile = "single-image";
+    internal const string Png = "png";
+    internal const string Jpeg = "jpg";
+    internal const string Webp = "webp";
     internal const string Book = "book";
     internal const string Comic = "comic";
     internal const string Profile = "single-publication";

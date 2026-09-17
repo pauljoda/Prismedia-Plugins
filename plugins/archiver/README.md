@@ -6,12 +6,13 @@ An existing installation must implement this interface before it can be connecte
 
 Configure the application's base URL and a dedicated integration bearer token, then
 enable discovery and transfer execution and test the connection. Use Prismedia's
-**Requests → Import from URL** to inspect a URL and explicitly select a publication.
+**Requests → Import from URL** to inspect a URL and explicitly select a book, comic, or image.
 
-## Supported profile
+## Supported profiles
 
 - URL inspection; search is not advertised.
 - One EPUB/PDF book or CBZ comic through the negotiated `single-publication` profile.
+- One JPEG/PNG/WebP still image through the optional `single-image` profile. Image capability is advertised only when the server supports that profile.
 - Persistent installation identity and same-operation recovery after uncertain POSTs.
 - Authoritative job snapshots, remote cancellation, immutable paged manifests.
 - Atomic operation cancellation prevents late acceptance after a timed-out submission.
@@ -25,7 +26,7 @@ before every operation. Archive bytes travel directly to the host's bounded stag
 transport; they never pass through the plugin's JSON output.
 
 The Prismedia repository includes `apps/backend/tools/Prismedia.IntegrationSimulator`
-with synthetic EPUB/CBZ files, durable restart behavior, and response-loss injection.
+with synthetic EPUB/CBZ/PNG files, durable restart behavior, and response-loss injection.
 Its HTTP schema is independent of Prismedia's database and domain entities. It can
 validate this adapter while The Archiver is rebuilt separately.
 

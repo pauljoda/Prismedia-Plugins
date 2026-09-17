@@ -648,10 +648,10 @@
     settings: []
 - id: archiver
   name: The Archiver (executor API)
-  version: 1.1.0
-  date: '2026-09-16'
+  version: 1.2.0
+  date: '2026-09-17'
   path: plugins/archiver/archiver.zip
-  sha256: 5cc06de1c8aa646f2583a97c9ea7625501e65fe50f118c59c827428b6064f529
+  sha256: cd0c541e3094dcff43ac967f8013272c14a8a833d62d03cb0e226dd7e697630a
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -672,6 +672,7 @@
         entityKinds:
           - book
           - comic-installment
+          - image
       - kind: transfer-executor
         operations:
           - submit
@@ -686,6 +687,7 @@
         entityKinds:
           - book
           - comic-installment
+          - image
     settings: []
 - id: radarr
   name: Radarr
