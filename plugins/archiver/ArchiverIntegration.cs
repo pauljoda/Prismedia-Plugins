@@ -6,30 +6,30 @@ namespace Prismedia.Plugin.Archiver;
 /// <summary>Maps the independent Archiver executor API to Prismedia's declared integration capabilities.</summary>
 internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionContext connection) {
     private static readonly Capability[] Capabilities = [
-        new(IntegrationCapabilities.Discovery, [IntegrationOperations.Inspect], [MediaKinds.Book, MediaKinds.Comic, MediaKinds.Image]),
+        new(IntegrationCapabilities.Discovery, [IntegrationOperations.Inspect], [MediaKinds.Book, MediaKinds.Comic, MediaKinds.Image, MediaKinds.Gallery]),
         new(IntegrationCapabilities.TransferExecutor, [IntegrationOperations.Submit, IntegrationOperations.FindSubmission,
             IntegrationOperations.GetJob, IntegrationOperations.Cancel, IntegrationOperations.CancelSubmission, IntegrationOperations.ListArtifacts,
-            IntegrationOperations.AuthorizeArtifact, IntegrationOperations.RenewRetention, IntegrationOperations.Acknowledge], [MediaKinds.Book, MediaKinds.Comic, MediaKinds.Image])
+            IntegrationOperations.AuthorizeArtifact, IntegrationOperations.RenewRetention, IntegrationOperations.Acknowledge], [MediaKinds.Book, MediaKinds.Comic, MediaKinds.Image, MediaKinds.Gallery])
     ];
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) {
         var system = await client.SendAsync<SystemInfo>(HttpMethod.Get, "system", null, cancellationToken)
             ?? throw new IntegrationFailure("The Archiver did not return its identity.");
         if (string.IsNullOrWhiteSpace(system.InstanceId) || system.InstanceId.Length > 512 || !Version.TryParse(system.ApiVersion, out var version) || version.Major != 1
-            || !(system.OutputProfiles?.Contains(ArchiverWire.Profile) == true || system.OutputProfiles?.Contains(ArchiverWire.ImageProfile) == true) || system.MaximumItems < 1 || system.MaximumBytes < 1
+            || !(system.OutputProfiles?.Contains(ArchiverWire.Profile) == true || system.OutputProfiles?.Contains(ArchiverWire.ImageProfile) == true || system.OutputProfiles?.Contains(ArchiverWire.GalleryProfile) == true) || system.MaximumItems < 1 || system.MaximumBytes < 1
             || new[] { ArchiverWire.Inspect, ArchiverWire.Submit, ArchiverWire.Cancel, ArchiverWire.CancelOperation, ArchiverWire.Artifacts, ArchiverWire.Retention, ArchiverWire.Receipts }
                 .Any(capability => system.Capabilities?.Contains(capability) != true))
-            throw new IntegrationFailure("This server does not support the required Archiver executor API v1 publication profile.");
+            throw new IntegrationFailure("This server does not support the required Archiver executor API v1 output profiles.");
         if (connection.ExpectedInstanceId is not null && connection.ExpectedInstanceId != system.InstanceId)
             throw new IntegrationFailure("The Archiver installation identity changed. Reconcile the saved connection before creating work.");
         switch (request.Operation) {
             case IntegrationOperations.Probe:
                 return new ProbeResult(system.InstanceId, "The Archiver", system.ApplicationVersion, Capabilities.Select(capability => capability with {
-                    EntityKinds = capability.EntityKinds.Where(kind => system.OutputProfiles.Contains(kind == MediaKinds.Image ? ArchiverWire.ImageProfile : ArchiverWire.Profile)).ToArray()
+                    EntityKinds = capability.EntityKinds.Where(kind => system.OutputProfiles.Contains(ProfileForKind(kind))).ToArray()
                 }).ToArray());
             case IntegrationOperations.Inspect: {
                 var input = Input<InspectTransferInput>(request);
-                var kind = input.EntityKind switch { MediaKinds.Book => ArchiverWire.Book, MediaKinds.Comic => ArchiverWire.Comic, MediaKinds.Image => ArchiverWire.Image, _ => throw new IntegrationFailure("This executor profile supports books, comics, and still images.") };
-                if (!system.OutputProfiles.Contains(kind == ArchiverWire.Image ? ArchiverWire.ImageProfile : ArchiverWire.Profile))
+                var kind = input.EntityKind switch { MediaKinds.Book => ArchiverWire.Book, MediaKinds.Comic => ArchiverWire.Comic, MediaKinds.Image => ArchiverWire.Image, MediaKinds.Gallery => ArchiverWire.Gallery, _ => throw new IntegrationFailure("This executor profile supports books, comics, still images, and ordered galleries.") };
+                if (!system.OutputProfiles.Contains(ProfileForKind(input.EntityKind)))
                     throw new IntegrationFailure("The server does not support the selected output profile.");
                 var inspected = await client.SendAsync<Inspection>(HttpMethod.Post, "inspect", new InspectRequest(input.Url, kind, input.MaximumItems), cancellationToken)
                     ?? throw new IntegrationFailure("The source returned no inspection.");
@@ -38,6 +38,7 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
                 var formats = kind switch {
                     ArchiverWire.Book => new[] { ArchiverWire.Epub, ArchiverWire.Pdf },
                     ArchiverWire.Image => [ArchiverWire.Png, ArchiverWire.Jpeg, ArchiverWire.Webp],
+                    ArchiverWire.Gallery => [ArchiverWire.ImageSet],
                     _ => [ArchiverWire.Cbz]
                 };
                 var format = formats.FirstOrDefault(candidate => inspected.Items.All(item => item.Formats.Contains(candidate)))
@@ -51,9 +52,13 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
                 PinnedSelection pinned;
                 try { pinned = JsonSerializer.Deserialize<PinnedSelection>(Convert.FromBase64String(input.SelectionId), IntegrationProtocol.Json)!; }
                 catch (Exception error) when (error is FormatException or JsonException) { throw new IntegrationFailure("The inspected selection is invalid."); }
-                if (pinned is null || pinned.Format is not (ArchiverWire.Epub or ArchiverWire.Pdf or ArchiverWire.Cbz or ArchiverWire.Png or ArchiverWire.Jpeg or ArchiverWire.Webp) || input.ItemIds.Count != 1 || input.MaximumItems != 1)
+                if (pinned is null || pinned.Format is not (ArchiverWire.Epub or ArchiverWire.Pdf or ArchiverWire.Cbz or ArchiverWire.Png or ArchiverWire.Jpeg or ArchiverWire.Webp or ArchiverWire.ImageSet) || input.ItemIds.Count != 1 || input.MaximumItems != 1)
                     throw new IntegrationFailure("Select one supported publication from a current inspection.");
-                var profile = pinned.Format is ArchiverWire.Png or ArchiverWire.Jpeg or ArchiverWire.Webp ? ArchiverWire.ImageProfile : ArchiverWire.Profile;
+                var profile = pinned.Format switch {
+                    ArchiverWire.Png or ArchiverWire.Jpeg or ArchiverWire.Webp => ArchiverWire.ImageProfile,
+                    ArchiverWire.ImageSet => ArchiverWire.GalleryProfile,
+                    _ => ArchiverWire.Profile
+                };
                 if (!system.OutputProfiles.Contains(profile)) throw new IntegrationFailure("The server no longer supports the inspected output profile.");
                 return await client.SendAsync<JobSnapshot>(HttpMethod.Post, "jobs", new SubmitJob(input.ClientOperationId,
                     new(input.Url), new(pinned.Id, input.SelectionRevision, input.ItemIds), new(profile, pinned.Format), new(input.MaximumItems, input.MaximumBytes)),
@@ -118,6 +123,11 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
             throw new IntegrationFailure("The returned manifest does not match its requested sealed revision.");
         return page;
     }
+    private static string ProfileForKind(string kind) => kind switch {
+        MediaKinds.Image => ArchiverWire.ImageProfile,
+        MediaKinds.Gallery => ArchiverWire.GalleryProfile,
+        _ => ArchiverWire.Profile
+    };
     private static string Escape(string value) => Uri.EscapeDataString(value);
     private static T Input<T>(IntegrationRequest request) => request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
 }

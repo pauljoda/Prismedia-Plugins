@@ -6,13 +6,14 @@ An existing installation must implement this interface before it can be connecte
 
 Configure the application's base URL and a dedicated integration bearer token, then
 enable discovery and transfer execution and test the connection. Use Prismedia's
-**Requests → Import from URL** to inspect a URL and explicitly select a book, comic, or image.
+**Requests → Import from URL** to inspect a URL and explicitly select a book, comic, image, or gallery.
 
 ## Supported profiles
 
 - URL inspection; search is not advertised.
 - One EPUB/PDF book or CBZ comic through the negotiated `single-publication` profile.
 - One JPEG/PNG/WebP still image through the optional `single-image` profile. Image capability is advertised only when the server supports that profile.
+- One ordered gallery through the optional `ordered-gallery` profile and `image-set` format. Every member must declare the same group ID and contiguous one-based ordinals; Prismedia verifies all images before publishing the gallery.
 - Persistent installation identity and same-operation recovery after uncertain POSTs.
 - Authoritative job snapshots, remote cancellation, immutable paged manifests.
 - Atomic operation cancellation prevents late acceptance after a timed-out submission.

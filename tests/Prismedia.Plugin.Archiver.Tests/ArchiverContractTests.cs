@@ -64,25 +64,27 @@ public sealed class ArchiverContractTests {
         await new ArchiverIntegration(client, Connection()).DispatchAsync(Request(IntegrationOperations.Submit,
             new SubmitTransferInput(operation, "https://source.test/comic", pinned, "revision", ["issue"], 1, 1000)), default);
     }
-    [Fact]
-    public async Task ImageProfileIsNegotiatedSeparatelyAndPinsItsOutputFormat() {
+    [Theory]
+    [InlineData(MediaKinds.Image, ArchiverWire.Image, ArchiverWire.ImageProfile, ArchiverWire.Png)]
+    [InlineData(MediaKinds.Gallery, ArchiverWire.Gallery, ArchiverWire.GalleryProfile, ArchiverWire.ImageSet)]
+    public async Task OptionalProfileIsNegotiatedSeparatelyAndPinsItsOutputFormat(string kind, string wireKind, string profile, string format) {
         using var legacy = new ArchiverClient(Connection(), new Handler(_ => Json(System())));
         var old = Assert.IsType<ProbeResult>(await new ArchiverIntegration(legacy, Connection()).DispatchAsync(Request(IntegrationOperations.Probe, new { }), default));
-        Assert.DoesNotContain(old.Capabilities.SelectMany(c => c.EntityKinds), kind => kind == MediaKinds.Image);
+        Assert.DoesNotContain(old.Capabilities.SelectMany(c => c.EntityKinds), item => item == kind);
         using var client = new ArchiverClient(Connection(), new Handler(request => {
-            if (request.Method == HttpMethod.Get) return Json(System() with { OutputProfiles = [ArchiverWire.Profile, ArchiverWire.ImageProfile] });
+            if (request.Method == HttpMethod.Get) return Json(System() with { OutputProfiles = [profile] });
             if (request.RequestUri!.AbsolutePath.EndsWith("/inspect")) return Json(new Inspection("selection", "revision", DateTimeOffset.UtcNow.AddMinutes(5),
-                "https://source.test/image", "source", [new("image", "An image", ArchiverWire.Image, [ArchiverWire.Png])], []));
+                "https://source.test/image", "source", [new("image", "An image", wireKind, [format])], []));
             var submitted = JsonSerializer.Deserialize<SubmitJob>(request.Content!.ReadAsStringAsync().GetAwaiter().GetResult(), IntegrationProtocol.Json)!;
-            Assert.Equal(ArchiverWire.ImageProfile, submitted.Output.Profile);
-            Assert.Equal(ArchiverWire.Png, submitted.Output.Format);
+            Assert.Equal(profile, submitted.Output.Profile);
+            Assert.Equal(format, submitted.Output.Format);
             return Json(new { instanceId = Instance, jobId = "job", clientOperationId = submitted.ClientOperationId, revision = 1, state = "queued", itemFailures = Array.Empty<object>() });
         }));
         var integration = new ArchiverIntegration(client, Connection());
         var probe = Assert.IsType<ProbeResult>(await integration.DispatchAsync(Request(IntegrationOperations.Probe, new { }), default));
-        Assert.Contains(probe.Capabilities, c => c.Kind == IntegrationCapabilities.TransferExecutor && c.EntityKinds.Contains(MediaKinds.Image));
+        Assert.Contains(probe.Capabilities, c => c.Kind == IntegrationCapabilities.TransferExecutor && c.EntityKinds.Contains(kind));
         var inspected = Assert.IsType<TransferInspection>(await integration.DispatchAsync(Request(IntegrationOperations.Inspect,
-            new InspectTransferInput("https://source.test/image", MediaKinds.Image, 1)), default));
+            new InspectTransferInput("https://source.test/image", kind, 1)), default));
         await integration.DispatchAsync(Request(IntegrationOperations.Submit,
             new SubmitTransferInput(Guid.NewGuid(), inspected.CanonicalUrl, inspected.SelectionId, inspected.Revision, ["image"], 1, 1000)), default);
     }

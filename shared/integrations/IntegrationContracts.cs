@@ -34,6 +34,7 @@ public static class IntegrationCapabilities {
 }
 /// <summary>Prismedia entity kinds supported by publication catalogs.</summary>
 public static class MediaKinds {
+    public const string Gallery = "gallery";
     public const string Image = "image";
     public const string Book = "book";
     public const string Comic = "comic-installment";
