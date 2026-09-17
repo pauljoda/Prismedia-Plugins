@@ -65,7 +65,10 @@ public sealed record SourceSelection(string ItemId, string Locator, string Entit
 public sealed record CatalogOffer(string Id, string Label, string Access, string? MediaType = null, long? ByteSize = null);
 /// <summary>Descriptive evidence from a catalog; it is not an automatic metadata update.</summary>
 public sealed record CatalogPublication(string Title, string? Description, IReadOnlyList<string> Authors, IReadOnlyDictionary<string, string> ExternalIds,
-    string? Language = null, string? Publisher = null, string? EditionLabel = null, string? IssueLabel = null);
+    string? Language = null, string? Publisher = null, string? EditionLabel = null, string? IssueLabel = null, CatalogAttribution? Attribution = null);
+/// <summary>Plain-text source attribution and license statements retained by the host with accepted imports.</summary>
+public sealed record CatalogAttribution(string SourceUrl, string? Creator, string? Credit, string? LicenseName,
+    string? LicenseUrl, string? UsageTerms, bool? AttributionRequired);
 /// <summary>A navigable container or a publication with explicitly classified acquisition choices.</summary>
 public sealed record CatalogItem(SourceSelection Selection, bool IsContainer, CatalogPublication Publication, IReadOnlyList<CatalogOffer> Offers);
 /// <summary>One bounded result page and an optional adapter-owned continuation cursor.</summary>
@@ -74,7 +77,7 @@ public sealed record CatalogPage(string Title, IReadOnlyList<CatalogItem> Items,
 public sealed record ResolveOfferInput(SourceSelection Selection, string OfferId);
 /// <summary>Server-only byte retrieval instructions; credentials must never reach browser responses.</summary>
 public sealed record HttpArtifactDelivery(string Url, IReadOnlyDictionary<string, string> Headers, string SuggestedFileName,
-    long? ByteSize = null, string? Sha256 = null, DateTimeOffset? ExpiresAt = null);
+    long? ByteSize = null, string? Sha256 = null, DateTimeOffset? ExpiresAt = null, string? Sha1 = null);
 /// <summary>Revalidated full-publication offer and its server-only delivery instructions.</summary>
 public sealed record ResolvedSourceOffer(SourceSelection Selection, string OfferId, CatalogPublication Publication, CatalogOffer Offer, HttpArtifactDelivery Delivery);
 

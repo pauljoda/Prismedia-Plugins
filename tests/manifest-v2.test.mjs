@@ -7,6 +7,7 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
+  commons: {},
   metron: {
     "comic-series": { identities: ["metronseries"], fields: ["seriesTitle", "year", "volume", "publisher", "language"] },
     "comic-installment": { identities: ["metronissue"], fields: ["seriesTitle", "issueNumber", "year", "volume", "publisher"] },

@@ -965,3 +965,39 @@
         entityKinds:
           - comic-series
     settings: []
+- id: commons
+  name: Wikimedia Commons
+  version: 1.0.0
+  date: '2026-09-17'
+  path: plugins/commons/commons.zip
+  sha256: 09c68e532d4a802a1f93b38caf3c9d65b5dc7e585fd5c2bc035c69b68c19e50c
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 1100
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - search
+        entityKinds:
+          - image
+      - kind: acquisition-source
+        operations:
+          - resolve
+        entityKinds:
+          - image
+    settings: []
+    anonymousArtifactOrigins:
+      - https://upload.wikimedia.org
