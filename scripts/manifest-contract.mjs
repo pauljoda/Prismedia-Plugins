@@ -261,6 +261,20 @@ function validateIntegration(integration, auth, pluginId) {
     requireUnique(kinds, "integration entityKinds", pluginId);
     if (kinds.some(kind => !VALID_ENTITY_KINDS.has(kind))) throw new Error(`${pluginId} declares an unknown integration entity kind`);
   }
+  const origins = integration.anonymousArtifactOrigins ?? [];
+  const invalidOrigins = () => new Error(`${pluginId} anonymous artifact origins must be unique bounded HTTPS origins for acquisition sources`);
+  if (!Array.isArray(origins) || origins.length > 8) throw invalidOrigins();
+  if (origins.length && !capabilities.some(item => item.kind === "acquisition-source" && item.operations.includes("resolve"))) throw invalidOrigins();
+  const normalizedOrigins = new Set();
+  for (const value of origins) {
+    if (typeof value !== "string" || value.length > 2048 || !/^https:\/\//iu.test(value) || /[\s\p{Cc}\\?#]/u.test(value)) throw invalidOrigins();
+    let url;
+    try { url = new URL(value); } catch { throw invalidOrigins(); }
+    const pathStart = value.indexOf("/", value.indexOf("://") + 3);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password
+      || (pathStart >= 0 && value.slice(pathStart) !== "/") || normalizedOrigins.has(url.origin)) throw invalidOrigins();
+    normalizedOrigins.add(url.origin);
+  }
   const settings = requireArray(integration.settings, "integration.settings", pluginId, { allowEmpty: true });
   if (settings.length > 32) throw new Error(`${pluginId} has too many connection settings`);
   if (settings.length) validateSearch({ fields: settings }, pluginId, "connection");

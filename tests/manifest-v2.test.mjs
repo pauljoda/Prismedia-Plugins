@@ -363,3 +363,20 @@ test("integration-only manifests are independently versioned and do not need met
   ]) assert.throws(() => validateManifest({ ...manifest, integration }));
   assert.throws(() => validateManifest({ ...manifest, integration: undefined }), /non-empty supports/);
 });
+
+test("anonymous artifact origins are bounded HTTPS origins for acquisition sources", () => {
+  const integration = { protocolVersion: 1, settings: [],
+    capabilities: [{ kind: "acquisition-source", operations: ["resolve"], entityKinds: ["book"] }],
+    anonymousArtifactOrigins: ["https://files.test"] };
+  const manifest = validManifest({ integration });
+  assert.equal(validateManifest(manifest), manifest);
+  for (const origins of [
+    ["http://files.test"], ["https://files.test/path"], ["https://user@files.test"],
+    ["https://files.test?query"], ["https://files.test#fragment"],
+    ["https://files.test", "https://FILES.test:443/"],
+    Array.from({ length: 9 }, (_, index) => `https://files${index}.test`),
+    [null], "https://files.test", [" https://files.test"], ["https://files.test/.."], ["https:files.test"],
+  ]) assert.throws(() => validateManifest({ ...manifest, integration: { ...integration, anonymousArtifactOrigins: origins } }), /artifact origins/);
+  assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
+    capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["book"] }] } }), /artifact origins/);
+});
