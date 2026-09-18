@@ -241,7 +241,7 @@ const INTEGRATION_OPERATIONS = {
   "catalog-discovery": ["search", "browse", "inspect"],
   "acquisition-source": ["resolve", "request-source", "observe-source"],
   "transfer-executor": ["submit", "find-submission", "cancel-submission", "get-job", "cancel", "list-artifacts", "authorize-artifact", "renew-retention", "acknowledge"],
-  "external-manager": ["manager-options", "lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed", "inspect-managed-release"],
+  "external-manager": ["manager-options", "discover-managed", "lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed", "inspect-managed-release"],
   "connected-library": ["search-library", "get-library-item"],
 };
 
@@ -291,6 +291,12 @@ function validateTopLevel(manifest, directoryId) {
   }
   if (manifest.manifestVersion !== 2) throw new Error(`${pluginId} manifestVersion must be 2`);
   requireString(manifest.name, "name", pluginId);
+  const icon = requireString(manifest.icon, "icon", pluginId);
+  if (icon.length > 256 || icon.includes("\\") || icon.startsWith("/") ||
+      icon.split("/").some((segment) => !segment || segment === "." || segment === "..") ||
+      !/\.(svg|png)$/i.test(icon)) {
+    throw new Error(`${pluginId} manifest icon must be a contained package-relative SVG or PNG path`);
+  }
   requireSemver(manifest.version, "version", pluginId);
   const date = requireString(manifest.date, "date", pluginId);
   const parsedDate = new Date(`${date}T00:00:00Z`);

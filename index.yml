@@ -3,10 +3,10 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.14
-  date: '2026-09-01'
+  version: 1.1.15
+  date: '2026-09-18'
   path: plugins/tmdb/tmdb.zip
-  sha256: c0d50a238c48e6d42bd66bc1eeeead5112e969b663f6d3f39781fab8a564562f
+  sha256: 3db2d97c059f3db0df5e98cdde02cd6fc7d2be38096401672a343c12c81258bf
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -141,12 +141,13 @@
             type: text
             required: true
             placeholder: Studio name
+  icon: plugins/tmdb/assets/icon.svg
 - id: youtube
   name: YouTube Metadata
-  version: 1.2.4
-  date: '2026-07-09'
+  version: 1.2.5
+  date: '2026-09-18'
   path: plugins/youtube/youtube.zip
-  sha256: c100ec28314edb3dedbe05d90eb12c056791543a8438f84b0fbf00aa41c6e448
+  sha256: 2a82c3f5d0a156515952b5ae9f831c4ce35c2b9d18dec8d200594152343a6977
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -238,12 +239,13 @@
             type: text
             required: false
             placeholder: Album title
+  icon: plugins/youtube/assets/icon.svg
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.2.4
-  date: '2026-07-24'
+  version: 1.2.5
+  date: '2026-09-18'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: 80c51864da4e3aeedecb28abf49286aa64bad1cd0b4a488c26d047e1a8c3b78b
+  sha256: a5063e182215269ef1183d0b96146b38d245ba9cd9b59125a37b294d477fef40
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -337,15 +339,16 @@
             type: year
             required: false
             placeholder: '2024'
+  icon: plugins/musicbrainz/assets/icon.svg
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 1100
 - id: anilist
   name: AniList
-  version: 1.1.0
-  date: '2026-09-17'
+  version: 1.1.1
+  date: '2026-09-18'
   path: plugins/anilist/anilist.zip
-  sha256: 58e0bf92615d5db0a1976585b60f0ac7b4167046e5cc334b9ca5643f335baaaf
+  sha256: c5bd99d23287e604d67418e15bdc0155d5433d25a5d553c7b56864b02ca203e7
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -447,12 +450,13 @@
         - identityNamespace: anilist
           valuePattern: '{id}'
           urlTemplate: https://anilist.co/manga/{id}
+  icon: plugins/anilist/assets/icon.svg
 - id: mangadex
   name: MangaDex
-  version: 2.1.0
-  date: '2026-09-16'
+  version: 2.1.1
+  date: '2026-09-18'
   path: plugins/mangadex/mangadex.zip
-  sha256: 1280dd1dc3cf03f45aa3cc45184f00d8111a234dba8bd4abf495ffcc23102e82
+  sha256: b5d6ef263ab47067adf315a11104b57e0a1853f12e4fe91b6f42a816e198e493
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -499,15 +503,16 @@
         - lookup-url
       identityNamespaces:
         - mangadexchapter
+  icon: plugins/mangadex/assets/icon.svg
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 250
 - id: openlibrary
   name: Open Library
-  version: 0.3.6
-  date: '2026-09-17'
+  version: 0.3.7
+  date: '2026-09-18'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: cde1f6f247d8fec949137f6c575d004e8411f514c9fb2b9ffc9359aef1ff0742
+  sha256: 06e97e1b07768b62891ed0dee775215996fbfedd3955f3a572b37172b38edad2
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -607,6 +612,7 @@
             type: year
             required: false
             placeholder: '1948'
+  icon: plugins/openlibrary/assets/icon.png
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 1100
@@ -614,10 +620,10 @@
   author: Prismedia Community
 - id: opds
   name: OPDS Catalogs
-  version: 1.0.0
-  date: '2026-09-16'
+  version: 1.0.1
+  date: '2026-09-18'
   path: plugins/opds/opds.zip
-  sha256: 8332cd2eb13147c0be733caf682ae235d738146115ca531ec0f702ea80dce55b
+  sha256: ce1a3d35725c63f08e1274b85d48f28971f619486e9c6a8540b2f727d2166053
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -629,6 +635,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/opds/assets/icon.png
   integration:
     protocolVersion: 1
     capabilities:
@@ -648,10 +655,10 @@
     settings: []
 - id: archiver
   name: The Archiver (executor API)
-  version: 1.3.0
-  date: '2026-09-17'
+  version: 1.3.1
+  date: '2026-09-18'
   path: plugins/archiver/archiver.zip
-  sha256: 574eafb29afe09d0134355e6e8666bfdb4165a3303fe20dcf27ca6ac53e92913
+  sha256: 15cd9aa9b68ebe4e5aba8ae99b058bba9c54f203f73d3914edad5068f3f4b0e8
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -663,6 +670,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/archiver/assets/icon.svg
   integration:
     protocolVersion: 1
     capabilities:
@@ -693,10 +701,10 @@
     settings: []
 - id: radarr
   name: Radarr
-  version: 1.4.0
-  date: '2026-09-17'
+  version: 1.5.0
+  date: '2026-09-18'
   path: plugins/radarr/radarr.zip
-  sha256: 3a09defa9d3547a8edbe7c84bcf031a31c91808b59b7534c42bc5f400a138fd1
+  sha256: f0d2059991aac91f155579f4fe89b192d893d0a80ace5fa28d4f67cf14addc5e
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -708,6 +716,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/radarr/assets/icon.svg
   integration:
     protocolVersion: 1
     capabilities:
@@ -720,6 +729,7 @@
       - kind: external-manager
         operations:
           - manager-options
+          - discover-managed
           - lookup-managed
           - ensure-managed
           - reconcile-managed
@@ -731,10 +741,10 @@
     settings: []
 - id: sonarr
   name: Sonarr
-  version: 1.4.0
-  date: '2026-09-17'
+  version: 1.4.1
+  date: '2026-09-18'
   path: plugins/sonarr/sonarr.zip
-  sha256: 83ebbc30435538c8537b5b177b7c4859fb66ddda58910145f7917d4ed4a7ac98
+  sha256: ba6963b00e66ffb638071db2c2f965621bfcff260770bc00505c5f1cb2c1e6e3
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -746,6 +756,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/sonarr/assets/icon.svg
   description: Adopt or create exact Sonarr series scopes and request selected episodes
   author: Prismedia Community
   integration:
@@ -771,10 +782,10 @@
     settings: []
 - id: googlebooks
   name: Google Books
-  version: 1.0.0
-  date: '2026-09-16'
+  version: 1.0.1
+  date: '2026-09-18'
   path: plugins/googlebooks/googlebooks.zip
-  sha256: b3c1608653867440ad9b0fb0143f037633c8ed903c93189fbe205760fc284888
+  sha256: 301db874b489d00bdffdd301faa1ceb5fb772902b1398bc9f61046e44063dfaa
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -844,6 +855,7 @@
             type: text
             required: false
             placeholder: en
+  icon: plugins/googlebooks/assets/icon.svg
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 300
@@ -851,10 +863,10 @@
   author: Prismedia Community
 - id: metron
   name: Metron
-  version: 1.0.0
-  date: '2026-09-17'
+  version: 1.0.1
+  date: '2026-09-18'
   path: plugins/metron/metron.zip
-  sha256: 8c382ba1ecb7eab60af070b2f8246140509d02dffacc43e0bbb22a9e39df7db1
+  sha256: ade6b9c7591897ce2e2a984a22ef7f53454b763204fc449f9107a1c7ebcb5b51
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -932,6 +944,7 @@
             label: Publisher
             type: text
             required: false
+  icon: plugins/metron/assets/icon.png
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 3100
@@ -939,10 +952,10 @@
   author: Prismedia Community
 - id: kapowarr
   name: Kapowarr
-  version: 1.0.0
-  date: '2026-09-17'
+  version: 1.0.1
+  date: '2026-09-18'
   path: plugins/kapowarr/kapowarr.zip
-  sha256: 11cb9eace75b14d36b669af820ac5277662522c719a1c6199ba95e8e8b418076
+  sha256: 5b591b8e598fa51feeb966943b42d0ec82f5918df501b53735e779e6d273bee4
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -954,6 +967,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/kapowarr/assets/icon.png
   integration:
     protocolVersion: 1
     capabilities:
@@ -971,10 +985,10 @@
     settings: []
 - id: commons
   name: Wikimedia Commons
-  version: 1.0.0
-  date: '2026-09-17'
+  version: 1.0.1
+  date: '2026-09-18'
   path: plugins/commons/commons.zip
-  sha256: 09c68e532d4a802a1f93b38caf3c9d65b5dc7e585fd5c2bc035c69b68c19e50c
+  sha256: 1e697b34f15c0167d13e4329b25e2ede0542f222d6cb0250f8ad7b59354a15d9
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -986,6 +1000,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/commons/assets/icon.svg
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 1100
@@ -1007,10 +1022,10 @@
       - https://upload.wikimedia.org
 - id: suwayomi
   name: Suwayomi Sources
-  version: 1.0.1
-  date: '2026-09-17'
+  version: 1.0.2
+  date: '2026-09-18'
   path: plugins/suwayomi/suwayomi.zip
-  sha256: c8736cc0fc7b94a12406c97328b2a83f4372ace3988df076514d33d5568d07ff
+  sha256: 4a929a1df4173ff0774f6fc650cc4164c2c382251f1bbf4bf2604ec439f50c7b
   runtime: dotnet-process
   isNsfw: true
   manifestVersion: 2
@@ -1022,6 +1037,7 @@
     prismediaMin: 3.8.0
     prismediaMax: null
   supports: []
+  icon: plugins/suwayomi/assets/icon.png
   description: Browse installed Suwayomi manga sources and acquire one exact chapter as a CBZ
   author: Prismedia Community
   integration:

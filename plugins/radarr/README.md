@@ -4,6 +4,9 @@ Connect an existing Radarr 6.x instance through its API v3. Configure the applic
 
 ## Implemented
 
+- Search new movies through Radarr’s upstream catalog, with normalized posters, backdrops, descriptions, identities, and release dates.
+- Review an exact movie through the same connection before saving metadata and requesting acquisition. Existing holdings resolve from local Radarr metadata when upstream discovery is unavailable.
+
 - Browse/search existing movies by title or metadata ID.
 - Expose bounded overview, genres, runtime, certification, and public poster/fanart remote URLs for read-only holding presentation. Authenticated, local-only, and credential-bearing cover URLs are omitted.
 - Inspect exact final file associations and read existing profile/root-folder choices.

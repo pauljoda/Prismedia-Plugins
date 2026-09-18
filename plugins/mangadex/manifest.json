@@ -5,8 +5,9 @@
   ],
   "id": "mangadex",
   "name": "MangaDex",
-  "version": "2.1.0",
-  "date": "2026-09-16",
+  "version": "2.1.1",
+  "date": "2026-09-18",
+  "icon": "assets/icon.svg",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MangaDex.dll",
   "compat": {

@@ -5,8 +5,9 @@
   ],
   "id": "openlibrary",
   "name": "Open Library",
-  "version": "0.3.6",
-  "date": "2026-09-17",
+  "version": "0.3.7",
+  "date": "2026-09-18",
+  "icon": "assets/icon.png",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.OpenLibrary.dll",
   "compat": {

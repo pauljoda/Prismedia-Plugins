@@ -5,10 +5,11 @@
   ],
   "id": "radarr",
   "name": "Radarr",
-  "version": "1.4.0",
-  "date": "2026-09-17",
+  "version": "1.5.0",
+  "date": "2026-09-18",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Radarr.dll",
+  "icon": "assets/icon.svg",
   "compat": {
     "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
@@ -42,6 +43,7 @@
         "kind": "external-manager",
         "operations": [
           "manager-options",
+          "discover-managed",
           "lookup-managed",
           "ensure-managed",
           "reconcile-managed",

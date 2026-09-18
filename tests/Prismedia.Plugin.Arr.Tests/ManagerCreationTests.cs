@@ -19,6 +19,14 @@ public sealed class ManagerCreationTests {
         Assert.Empty(fixture.Writes);
     }
     [Fact]
+    public async Task ExistingLookupUsesLocalHoldingWithoutUpstreamMetadataLookup() {
+        using var fixture = new Fixture { Exists = true };
+        var result = Assert.IsType<ManagedLookupResult>(await fixture.Call(ManagerCreation.Lookup, Work()));
+        Assert.NotNull(result.Existing);
+        Assert.DoesNotContain("movie/lookup/tmdb?tmdbId=1001", fixture.Reads);
+        Assert.Empty(fixture.Writes);
+    }
+    [Fact]
     public async Task NewMovieIsAddedUnmonitoredWithoutSearchOrCollectionMonitoring() {
         using var fixture = new Fixture();
         var result = Assert.IsType<EnsureManagedResult>(await fixture.Call(ManagerCreation.Ensure, Intent()));
@@ -107,6 +115,7 @@ public sealed class ManagerCreationTests {
         internal int Profile = 2, ReturnedTmdb = 1001;
         internal string MoviePath = "/library/film";
         internal List<JsonElement> Writes { get; } = [];
+        internal List<string> Reads { get; } = [];
         private readonly ConnectionContext connection = new(Guid.NewGuid(), "http://manager.test/", null, new Dictionary<string,string>(), new Dictionary<string,string> { [ArrClient.ApiKey] = "fixture-secret" });
         private readonly ArrClient client;
         private readonly RadarrLibrary adapter;
@@ -115,7 +124,9 @@ public sealed class ManagerCreationTests {
         private object Movie() => new { id = 1, title = "Film", year = 2024, tmdbId = ReturnedTmdb, qualityProfileId = Profile, monitored = Monitored, hasFile = false, movieFileId = 0, path = MoviePath };
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) {
             var path = request.RequestUri!.PathAndQuery.Split("/api/v3/")[1];
-            if (request.Method == HttpMethod.Get) return path switch {
+            if (request.Method == HttpMethod.Get) {
+                Reads.Add(path);
+                return path switch {
                 "system/status" => Response(new { appName = "Radarr", version = "6.1.1.10360" }),
                 "movie?tmdbId=1001" => Response(Exists ? new[] { Movie() } : []),
                 "movie/lookup/tmdb?tmdbId=1001" => Response(new { title = "Film", year = 2024, tmdbId = ReturnedTmdb }),
@@ -123,7 +134,8 @@ public sealed class ManagerCreationTests {
                 "qualityprofile" => Response(new[] { new { id = 2, name = "Chosen" } }),
                 "rootfolder" => Response(new[] { new { id = 3, path = "/library", accessible = Accessible } }),
                 _ => throw new InvalidOperationException("Unexpected read: " + path)
-            };
+                };
+            }
             Assert.Equal(HttpMethod.Post, request.Method); Assert.Equal("movie", path);
             Writes.Add(JsonSerializer.Deserialize<JsonElement>(await request.Content!.ReadAsStringAsync(token)));
             Exists = true;

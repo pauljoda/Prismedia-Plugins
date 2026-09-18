@@ -9,11 +9,11 @@ internal sealed partial class RadarrLibrary {
         if (existing.Length > 1) throw new IntegrationFailure("The manager returned ambiguous holdings for this identity.");
         if (existing.Length == 1) {
             var snapshot = await GetAsync(ParseId(Id(existing[0].Id)), token);
-            var candidate = Candidate(snapshot.Item.Title, snapshot.Item.Year, snapshot.Item.ExternalIds, input);
-            return new(candidate, snapshot);
+            return new(Candidate(existing[0], input), snapshot);
         }
         var found = await Client.GetAsync<MovieLookup>($"movie/lookup/tmdb?tmdbId={tmdb}", token);
-        return new(Candidate(found.Title, found.Year, Identities(ManagerProtocol.Tmdb, found.TmdbId, found.ImdbId), input), null);
+        var candidate = Candidate(found, input);
+        return new(candidate, null);
     }
 
     private async Task<EnsureManagedResult> EnsureAsync(EnsureManagedInput input, CancellationToken token) {
@@ -45,7 +45,8 @@ internal sealed partial class RadarrLibrary {
         // Any failure from this point is uncertain. The host must look up the exact identity, never
         // retry a timed-out POST on the assumption that no movie was added.
         var observed = await GetAsync(ParseId(Id(acknowledgement.Id)), token);
-        Candidate(observed.Item.Title, observed.Item.Year, observed.Item.ExternalIds, input.Work);
+        if (input.Work.ExternalIds.Any(pair => observed.Item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
+            throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
         if (observed.Item.Monitored || observed.Item.ProfileId != input.ProfileId || !InsideRemoteRoot(observed.Path, root.Path))
             throw new IntegrationFailure("The added movie's settings or root could not be confirmed. Reconcile it before any acquisition action.");
         return new(ManagerControls.Applied, observed, true);
@@ -61,18 +62,34 @@ internal sealed partial class RadarrLibrary {
         if (Id(id) != tmdb) throw new IntegrationFailure("Use the canonical numeric TMDB movie identity.");
         return id;
     }
-    private static ManagedCandidate Candidate(string title, int? year, IReadOnlyDictionary<string, string> ids, ManagedLookupInput expected) {
+    private static ManagedCandidate Candidate(MovieLookup movie, ManagedLookupInput expected) {
+        var ids = Identities(ManagerProtocol.Tmdb, movie.TmdbId, movie.ImdbId);
+        var title = movie.Title;
+        var year = movie.Year;
         if (string.IsNullOrWhiteSpace(title) || title.Length > 512 || year is < 0 or > 9999
             || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))
             throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
-        return new(ManagerProtocol.Movie, title, year, ids);
+        return new(ManagerProtocol.Movie, title, year, ids, DiscoveryMetadata(movie));
+    }
+    private static ManagedCandidate Candidate(Movie movie, ManagedLookupInput expected) {
+        var ids = Identities(ManagerProtocol.Tmdb, movie.TmdbId, movie.ImdbId);
+        if (string.IsNullOrWhiteSpace(movie.Title) || movie.Title.Length > 512 || movie.Year is < 0 or > 9999
+            || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))
+            throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
+        return new(ManagerProtocol.Movie, movie.Title, movie.Year, ids, DiscoveryMetadata(movie));
     }
     private static bool InsideRemoteRoot(string path, string root) {
         // This is the remote path namespace. Local mapping and canonical byte checks remain host-owned.
         var prefix = root.TrimEnd('/', '\\');
         return path.StartsWith(prefix + "/", StringComparison.Ordinal) || path.StartsWith(prefix + "\\", StringComparison.Ordinal);
     }
-    private sealed record MovieLookup(string Title, int Year, int TmdbId, string? ImdbId);
+    private sealed record MovieLookup(string Title, int Year, int TmdbId, string? ImdbId,
+        string? OriginalTitle = null, string? Overview = null, string? Studio = null,
+        string? Certification = null, int? Runtime = null, string[]? Genres = null,
+        ArrImage?[]? Images = null, string? Website = null, string? InCinemas = null,
+        string? DigitalRelease = null, string? PhysicalRelease = null, MovieRatings? Ratings = null);
+    private sealed record MovieRatings(MovieRating? Tmdb = null);
+    private sealed record MovieRating(decimal? Value = null);
     private sealed record MovieCreationAcknowledgement(int Id);
     private sealed record AddMovie(int TmdbId, int QualityProfileId, string RootFolderPath, bool Monitored,
         string MinimumAvailability, AddMovieOptions AddOptions);

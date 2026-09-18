@@ -3,9 +3,10 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class RadarrLibrary {
-    protected override IReadOnlyList<string> ControlOperations => [ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup, ManagerCreation.Ensure, ManagerRelease.Inspect];
+    protected override IReadOnlyList<string> ControlOperations => [ManagerDiscovery.Search, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup, ManagerCreation.Ensure, ManagerRelease.Inspect];
 
     protected override async Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken token) => request.Operation switch {
+        ManagerDiscovery.Search => await DiscoverAsync(Input<ManagedDiscoveryQuery>(request), token),
         ManagerControls.Reconcile => await ReconcileAsync(Input<ReconcileManagedInput>(request), token),
         ManagerControls.Configure => await ConfigureAsync(Input<ConfigureManagedInput>(request), token),
         ManagerControls.Request => await RequestAsync(Input<RequestManagedInput>(request), token),

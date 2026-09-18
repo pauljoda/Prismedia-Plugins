@@ -76,6 +76,12 @@ for (const pluginId of readdirSync(pluginsRoot).sort()) {
       expectedContracts[pluginId],
     );
   });
+
+  test(`${pluginId} packages its declared icon`, () => {
+    const icon = readFileSync(join(pluginsRoot, pluginId, manifest.icon));
+    assert.ok(icon.length > 0 && icon.length <= 256 * 1024);
+    assert.match(manifest.icon, /^assets\/icon\.(svg|png)$/);
+  });
 }
 
 test("tmdb declares kind-scoped provider identity URLs", () => {
@@ -133,6 +139,7 @@ function validManifest(overrides = {}) {
     date: "2026-07-09",
     runtime: "dotnet-process",
     entry: "dist/Validation.dll",
+    icon: "assets/icon.svg",
     compat: {
       pluginApiMin: "2.0.0",
       pluginApiMax: null,

@@ -24,6 +24,8 @@ internal sealed partial class RadarrLibrary(ArrClient client) : ArrLibrary(clien
         ArrPresentation.Map(movie.Overview, movie.Images, movie.Genres, movie.Runtime, movie.Certification));
     private sealed record Movie(int Id, string Title, int Year, int TmdbId, string? ImdbId,
         [property: JsonRequired] bool Monitored, int QualityProfileId, [property: JsonRequired] bool HasFile, int MovieFileId, string Path,
-        string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null);
+        string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null,
+        string? OriginalTitle = null, string? Studio = null, string? Website = null, string? InCinemas = null,
+        string? DigitalRelease = null, string? PhysicalRelease = null, MovieRatings? Ratings = null);
     private sealed record MovieFile(int Id, int MovieId, string Path, long Size, DateTimeOffset? DateAdded);
 }
