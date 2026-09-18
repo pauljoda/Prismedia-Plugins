@@ -7,7 +7,12 @@ public static class ManagerRelease {
 /// <summary>The exact reviewed holding and finite targets; no remote mutation is authorized.</summary>
 public sealed record InspectManagedReleaseInput(ManagedControlScope Scope);
 /// <summary>
-/// A current configuration and complete application-wide activity observation. Empty queues do not
-/// establish availability, cancel downloads, or guarantee that another user cannot start new work.
+/// A current configuration or explicitly confirmed remote absence, plus complete application-wide
+/// activity observation. Empty queues do not establish availability, cancel downloads, or guarantee
+/// that another user cannot start new work.
 /// </summary>
-public sealed record ManagedReleaseObservation(ManagedControlState State, bool QueueEmpty, bool CommandsIdle);
+public sealed record ManagedReleaseObservation(
+    ManagedControlState? State,
+    bool QueueEmpty,
+    bool CommandsIdle,
+    bool RemoteItemAbsent = false);

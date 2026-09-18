@@ -13,7 +13,7 @@ internal sealed partial class RadarrLibrary {
         ManagerCreation.Lookup => await LookupAsync(Input<ManagedLookupInput>(request), token),
         ManagerCreation.Ensure => await EnsureAsync(Input<EnsureManagedInput>(request), token),
         ManagerRelease.Inspect => await ArrReleaseInspector.InspectAsync(Client,
-            ct => ReconcileAsync(new(Input<InspectManagedReleaseInput>(request).Scope), ct), false, token),
+            ct => ObserveReleaseScopeAsync(Input<InspectManagedReleaseInput>(request).Scope, ct), false, token),
         _ => throw new IntegrationFailure("This operation is not implemented by the installed adapter.")
     };
 
@@ -28,7 +28,7 @@ internal sealed partial class RadarrLibrary {
                     : MatchesCommand(observed, movie.Id) ? MapCommand(observed)
                     : Unknown(reference, "This command no longer belongs to the selected work and scope.");
         }
-        return new(Summary(movie), movie.Path, [new(input.Scope.Targets[0], movie.Monitored)], new(true, true, true), command);
+        return ControlState(input.Scope, movie, command);
     }
 
     private async Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) {
@@ -81,19 +81,48 @@ internal sealed partial class RadarrLibrary {
     }
 
     private async Task<Movie> RequireMovieAsync(ManagedControlScope scope, CancellationToken token) {
+        var id = RequireMovieScope(scope);
+        var movie = await Client.GetAsync<Movie>($"movie/{id}", token);
+        return RequireMovieMatch(scope, id, movie);
+    }
+
+    private async Task<ArrReleaseScopeObservation> ObserveReleaseScopeAsync(
+        ManagedControlScope scope,
+        CancellationToken token) {
+        var id = RequireMovieScope(scope);
+        var movie = await Client.GetOptionalAsync<Movie>($"movie/{id}", token);
+        if (movie is null) {
+            await ConfirmHoldingAbsentAsync(scope, ManagerProtocol.Tmdb, token);
+            return ArrReleaseScopeObservation.Absent();
+        }
+        return ArrReleaseScopeObservation.Present(ControlState(scope, RequireMovieMatch(scope, id, movie)));
+    }
+
+    private static int RequireMovieScope(ManagedControlScope scope) {
         if (scope?.Item is null || scope.Item.EntityKind != ManagerProtocol.Movie || scope.Targets is not { Count: 1 }
             || scope.Item.ExpectedExternalIds is not { Count: > 0 and <= 64 }
             || !scope.Item.ExpectedExternalIds.ContainsKey(ManagerProtocol.Tmdb))
             throw new IntegrationFailure("Select one movie with its known TMDB identity.");
         var id = ParseId(scope.Item.RemoteId);
+        var tmdbId = ParseId(scope.Item.ExpectedExternalIds[ManagerProtocol.Tmdb]);
         if (Id(id) != scope.Item.RemoteId || scope.Targets[0] is not { EntityKind: ManagerProtocol.Movie, SeasonNumber: null, EpisodeNumber: null, AbsoluteNumber: null } target
-            || target.RemoteId != scope.Item.RemoteId) throw new IntegrationFailure("The selected scope must contain exactly this movie.");
-        var movie = await Client.GetAsync<Movie>($"movie/{id}", token);
+            || target.RemoteId != scope.Item.RemoteId || Id(tmdbId) != scope.Item.ExpectedExternalIds[ManagerProtocol.Tmdb])
+            throw new IntegrationFailure("The selected scope must contain exactly this movie.");
+        return id;
+    }
+
+    private Movie RequireMovieMatch(ManagedControlScope scope, int id, Movie movie) {
         if (movie.Id != id || scope.Item.ExpectedExternalIds.Any(pair => Summary(movie).ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
             throw new IntegrationFailure("The remote movie now has different metadata identities. Refresh it before using manager controls.");
         if (string.IsNullOrWhiteSpace(movie.Path) || movie.Path.Length > 8192) throw new IntegrationFailure("The remote movie did not supply a valid library path.");
         return movie;
     }
+
+    private ManagedControlState ControlState(
+        ManagedControlScope scope,
+        Movie movie,
+        ManagedCommandSnapshot? command = null) =>
+        new(Summary(movie), movie.Path, [new(scope.Targets[0], movie.Monitored)], new(true, true, true), command);
 
     private static bool MatchesChanges(Movie movie, ManagedConfigurationChange changes) =>
         (changes.ProfileId is null || Id(movie.QualityProfileId) == changes.ProfileId)

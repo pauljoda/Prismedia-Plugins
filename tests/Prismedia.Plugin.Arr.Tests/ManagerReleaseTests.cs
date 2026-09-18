@@ -14,7 +14,7 @@ public sealed class ManagerReleaseTests {
         var observed = await fixture.Inspect();
         Assert.True(observed.QueueEmpty);
         Assert.True(observed.CommandsIdle);
-        Assert.All(observed.State.Targets, target => Assert.False(target.Monitored));
+        Assert.All(Assert.IsType<ManagedControlState>(observed.State).Targets, target => Assert.False(target.Monitored));
         Assert.Equal(2, fixture.QueueReads);
         Assert.Equal(2, fixture.HoldingReads);
         Assert.Equal(2, fixture.HealthReads);
@@ -71,7 +71,82 @@ public sealed class ManagerReleaseTests {
     [Fact]
     public async Task DisabledSonarrParentDoesNotHideEnabledEpisodeMonitoring() {
         using var fixture = new Fixture(true) { Monitored = true };
-        Assert.True(Assert.Single((await fixture.Inspect()).State.Targets).Monitored);
+        Assert.True(Assert.Single(Assert.IsType<ManagedControlState>((await fixture.Inspect()).State).Targets).Monitored);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfirmedRemovedHoldingReturnsExplicitAbsenceWithoutFabricatingState(bool television) {
+        using var fixture = new Fixture(television) { HoldingAbsent = true };
+
+        var observed = await fixture.Inspect();
+
+        Assert.Null(observed.State);
+        Assert.True(observed.RemoteItemAbsent);
+        Assert.True(observed.QueueEmpty);
+        Assert.True(observed.CommandsIdle);
+        Assert.Equal(2, fixture.HoldingReads);
+        Assert.Equal(2, fixture.CatalogReads);
+        Assert.All(fixture.Methods, method => Assert.Equal(HttpMethod.Get, method));
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    public async Task RemovedHoldingStillReportsBusyApplicationActivity(bool television, bool queueBusy) {
+        using var fixture = new Fixture(television) {
+            HoldingAbsent = true,
+            QueueCount = queueBusy ? 1 : 0,
+            CommandStatus = queueBusy ? ArrCommands.Completed : ArrCommands.Started
+        };
+
+        var observed = await fixture.Inspect();
+
+        Assert.True(observed.RemoteItemAbsent);
+        Assert.Equal(!queueBusy, observed.QueueEmpty);
+        Assert.Equal(queueBusy, observed.CommandsIdle);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReappearanceDuringInspectionInvalidatesEarlierAbsence(bool television) {
+        using var fixture = new Fixture(television) { HoldingAbsent = true, ReappearOnSecondHoldingRead = true };
+
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Inspect());
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task CatalogPresenceUnderSameOrNewManagerIdBlocksAbsence(bool television, bool newRemoteId) {
+        using var fixture = new Fixture(television) {
+            HoldingAbsent = true,
+            ReaddedInCatalog = true,
+            ReaddedWithNewRemoteId = newRemoteId
+        };
+
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Inspect());
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    public async Task MissingHoldingCannotBeConfirmedThroughAnEndpointOrCatalogFailure(bool television, bool exactFailure) {
+        using var fixture = new Fixture(television) {
+            HoldingAbsent = true,
+            FailHoldingRead = exactFailure,
+            FailCatalogRead = !exactFailure
+        };
+
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Inspect());
     }
 
     [Theory]
@@ -102,9 +177,10 @@ public sealed class ManagerReleaseTests {
     }
 
     private sealed class Fixture(bool television) : HttpMessageHandler {
-        internal int QueueCount, QueueReads, HoldingReads, HealthReads;
+        internal int QueueCount, QueueReads, HoldingReads, CatalogReads, HealthReads;
         internal bool GrowQueue, OmitQueueCount, OmitQueueRecords, InconsistentQueue, DuplicateCommands, ChangeMonitoring, Monitored;
         internal bool FailHealthAfterFirstRead, InvalidHealth, NullHealthEntry;
+        internal bool HoldingAbsent, ReappearOnSecondHoldingRead, ReaddedInCatalog, ReaddedWithNewRemoteId, FailHoldingRead, FailCatalogRead;
         internal string? HealthSource;
         internal string CommandStatus = ArrCommands.Completed, QueuePath = "";
         internal List<HttpMethod> Methods = [];
@@ -128,9 +204,20 @@ public sealed class ManagerReleaseTests {
             if (path == "system/status") value = new { appName = television ? "Sonarr" : "Radarr", version = television ? "4.0.17.2952" : "6.1.1.10360" };
             else if (path is "movie/1" or "series/1") {
                 HoldingReads++;
+                if (FailHoldingRead) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+                if (HoldingAbsent && !(ReappearOnSecondHoldingRead && HoldingReads > 1))
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
                 value = new { id = 1, title = "Holding", year = 2024, tmdbId = 42, tvdbId = 42,
                     qualityProfileId = 1, monitored = television ? false : Monitored || ChangeMonitoring && HoldingReads > 1,
                     hasFile = false, movieFileId = 0, path = "/library/holding", statistics = new { episodeFileCount = 0 } };
+            } else if (path is "movie" or "series") {
+                CatalogReads++;
+                if (FailCatalogRead) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+                value = ReaddedInCatalog
+                    ? new[] { new { id = ReaddedWithNewRemoteId ? 2 : 1, title = "Replacement", year = 2024, tmdbId = 42, tvdbId = 42,
+                        qualityProfileId = 1, monitored = false, hasFile = false, movieFileId = 0,
+                        path = "/library/replacement", statistics = new { episodeFileCount = 0 } } }
+                    : [];
             } else if (path == "episode?seriesId=1") value = new[] { new { id = 10, seriesId = 1, title = "Special", seasonNumber = 0,
                 episodeNumber = 1, monitored = Monitored, hasFile = false, episodeFileId = 0 } };
             else if (path.StartsWith("queue?", StringComparison.Ordinal)) {

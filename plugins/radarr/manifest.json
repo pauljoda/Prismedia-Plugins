@@ -5,7 +5,7 @@
   ],
   "id": "radarr",
   "name": "Radarr",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "date": "2026-09-18",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Radarr.dll",

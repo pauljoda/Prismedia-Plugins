@@ -80,6 +80,22 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
         throw new IntegrationFailure("This operation is not implemented by the installed adapter.");
     protected abstract Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken);
     protected abstract Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken);
+    /// <summary>
+    /// Requires a complete catalog to exclude both the former manager ID and its canonical metadata
+    /// identity. This prevents a delete/re-add race from being mistaken for confirmed absence.
+    /// </summary>
+    protected async Task ConfirmHoldingAbsentAsync(
+        ManagedControlScope scope,
+        string canonicalIdentityNamespace,
+        CancellationToken cancellationToken) {
+        var all = await ListAsync(cancellationToken);
+        if (all.Count > 100000 || all.Select(item => item.RemoteId).Distinct(StringComparer.Ordinal).Count() != all.Count)
+            throw new IntegrationFailure("The connected library returned duplicate or excessive holdings while confirming removal.");
+        var expectedIdentity = scope.Item.ExpectedExternalIds[canonicalIdentityNamespace];
+        if (all.Any(item => item.RemoteId == scope.Item.RemoteId
+            || item.ExternalIds.GetValueOrDefault(canonicalIdentityNamespace) == expectedIdentity))
+            throw new IntegrationFailure("The managed holding is present in the connected library. Refresh its association before releasing ownership.");
+    }
     protected static string Id(int id) => id > 0 ? id.ToString(CultureInfo.InvariantCulture) : throw new IntegrationFailure("The application returned an invalid item identity.");
     protected static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new IntegrationFailure("Select a valid remote item identity.");
     private static string Required(string? value, int maximum) => !string.IsNullOrWhiteSpace(value) && value.Length <= maximum

@@ -6,8 +6,9 @@ namespace Prismedia.Plugin.Arr;
 /// <summary>Conservative, read-only drain evidence; unknown work anywhere in the application blocks release.</summary>
 internal static class ArrReleaseInspector {
     internal static async Task<ManagedReleaseObservation> InspectAsync(ArrClient client,
-        Func<CancellationToken, Task<ManagedControlState>> readScope, bool television, CancellationToken token) {
+        Func<CancellationToken, Task<ArrReleaseScopeObservation>> readScope, bool television, CancellationToken token) {
         var before = await readScope(token);
+        ValidateScopeObservation(before);
         await RequireDownloadVisibilityAsync(client, token);
         var queuePath = television ? "queue?page=1&pageSize=100&includeUnknownSeriesItems=true"
             : "queue?page=1&pageSize=100&includeUnknownMovieItems=true";
@@ -20,10 +21,19 @@ internal static class ArrReleaseInspector {
         var emptyAfter = await QueueEmptyAsync(client, queuePath, token);
         await RequireDownloadVisibilityAsync(client, token);
         var after = await readScope(token);
-        if (before.Path != after.Path || before.Item.ProfileId != after.Item.ProfileId || before.Item.Monitored != after.Item.Monitored
-            || !before.Targets.SequenceEqual(after.Targets))
+        ValidateScopeObservation(after);
+        if (before.RemoteItemAbsent != after.RemoteItemAbsent
+            || before.State is { } beforeState && after.State is { } afterState
+                && (beforeState.Path != afterState.Path || beforeState.Item.ProfileId != afterState.Item.ProfileId
+                    || beforeState.Item.Monitored != afterState.Item.Monitored
+                    || !beforeState.Targets.SequenceEqual(afterState.Targets)))
             throw new IntegrationFailure("The managed scope changed during release inspection. Review its settings again.");
-        return new(after, emptyBefore && emptyAfter, idle);
+        return new(after.State, emptyBefore && emptyAfter, idle, after.RemoteItemAbsent);
+    }
+
+    private static void ValidateScopeObservation(ArrReleaseScopeObservation observation) {
+        if (observation.RemoteItemAbsent != (observation.State is null))
+            throw new IntegrationFailure("The manager returned contradictory release scope evidence.");
     }
 
     private static async Task RequireDownloadVisibilityAsync(ArrClient client, CancellationToken token) {
@@ -49,4 +59,10 @@ internal static class ArrReleaseInspector {
     private sealed record ActivityQueueItem([property: JsonRequired] int Id);
     private sealed record ActivityCommand([property: JsonRequired] int Id, [property: JsonRequired] string Status);
     private sealed record ActivityHealth([property: JsonRequired] string Source);
+}
+
+/// <summary>One exact holding observation, either current state or independently confirmed absence.</summary>
+internal sealed record ArrReleaseScopeObservation(ManagedControlState? State, bool RemoteItemAbsent) {
+    internal static ArrReleaseScopeObservation Present(ManagedControlState state) => new(state, false);
+    internal static ArrReleaseScopeObservation Absent() => new(null, true);
 }

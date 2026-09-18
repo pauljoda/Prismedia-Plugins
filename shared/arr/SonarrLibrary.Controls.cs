@@ -12,7 +12,7 @@ internal sealed partial class SonarrLibrary {
         ManagerCreation.Lookup => await LookupAsync(Input<ManagedLookupInput>(request), token),
         ManagerCreation.Ensure => await EnsureAsync(Input<EnsureManagedInput>(request), token),
         ManagerRelease.Inspect => await ArrReleaseInspector.InspectAsync(Client,
-            ct => ReconcileAsync(new(Input<InspectManagedReleaseInput>(request).Scope), ct), true, token),
+            ct => ObserveReleaseScopeAsync(Input<InspectManagedReleaseInput>(request).Scope, ct), true, token),
         _ => throw new IntegrationFailure("This operation is not implemented by the installed adapter.")
     };
 
@@ -25,10 +25,7 @@ internal sealed partial class SonarrLibrary {
                 && MatchesCommand(observed, episodes) ? MapCommand(observed)
                 : new(reference, ManagerControls.Unknown, "The original command is absent, its identity changed, or it no longer matches the selected episodes.");
         }
-        var byId = episodes.ToDictionary(episode => Id(episode.Id), StringComparer.Ordinal);
-        return new(Summary(series), series.Path, input.Scope.Targets.Select(target => new ManagedTargetMonitoring(target, byId[target.RemoteId].Monitored)).ToArray(),
-            new(true, series.Monitored, false, series.Monitored ? null
-                : "Series monitoring is disabled in Sonarr. Enable it there before changing episode monitoring here; Prismedia will not change that series-wide setting."), command);
+        return ControlState(input.Scope, series, episodes, command);
     }
 
     private async Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) {
@@ -75,15 +72,43 @@ internal sealed partial class SonarrLibrary {
     }
 
     private async Task<(Series Series, Episode[] Episodes)> RequireScopeAsync(ManagedControlScope scope, CancellationToken token) {
+        var id = RequireScopeIdentity(scope);
+        var series = await Client.GetAsync<Series>($"series/{id}", token);
+        return await RequireScopeMatchAsync(scope, id, series, token);
+    }
+
+    private async Task<ArrReleaseScopeObservation> ObserveReleaseScopeAsync(
+        ManagedControlScope scope,
+        CancellationToken token) {
+        var id = RequireScopeIdentity(scope);
+        var series = await Client.GetOptionalAsync<Series>($"series/{id}", token);
+        if (series is null) {
+            await ConfirmHoldingAbsentAsync(scope, ManagerProtocol.Tvdb, token);
+            return ArrReleaseScopeObservation.Absent();
+        }
+        var matched = await RequireScopeMatchAsync(scope, id, series, token);
+        return ArrReleaseScopeObservation.Present(ControlState(scope, matched.Series, matched.Episodes));
+    }
+
+    private static int RequireScopeIdentity(ManagedControlScope scope) {
         if (scope?.Item is null || scope.Item.EntityKind != ManagerProtocol.Series || scope.Targets is not { Count: > 0 and <= 10000 }
             || scope.Item.ExpectedExternalIds is not { Count: > 0 and <= 64 } || !scope.Item.ExpectedExternalIds.ContainsKey(ManagerProtocol.Tvdb))
             throw new IntegrationFailure("Select a pinned TVDB series and explicit episode targets.");
         var id = ParseId(scope.Item.RemoteId);
+        var tvdbId = ParseId(scope.Item.ExpectedExternalIds[ManagerProtocol.Tvdb]);
         if (Id(id) != scope.Item.RemoteId || scope.Targets.Any(target => target is null || target.EntityKind != ManagerProtocol.Episode
             || target.SeasonNumber is null or < 0 || target.EpisodeNumber is null or < 0 || Id(ParseId(target.RemoteId)) != target.RemoteId)
-            || scope.Targets.Select(target => target.RemoteId).Distinct(StringComparer.Ordinal).Count() != scope.Targets.Count)
+            || scope.Targets.Select(target => target.RemoteId).Distinct(StringComparer.Ordinal).Count() != scope.Targets.Count
+            || Id(tvdbId) != scope.Item.ExpectedExternalIds[ManagerProtocol.Tvdb])
             throw new IntegrationFailure("The scope must contain unique canonical episode IDs and exact numbering.");
-        var series = await Client.GetAsync<Series>($"series/{id}", token);
+        return id;
+    }
+
+    private async Task<(Series Series, Episode[] Episodes)> RequireScopeMatchAsync(
+        ManagedControlScope scope,
+        int id,
+        Series series,
+        CancellationToken token) {
         if (series.Id != id || series.QualityProfileId <= 0 || string.IsNullOrWhiteSpace(series.Path) || series.Path.Length > 8192
             || scope.Item.ExpectedExternalIds.Any(pair => Summary(series).ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
             throw new IntegrationFailure("The remote series no longer has the pinned metadata identity or a complete configuration.");
@@ -96,6 +121,19 @@ internal sealed partial class SonarrLibrary {
             || target.EpisodeNumber != episode.EpisodeNumber || target.AbsoluteNumber != episode.AbsoluteEpisodeNumber))
             throw new IntegrationFailure("An episode identity or coordinate changed. Review its saved association before changing this scope.");
         return (series, scope.Targets.Select(target => byId[target.RemoteId]).ToArray());
+    }
+
+    private ManagedControlState ControlState(
+        ManagedControlScope scope,
+        Series series,
+        Episode[] episodes,
+        ManagedCommandSnapshot? command = null) {
+        var byId = episodes.ToDictionary(episode => Id(episode.Id), StringComparer.Ordinal);
+        return new(Summary(series), series.Path,
+            scope.Targets.Select(target => new ManagedTargetMonitoring(target, byId[target.RemoteId].Monitored)).ToArray(),
+            new(true, series.Monitored, false, series.Monitored ? null
+                : "Series monitoring is disabled in Sonarr. Enable it there before changing episode monitoring here; Prismedia will not change that series-wide setting."),
+            command);
     }
     private static void RequireConfiguration(Series series, string path, string profile) {
         if (string.IsNullOrWhiteSpace(path) || series.Path != path || Id(series.QualityProfileId) != profile)

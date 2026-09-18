@@ -701,10 +701,10 @@
     settings: []
 - id: radarr
   name: Radarr
-  version: 1.7.0
+  version: 1.7.1
   date: '2026-09-18'
   path: plugins/radarr/radarr.zip
-  sha256: b9873d5c9f24ad1c0d3cb5ab456eb607021b8481a27e4dfab929086405e4a5c8
+  sha256: 9288157788682151d60312f1a3f0da6fd977537e753bf14fdd01c0edf36a0b74
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -742,10 +742,10 @@
     settings: []
 - id: sonarr
   name: Sonarr
-  version: 1.6.0
+  version: 1.6.1
   date: '2026-09-18'
   path: plugins/sonarr/sonarr.zip
-  sha256: 27bd1c8abc7d0fbc3df22f161a3509baacd6bac41c7f75d0d9c7c9b1a566e1e7
+  sha256: 5f880d75ee24195fb79283abbc58231a733e2f9176386cf998a09fc15900827f
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
