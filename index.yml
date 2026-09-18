@@ -742,10 +742,10 @@
     settings: []
 - id: sonarr
   name: Sonarr
-  version: 1.6.1
+  version: 1.7.1
   date: '2026-09-18'
   path: plugins/sonarr/sonarr.zip
-  sha256: 5f880d75ee24195fb79283abbc58231a733e2f9176386cf998a09fc15900827f
+  sha256: 1d16572f5a6971162c77774496f7a65a965a6044faf242db067d69cff41da609
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -773,6 +773,7 @@
       - kind: external-manager
         operations:
           - manager-options
+          - discover-managed
           - lookup-managed
           - ensure-managed
           - reconcile-managed

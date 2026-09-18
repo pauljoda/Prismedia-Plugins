@@ -7,6 +7,8 @@ public static class ManagerDiscovery {
 
 /// <summary>Canonical semantic date codes carried by normalized manager discovery metadata.</summary>
 public static class ManagerDiscoveryDates {
+    public const string FirstAir = "first-air";
+    public const string LastAir = "last-air";
     public const string TheatricalRelease = "theatrical-release";
     public const string DigitalRelease = "digital-release";
     public const string PhysicalRelease = "physical-release";

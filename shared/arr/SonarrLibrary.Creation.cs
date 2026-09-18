@@ -5,7 +5,7 @@ namespace Prismedia.Plugin.Arr;
 internal sealed partial class SonarrLibrary {
     private async Task<ManagedLookupResult> LookupAsync(ManagedLookupInput input, CancellationToken token) {
         var identity = RequireCreationIdentity(input);
-        ValidateTargets(input.Targets);
+        ValidateTargets(input.Targets, required: false);
 
         Series? candidate = null;
         if (identity.TvdbId is { } requestedTvdb) {
@@ -35,7 +35,7 @@ internal sealed partial class SonarrLibrary {
             if (input.OperationId == Guid.Empty || string.IsNullOrWhiteSpace(input.ExpectedRootPath) || input.ExpectedRootPath.Length > 8192)
                 throw new IntegrationFailure("Choose reviewed creation settings and a durable operation ID.");
             RequireCreationIdentity(input.Work);
-            ValidateTargets(input.Work.Targets);
+            ValidateTargets(input.Work.Targets, required: true);
             profile = ParseId(input.ProfileId);
             var rootId = ParseId(input.RootId);
             lookup = await LookupAsync(input.Work, token);
@@ -72,7 +72,7 @@ internal sealed partial class SonarrLibrary {
 
     private async Task<ManagedLookupResult> ExistingResultAsync(Series series, ManagedLookupInput input, CancellationToken token) {
         var snapshot = await GetAsync(ParseId(Id(series.Id)), token);
-        var candidate = Candidate(snapshot.Item.Title, snapshot.Item.Year, snapshot.Item.ExternalIds, input);
+        var candidate = Candidate(series, input);
         var targets = await ResolveTargetsAsync(series.Id, input.Targets, token);
         return new(candidate, snapshot, targets);
     }
@@ -128,8 +128,12 @@ internal sealed partial class SonarrLibrary {
         return parsed;
     }
 
-    private static void ValidateTargets(IReadOnlyList<ManagedLookupTarget>? targets) {
-        if (targets is not { Count: > 0 and <= 10000 }) throw new IntegrationFailure("Select a finite nonempty episode scope.");
+    private static void ValidateTargets(IReadOnlyList<ManagedLookupTarget>? targets, bool required) {
+        if (targets is null or { Count: 0 }) {
+            if (required) throw new IntegrationFailure("Select a finite nonempty episode scope.");
+            return;
+        }
+        if (targets.Count > 10000) throw new IntegrationFailure("Select a finite nonempty episode scope.");
         foreach (var target in targets) {
             if (target is null || target.EntityKind != ManagerProtocol.Episode || target.ExternalIds is null or { Count: > 1 }
                 || target.ExternalIds.Keys.Any(key => key != ManagerProtocol.Tvdb)
@@ -153,8 +157,10 @@ internal sealed partial class SonarrLibrary {
             || episode.TvdbId > 0 && Id(episode.TvdbId) == expectedTvdb;
     }
 
-    private static ManagedCandidate Candidate(Series series, ManagedLookupInput expected) =>
-        Candidate(series.Title, series.Year, SeriesIdentities(series), expected);
+    private static ManagedCandidate Candidate(Series series, ManagedLookupInput expected) {
+        var candidate = Candidate(series.Title, series.Year, SeriesIdentities(series), expected);
+        return candidate with { Metadata = DiscoveryMetadata(series) };
+    }
     private static ManagedCandidate Candidate(string title, int? year, IReadOnlyDictionary<string, string> ids, ManagedLookupInput expected) {
         if (string.IsNullOrWhiteSpace(title) || title.Length > 512 || year is < 0 or > 9999
             || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))

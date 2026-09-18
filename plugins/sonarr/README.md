@@ -5,7 +5,7 @@ Connect an existing Sonarr 4.x instance through its API v3. Configure the applic
 ## Implemented
 
 - Report confirmed removal only after the exact holding is missing and a healthy complete catalog also excludes it; outages remain unverified failures.
-
+- Search Sonarr's upstream series catalog and carry its TVDB, TMDB, IMDb, artwork, and descriptive metadata into review.
 - Browse/search existing series by title or metadata ID.
 - List every configured Sonarr root folder as a provider library with its stable root ID, path, series type, and Sonarr management link.
 - Resolve exact TVDB or TMDB series identities and adopt an existing series without changing its path, profile, or monitoring.

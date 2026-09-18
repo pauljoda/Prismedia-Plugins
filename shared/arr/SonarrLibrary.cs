@@ -35,8 +35,10 @@ internal sealed partial class SonarrLibrary(ArrClient client) : ArrLibrary(clien
         return identities;
     }
     private sealed record Series(int Id, string Title, int Year, int TvdbId, int TmdbId, string? ImdbId, [property: JsonRequired] bool Monitored, int QualityProfileId, string Path, SeriesStatistics? Statistics,
-        string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null);
+        string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null,
+        string? Network = null, string? FirstAired = null, string? LastAired = null, SeriesRatings? Ratings = null);
     private sealed record SeriesStatistics(int EpisodeFileCount);
+    private sealed record SeriesRatings(decimal? Value = null);
     private sealed record EpisodeFile(int Id, int SeriesId, string Path, long Size, DateTimeOffset? DateAdded);
     private sealed record Episode(int Id, int SeriesId, int TvdbId, string Title, int SeasonNumber, int EpisodeNumber, int? AbsoluteEpisodeNumber, int EpisodeFileId, bool HasFile,
         [property: JsonRequired] bool Monitored);
