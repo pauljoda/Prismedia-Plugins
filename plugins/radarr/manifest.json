@@ -5,7 +5,7 @@
   ],
   "id": "radarr",
   "name": "Radarr",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "date": "2026-09-18",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Radarr.dll",
@@ -33,7 +33,8 @@
         "kind": "connected-library",
         "operations": [
           "search-library",
-          "get-library-item"
+          "get-library-item",
+          "list-libraries"
         ],
         "entityKinds": [
           "movie"

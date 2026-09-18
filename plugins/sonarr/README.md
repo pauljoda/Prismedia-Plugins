@@ -5,6 +5,7 @@ Connect an existing Sonarr 4.x instance through its API v3. Configure the applic
 ## Implemented
 
 - Browse/search existing series by title or metadata ID.
+- List every configured Sonarr root folder as a provider library with its stable root ID, path, series type, and Sonarr management link.
 - Resolve exact TVDB or TMDB series identities and adopt an existing series without changing its path, profile, or monitoring.
 - Add a missing series unmonitored with no automatic search, then bind every initially selected episode to Sonarr's canonical episode ID and observed numbering.
 - Expose bounded overview, genres, runtime, certification, and public poster/fanart remote URLs for read-only holding presentation. Authenticated, local-only, and credential-bearing cover URLs are omitted.
@@ -21,7 +22,7 @@ Initial creation uses `POST series` with `monitored=false`, `monitor=none`, and 
 
 Sonarr provides no idempotency key or atomic conditional mutation for these endpoints. Writes are never retried by the adapter, and a timeout or invalid reply after dispatch is uncertain. The host can reconcile desired flags by reading but cannot infer a lost search's command ID from similar history. Command completion is independent of downloads or local byte availability. Missing history or command-ID reuse stays unknown.
 
-Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
+Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item and library IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
 
 ## Boundaries
 

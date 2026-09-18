@@ -15,11 +15,19 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
         if (request.Connection.ExpectedInstanceId is not null)
             throw new IntegrationFailure("Kapowarr does not report a persistent installation ID. Reconnect it with its current identity policy.");
         if (request.Operation == IntegrationOperations.Probe) return new ProbeResult(null, "Kapowarr", about.Version, [
-            new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem], [KapowarrCodes.ComicSeries]),
+            new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries], [KapowarrCodes.ComicSeries]),
             new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options], [KapowarrCodes.ComicSeries])
         ]);
         if (request.Operation == ManagerProtocol.SearchLibrary) return await SearchAsync(request, token);
         if (request.Operation == ManagerProtocol.GetLibraryItem) return await GetAsync(Input<ManagedItemInput>(request), token);
+        if (request.Operation == ManagerProtocol.ListLibraries) {
+            var roots = await client.GetAsync<KapowarrRoot[]>("rootfolder", token);
+            if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw Invalid();
+            return new ProviderLibraryCatalog(roots.Select(root => {
+                var path = Required(root.Folder, 8192);
+                return new ProviderLibraryDescriptor(Id(root.Id), LibraryLabel(path), path, [KapowarrCodes.ComicSeries], request.Connection.BaseUrl);
+            }).ToArray());
+        }
         if (request.Operation == ManagerProtocol.Options) {
             RequireKind(Input<ManagerOptionsInput>(request).EntityKind);
             var roots = await client.GetAsync<KapowarrRoot[]>("rootfolder", token);
@@ -92,6 +100,12 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
     private static string Id(int value) => value > 0 ? value.ToString(CultureInfo.InvariantCulture) : throw Invalid();
     private static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw Invalid();
     private static string Required(string? value, int limit) => !string.IsNullOrWhiteSpace(value) && value.Length <= limit && !value.Any(char.IsControl) ? value : throw Invalid();
+    private static string LibraryLabel(string path) {
+        var trimmed = path.TrimEnd('/', '\\');
+        if (trimmed.Length == 0) return path;
+        var separator = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        return separator >= 0 && separator < trimmed.Length - 1 ? trimmed[(separator + 1)..] : trimmed;
+    }
     private static T Input<T>(IntegrationRequest request) => request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw Invalid();
     private static IntegrationFailure Invalid() => new("Kapowarr returned invalid, ambiguous, or oversized comic library evidence.");
 }

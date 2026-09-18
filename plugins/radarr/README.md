@@ -8,6 +8,7 @@ Connect an existing Radarr 6.x instance through its API v3. Configure the applic
 - Review an exact movie through the same connection before saving metadata and requesting acquisition. Existing holdings resolve from local Radarr metadata when upstream discovery is unavailable.
 
 - Browse/search existing movies by title or metadata ID.
+- List every configured Radarr root folder as a provider library with its stable root ID, path, movie type, and Radarr management link.
 - Expose bounded overview, genres, runtime, certification, and public poster/fanart remote URLs for read-only holding presentation. Authenticated, local-only, and credential-bearing cover URLs are omitted.
 - Inspect exact final file associations and read existing profile/root-folder choices.
 - Check the selected holding's metadata identity before trusting a reused remote item ID.
@@ -25,7 +26,7 @@ The adapter checks pinned TMDB/other identities, the reviewed managed path, and 
 
 Creation uses a separate `ensure-managed` operation. It first resolves the exact identity, validates the chosen profile/root, and adds only a missing movie. New movies use Radarr's released-availability policy; monitoring and search require later explicit controls. A fresh movie read verifies the acknowledged identity, root, and initial settings. If a response is lost, use `lookup-managed` to reconcile; an absent lookup result does not prove that an earlier POST failed. The host must retain an uncertain creation instead of automatically repeating it.
 
-Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
+Neither supported API reports a persistent installation UUID. The adapter reports that absence explicitly, and Prismedia scopes item and library IDs to the Connection. Profile and folder choices retain their external IDs. An unavailable server produces an error, never an empty successful library.
 
 ## Boundaries
 

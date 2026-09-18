@@ -6,6 +6,23 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr.Tests;
 
 public sealed class ManagerLibraryTests {
+    [Theory]
+    [InlineData(false, "movie")]
+    [InlineData(true, "video-series")]
+    public async Task ListsEveryProviderLibraryWithStableRootIdentity(bool sonarr, string expectedKind) {
+        using var fixture = new Fixture(sonarr);
+        fixture.Responses["rootfolder"] = new[] {
+            new { id = 4, path = "/media/primary/", accessible = true },
+            new { id = 7, path = "D:\\Archive", accessible = false },
+        };
+
+        var catalog = Assert.IsType<ProviderLibraryCatalog>(await fixture.Call(ManagerProtocol.ListLibraries, new { }));
+
+        Assert.Equal(["4", "7"], catalog.Libraries.Select(library => library.RemoteId));
+        Assert.Equal(["primary", "Archive"], catalog.Libraries.Select(library => library.Label));
+        Assert.All(catalog.Libraries, library => Assert.Equal([expectedKind], library.EntityKinds));
+    }
+
     [Fact]
     public async Task RadarrPagesExistingHoldingsWithoutClaimsOfPersistentIdentityOrMutations() {
         using var fixture = new Fixture();

@@ -242,7 +242,7 @@ const INTEGRATION_OPERATIONS = {
   "acquisition-source": ["resolve", "request-source", "observe-source"],
   "transfer-executor": ["submit", "find-submission", "cancel-submission", "get-job", "cancel", "list-artifacts", "authorize-artifact", "renew-retention", "acknowledge"],
   "external-manager": ["manager-options", "discover-managed", "lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed", "inspect-managed-release"],
-  "connected-library": ["search-library", "get-library-item"],
+  "connected-library": ["search-library", "get-library-item", "list-libraries"],
 };
 
 function validateIntegration(integration, auth, pluginId) {

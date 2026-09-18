@@ -4,6 +4,7 @@ namespace Prismedia.Plugin.Integrations;
 public static class ManagerProtocol {
     public const string SearchLibrary = "search-library";
     public const string GetLibraryItem = "get-library-item";
+    public const string ListLibraries = "list-libraries";
     public const string Options = "manager-options";
     public const string ConnectedLibrary = "connected-library";
     public const string ExternalManager = "external-manager";
@@ -26,6 +27,11 @@ public sealed record ManagedLibraryPresentation(string? Overview = null, string?
     string? ContentRating = null);
 /// <summary>One bounded page of existing holdings.</summary>
 public sealed record ManagedLibraryPage(IReadOnlyList<ManagedLibraryItem> Items, string? NextCursor = null);
+/// <summary>A provider-owned library available for an explicit local folder mapping.</summary>
+public sealed record ProviderLibraryDescriptor(string RemoteId, string Label, string RemotePath,
+    IReadOnlyList<string> EntityKinds, string? ManagementUrl = null);
+/// <summary>The complete bounded provider library catalog.</summary>
+public sealed record ProviderLibraryCatalog(IReadOnlyList<ProviderLibraryDescriptor> Libraries);
 /// <summary>Stable metadata identities fence reuse of an application's numeric item ID.</summary>
 public sealed record ManagedItemInput(string EntityKind, string RemoteId, IReadOnlyDictionary<string, string> ExpectedExternalIds);
 /// <summary>Exact content targets represented by a remote file, including combined episodes.</summary>

@@ -18,7 +18,7 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
         // Neither supported API supplies a persistent installation UUID. Do not invent one from a name or path.
         if (request.Connection.ExpectedInstanceId is not null) throw new IntegrationFailure("This application does not report a persistent installation ID. Reconnect it with its current identity policy.");
         if (request.Operation == IntegrationOperations.Probe) return new ProbeResult(null, appName, status.Version, [
-            new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem], [kind]),
+            new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries], [kind]),
             new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, .. ControlOperations], [kind])
         ]);
         if (request.Operation == ManagerProtocol.SearchLibrary) {
@@ -48,6 +48,14 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
                 throw new IntegrationFailure("The remote item now has different metadata identities. Refresh the library before using it.");
             return snapshot;
         }
+        if (request.Operation == ManagerProtocol.ListLibraries) {
+            var roots = await client.GetAsync<ArrRoot[]>("rootfolder", cancellationToken);
+            if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw new IntegrationFailure("The application returned duplicate or excessive libraries.");
+            return new ProviderLibraryCatalog(roots.Select(root => {
+                var path = Required(root.Path, 8192);
+                return new ProviderLibraryDescriptor(Id(root.Id), LibraryLabel(path), path, [kind], request.Connection.BaseUrl);
+            }).ToArray());
+        }
         if (request.Operation == ManagerProtocol.Options) {
             if (Input<ManagerOptionsInput>(request).EntityKind != kind) throw new IntegrationFailure("Unsupported manager kind.");
             var profiles = await client.GetAsync<ArrProfile[]>("qualityprofile", cancellationToken);
@@ -63,6 +71,14 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
     protected abstract Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken);
     protected static string Id(int id) => id > 0 ? id.ToString(CultureInfo.InvariantCulture) : throw new IntegrationFailure("The application returned an invalid item identity.");
     protected static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new IntegrationFailure("Select a valid remote item identity.");
+    private static string Required(string? value, int maximum) => !string.IsNullOrWhiteSpace(value) && value.Length <= maximum
+        && !value.Any(char.IsControl) ? value : throw new IntegrationFailure("The application returned an invalid library path.");
+    private static string LibraryLabel(string path) {
+        var trimmed = path.TrimEnd('/', '\\');
+        if (trimmed.Length == 0) return path;
+        var separator = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        return separator >= 0 && separator < trimmed.Length - 1 ? trimmed[(separator + 1)..] : trimmed;
+    }
     protected static Dictionary<string, string> Identities(string primaryNamespace, int primaryId, string? imdbId = null) {
         var result = new Dictionary<string, string> { [primaryNamespace] = Id(primaryId) };
         if (!string.IsNullOrWhiteSpace(imdbId)) result[ManagerProtocol.Imdb] = imdbId;

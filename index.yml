@@ -701,10 +701,10 @@
     settings: []
 - id: radarr
   name: Radarr
-  version: 1.5.0
+  version: 1.6.0
   date: '2026-09-18'
   path: plugins/radarr/radarr.zip
-  sha256: f0d2059991aac91f155579f4fe89b192d893d0a80ace5fa28d4f67cf14addc5e
+  sha256: f843a53cb250fac9eea34b8c550c21cf01cd1e9f642cc33ef6d18b657b07e5c8
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -724,6 +724,7 @@
         operations:
           - search-library
           - get-library-item
+          - list-libraries
         entityKinds:
           - movie
       - kind: external-manager
@@ -741,10 +742,10 @@
     settings: []
 - id: sonarr
   name: Sonarr
-  version: 1.4.1
+  version: 1.5.0
   date: '2026-09-18'
   path: plugins/sonarr/sonarr.zip
-  sha256: ba6963b00e66ffb638071db2c2f965621bfcff260770bc00505c5f1cb2c1e6e3
+  sha256: 41bb896fad4721c5b655631eb87b529268e4d7945d61b62e31ea430fce541717
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -766,6 +767,7 @@
         operations:
           - search-library
           - get-library-item
+          - list-libraries
         entityKinds:
           - video-series
       - kind: external-manager
@@ -952,10 +954,10 @@
   author: Prismedia Community
 - id: kapowarr
   name: Kapowarr
-  version: 1.0.1
+  version: 1.1.0
   date: '2026-09-18'
   path: plugins/kapowarr/kapowarr.zip
-  sha256: 5b591b8e598fa51feeb966943b42d0ec82f5918df501b53735e779e6d273bee4
+  sha256: 7f455b53f75a79d6cbddbdb5f4a7e091ee2798e5b5b01024b035817e07c436e7
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -975,6 +977,7 @@
         operations:
           - search-library
           - get-library-item
+          - list-libraries
         entityKinds:
           - comic-series
       - kind: external-manager

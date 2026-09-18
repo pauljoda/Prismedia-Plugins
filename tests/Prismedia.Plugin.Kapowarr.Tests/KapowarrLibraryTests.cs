@@ -7,6 +7,21 @@ namespace Prismedia.Plugin.Kapowarr.Tests;
 
 public sealed class KapowarrLibraryTests {
     [Fact]
+    public async Task ListsProviderLibrariesWithStableRootIdentity() {
+        using var fixture = new Fixture();
+        fixture.Results["rootfolder"] = new[] {
+            new { id = 1, folder = "/comics/main/", size = 1000, free = 500 },
+            new { id = 2, folder = "D:\\Comics", size = 2000, free = 1000 },
+        };
+
+        var catalog = Assert.IsType<ProviderLibraryCatalog>(await fixture.Call(ManagerProtocol.ListLibraries, new { }));
+
+        Assert.Equal(["1", "2"], catalog.Libraries.Select(library => library.RemoteId));
+        Assert.Equal(["main", "Comics"], catalog.Libraries.Select(library => library.Label));
+        Assert.All(catalog.Libraries, library => Assert.Equal([KapowarrCodes.ComicSeries], library.EntityKinds));
+    }
+
+    [Fact]
     public async Task ProbeDeclaresOnlyExistingLibraryReadsWithoutInventingInstallationIdentity() {
         using var fixture = new Fixture();
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
