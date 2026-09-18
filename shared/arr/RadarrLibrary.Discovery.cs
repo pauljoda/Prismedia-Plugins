@@ -32,16 +32,19 @@ internal sealed partial class RadarrLibrary {
             movie.PhysicalRelease, movie.Ratings);
     }
 
-    private static ManagedDiscoveryMetadata DiscoveryMetadata(Movie movie) {
+    private static ManagedDiscoveryMetadata DiscoveryMetadata(
+        Movie movie,
+        IReadOnlyList<ManagedPersonCredit>? credits = null) {
         return DiscoveryMetadata(movie.OriginalTitle, movie.Overview, movie.Studio, movie.Certification,
             movie.Runtime, movie.Genres, movie.Images, movie.Website, movie.InCinemas, movie.DigitalRelease,
-            movie.PhysicalRelease, movie.Ratings);
+            movie.PhysicalRelease, movie.Ratings, credits);
     }
 
     private static ManagedDiscoveryMetadata DiscoveryMetadata(
         string? originalTitle, string? overview, string? studio, string? certification, int? runtime,
         string[]? genres, ArrImage?[]? images, string? website, string? inCinemas,
-        string? digitalRelease, string? physicalRelease, MovieRatings? ratings) {
+        string? digitalRelease, string? physicalRelease, MovieRatings? ratings,
+        IReadOnlyList<ManagedPersonCredit>? credits = null) {
         var presentation = ArrPresentation.Map(overview, images, genres, runtime, certification);
         var dates = new Dictionary<string, string>();
         AddDate(dates, ManagerDiscoveryDates.TheatricalRelease, inCinemas);
@@ -59,7 +62,8 @@ internal sealed partial class RadarrLibrary {
             Dates: dates.Count == 0 ? null : dates,
             Urls: urls.Length == 0 ? null : urls,
             PosterUrl: presentation?.PosterUrl,
-            BackdropUrl: presentation?.BackdropUrl);
+            BackdropUrl: presentation?.BackdropUrl,
+            Credits: credits is { Count: > 0 } ? credits : null);
     }
 
     private static void AddDate(IDictionary<string, string> dates, string kind, string? value) {

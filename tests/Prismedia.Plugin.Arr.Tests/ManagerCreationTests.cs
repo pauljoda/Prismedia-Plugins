@@ -16,6 +16,7 @@ public sealed class ManagerCreationTests {
         Assert.Equal("Film", result.Candidate.Title);
         Assert.Equal("1001", result.Candidate.ExternalIds[ManagerProtocol.Tmdb]);
         Assert.Null(result.Existing);
+        Assert.DoesNotContain(fixture.Reads, path => path.StartsWith("credit?", StringComparison.Ordinal));
         Assert.Empty(fixture.Writes);
     }
     [Fact]
@@ -24,7 +25,29 @@ public sealed class ManagerCreationTests {
         var result = Assert.IsType<ManagedLookupResult>(await fixture.Call(ManagerCreation.Lookup, Work()));
         Assert.NotNull(result.Existing);
         Assert.DoesNotContain("movie/lookup/tmdb?tmdbId=1001", fixture.Reads);
+        Assert.Contains("credit?movieId=1", fixture.Reads);
         Assert.Empty(fixture.Writes);
+    }
+    [Fact]
+    public async Task ExistingLookupNormalizesPeopleCreditsWithoutImportingUnmappedCrew() {
+        using var fixture = new Fixture { Exists = true };
+
+        var result = Assert.IsType<ManagedLookupResult>(await fixture.Call(ManagerCreation.Lookup, Work()));
+
+        var credits = result.Candidate.Metadata!.Credits!;
+        var actor = Assert.Single(credits, credit => credit.Name == "Lead Actor");
+        Assert.Equal("Lead Actor", actor.Name);
+        Assert.Equal("Hero", actor.Character);
+        Assert.Equal("101", actor.ExternalIds![ManagerProtocol.Tmdb]);
+        Assert.Equal("https://image.tmdb.org/t/p/original/lead.jpg", actor.ProfileUrl);
+        var director = Assert.Single(credits, credit => credit.Role == ManagerCreditRoles.Director);
+        Assert.Equal("Director Person", director.Name);
+        Assert.True(director.SortOrder >= 1000);
+        var unidentified = Assert.Single(credits, credit => credit.Name == "Unidentified Actor");
+        Assert.Null(unidentified.ExternalIds);
+        Assert.NotNull(unidentified.SortOrder);
+        Assert.InRange(unidentified.SortOrder.Value, 0, 1_000_000);
+        Assert.DoesNotContain(credits, credit => credit.Name == "Camera Operator");
     }
     [Fact]
     public async Task NewMovieIsAddedUnmonitoredWithoutSearchOrCollectionMonitoring() {
@@ -116,6 +139,14 @@ public sealed class ManagerCreationTests {
         internal string MoviePath = "/library/film";
         internal List<JsonElement> Writes { get; } = [];
         internal List<string> Reads { get; } = [];
+        internal object?[] Credits { get; set; } = [
+            null,
+            new { personName = "Lead Actor", personTmdbId = 101, type = "cast", character = "Hero", order = 0,
+                images = new[] { new { coverType = "headshot", remoteUrl = "https://image.tmdb.org/t/p/original/lead.jpg", url = "/MediaCover/101/headshot.jpg" } } },
+            new { personName = "Unidentified Actor", personTmdbId = -1, type = "cast", character = "Extra", order = int.MaxValue, images = Array.Empty<object>() },
+            new { personName = "Director Person", personTmdbId = 202, type = "crew", job = "Director", order = 0, images = Array.Empty<object>() },
+            new { personName = "Camera Operator", personTmdbId = 303, type = "crew", job = "Camera Operator", order = 1, images = Array.Empty<object>() }
+        ];
         private readonly ConnectionContext connection = new(Guid.NewGuid(), "http://manager.test/", null, new Dictionary<string,string>(), new Dictionary<string,string> { [ArrClient.ApiKey] = "fixture-secret" });
         private readonly ArrClient client;
         private readonly RadarrLibrary adapter;
@@ -131,6 +162,7 @@ public sealed class ManagerCreationTests {
                 "movie?tmdbId=1001" => Response(Exists ? new[] { Movie() } : []),
                 "movie/lookup/tmdb?tmdbId=1001" => Response(new { title = "Film", year = 2024, tmdbId = ReturnedTmdb }),
                 "movie/1" => Response(Movie()),
+                "credit?movieId=1" => Response(Credits),
                 "qualityprofile" => Response(new[] { new { id = 2, name = "Chosen" } }),
                 "rootfolder" => Response(new[] { new { id = 3, path = "/library", accessible = Accessible } }),
                 _ => throw new InvalidOperationException("Unexpected read: " + path)

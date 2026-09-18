@@ -15,6 +15,25 @@ public static class ManagerDiscoveryDates {
 /// <summary>A bounded title search of one external manager's upstream catalog.</summary>
 public sealed record ManagedDiscoveryQuery(string EntityKind, string Query, int Limit);
 
+/// <summary>Canonical credit-role codes understood by Prismedia's shared people relationship model.</summary>
+public static class ManagerCreditRoles {
+    public const string Actor = "actor";
+    public const string Director = "director";
+    public const string Writer = "writer";
+    public const string Producer = "producer";
+    public const string Creator = "creator";
+    public const string Composer = "composer";
+}
+
+/// <summary>A normalized person credit supplied by an external manager during exact metadata review.</summary>
+public sealed record ManagedPersonCredit(
+    string Name,
+    string Role,
+    string? Character,
+    int? SortOrder,
+    IReadOnlyDictionary<string, string>? ExternalIds = null,
+    string? ProfileUrl = null);
+
 /// <summary>Optional normalized descriptive metadata supplied by an external manager catalog.</summary>
 public sealed record ManagedDiscoveryMetadata(
     string? OriginalTitle = null,
@@ -27,7 +46,8 @@ public sealed record ManagedDiscoveryMetadata(
     IReadOnlyDictionary<string, string>? Dates = null,
     IReadOnlyList<string>? Urls = null,
     string? PosterUrl = null,
-    string? BackdropUrl = null);
+    string? BackdropUrl = null,
+    IReadOnlyList<ManagedPersonCredit>? Credits = null);
 
 /// <summary>Manager-confirmed catalog candidate in Prismedia integration vocabulary.</summary>
 public sealed record ManagedDiscoveryCandidate(string EntityKind, string Title, int? Year,

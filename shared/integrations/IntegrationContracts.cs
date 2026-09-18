@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Prismedia.Plugin.Integrations;
 
@@ -55,7 +56,12 @@ public sealed record ConnectionContext(Guid Id, string BaseUrl, string? Expected
 /// <summary>Correlated host request with a separately versioned integration protocol.</summary>
 public sealed record IntegrationRequest(string Protocol, int ProtocolVersion, Guid InvocationId, string Operation, ConnectionContext Connection, JsonElement Input);
 /// <summary>Correlated success or safe failure emitted by an integration executable.</summary>
-public sealed record IntegrationResponse(string Protocol, int ProtocolVersion, Guid InvocationId, bool Ok, object? Result, string? Error);
+public sealed record IntegrationResponse(string Protocol, int ProtocolVersion, Guid InvocationId, bool Ok, object? Result, string? Error,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null);
+/// <summary>Machine-readable evidence classifications; an ordinary failure never implies remote removal.</summary>
+public static class IntegrationErrorCodes {
+    public const string ManagedItemNotFound = "managed-item-not-found";
+}
 /// <summary>Declared operation and media-kind support for one capability family.</summary>
 public sealed record Capability(string Kind, IReadOnlyList<string> Operations, IReadOnlyList<string> EntityKinds);
 /// <summary>Observed remote support; InstanceId is null when the upstream has no persistent installation identity.</summary>
@@ -85,4 +91,7 @@ public sealed record HttpArtifactDelivery(string Url, IReadOnlyDictionary<string
 public sealed record ResolvedSourceOffer(SourceSelection Selection, string OfferId, CatalogPublication Publication, CatalogOffer Offer, HttpArtifactDelivery Delivery);
 
 /// <summary>Actionable failure whose text is safe to expose to the connection owner.</summary>
-public sealed class IntegrationFailure(string message) : Exception(message);
+public sealed class IntegrationFailure(string message, string? code = null) : Exception(message) {
+    /// <summary>Optional classification backed by affirmative adapter evidence.</summary>
+    public string? Code { get; } = code;
+}

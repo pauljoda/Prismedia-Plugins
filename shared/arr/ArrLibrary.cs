@@ -43,7 +43,18 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
         if (request.Operation == ManagerProtocol.GetLibraryItem) {
             var input = Input<ManagedItemInput>(request);
             if (input.EntityKind != kind || input.ExpectedExternalIds is not { Count: > 0 and <= 64 }) throw new IntegrationFailure("Select a holding with its known metadata identities.");
-            var snapshot = await GetAsync(ParseId(input.RemoteId), cancellationToken);
+            ManagedItemSnapshot snapshot;
+            try {
+                snapshot = await GetAsync(ParseId(input.RemoteId), cancellationToken);
+            } catch (ArrHoldingNotFoundException) {
+                // A single 404 can mean a broken endpoint. A healthy full catalog must also
+                // confirm absence before the host may archive the retained local title.
+                var all = await ListAsync(cancellationToken);
+                if (all.Count > 100000 || all.Select(item => item.RemoteId).Distinct().Count() != all.Count
+                    || all.Any(item => item.RemoteId == input.RemoteId))
+                    throw new IntegrationFailure("The connected library changed during this check. Its previous state is retained.");
+                throw new IntegrationFailure("This title was removed from the connected library.", IntegrationErrorCodes.ManagedItemNotFound);
+            }
             if (input.ExpectedExternalIds.Any(pair => snapshot.Item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
                 throw new IntegrationFailure("The remote item now has different metadata identities. Refresh the library before using it.");
             return snapshot;
@@ -91,3 +102,5 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
 internal sealed record ArrStatus(string AppName, string Version);
 internal sealed record ArrProfile(int Id, string Name);
 internal sealed record ArrRoot(int Id, string Path, bool? Accessible);
+/// <summary>Internal read evidence; only a separately confirmed catalog observation can classify removal.</summary>
+internal sealed class ArrHoldingNotFoundException : Exception;

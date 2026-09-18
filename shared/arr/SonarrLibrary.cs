@@ -8,7 +8,8 @@ internal sealed partial class SonarrLibrary(ArrClient client) : ArrLibrary(clien
     protected override async Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken) =>
         (await Client.GetAsync<Series[]>("series", cancellationToken)).Select(Summary).ToArray();
     protected override async Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken) {
-        var series = await Client.GetAsync<Series>($"series/{id}", cancellationToken);
+        var series = await Client.GetOptionalAsync<Series>($"series/{id}", cancellationToken)
+            ?? throw new ArrHoldingNotFoundException();
         if (series.Id != id) throw new IntegrationFailure("The application returned another series.");
         var files = await Client.GetAsync<EpisodeFile[]>($"episodefile?seriesId={id}", cancellationToken);
         var episodes = await Client.GetAsync<Episode[]>($"episode?seriesId={id}", cancellationToken);

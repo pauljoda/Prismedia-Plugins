@@ -9,7 +9,8 @@ internal sealed partial class RadarrLibrary {
         if (existing.Length > 1) throw new IntegrationFailure("The manager returned ambiguous holdings for this identity.");
         if (existing.Length == 1) {
             var snapshot = await GetAsync(ParseId(Id(existing[0].Id)), token);
-            return new(Candidate(existing[0], input), snapshot);
+            var credits = await CreditsAsync(existing[0].Id, token);
+            return new(Candidate(existing[0], input, credits), snapshot);
         }
         var found = await Client.GetAsync<MovieLookup>($"movie/lookup/tmdb?tmdbId={tmdb}", token);
         var candidate = Candidate(found, input);
@@ -71,12 +72,15 @@ internal sealed partial class RadarrLibrary {
             throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
         return new(ManagerProtocol.Movie, title, year, ids, DiscoveryMetadata(movie));
     }
-    private static ManagedCandidate Candidate(Movie movie, ManagedLookupInput expected) {
+    private static ManagedCandidate Candidate(
+        Movie movie,
+        ManagedLookupInput expected,
+        IReadOnlyList<ManagedPersonCredit>? credits = null) {
         var ids = Identities(ManagerProtocol.Tmdb, movie.TmdbId, movie.ImdbId);
         if (string.IsNullOrWhiteSpace(movie.Title) || movie.Title.Length > 512 || movie.Year is < 0 or > 9999
             || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))
             throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
-        return new(ManagerProtocol.Movie, movie.Title, movie.Year, ids, DiscoveryMetadata(movie));
+        return new(ManagerProtocol.Movie, movie.Title, movie.Year, ids, DiscoveryMetadata(movie, credits));
     }
     private static bool InsideRemoteRoot(string path, string root) {
         // This is the remote path namespace. Local mapping and canonical byte checks remain host-owned.

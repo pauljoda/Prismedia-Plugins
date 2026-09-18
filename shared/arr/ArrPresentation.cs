@@ -6,6 +6,7 @@ namespace Prismedia.Plugin.Arr;
 internal static class ArrCoverType {
     internal const string Poster = "poster";
     internal const string Fanart = "fanart";
+    internal const string Headshot = "headshot";
 }
 
 /// <summary>External Arr artwork shape; only its public remote URL is eligible for presentation.</summary>
@@ -30,6 +31,10 @@ internal static class ArrPresentation {
             ? null
             : presentation;
     }
+
+    /// <summary>Returns the public upstream URL for the first image with the requested Arr role.</summary>
+    internal static string? PublicImage(IReadOnlyList<ArrImage?>? images, string coverType) =>
+        Image(images, coverType);
 
     private static string? Image(IReadOnlyList<ArrImage?>? images, string coverType) =>
         images?.Where(image => image is not null && string.Equals(image.CoverType, coverType, StringComparison.OrdinalIgnoreCase))

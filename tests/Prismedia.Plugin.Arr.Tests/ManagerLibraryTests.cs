@@ -7,6 +7,32 @@ namespace Prismedia.Plugin.Arr.Tests;
 
 public sealed class ManagerLibraryTests {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemovalRequiresAHealthyCompleteLibraryToConfirmTheMissingHolding(bool sonarr) {
+        using var fixture = new Fixture(sonarr);
+        var collection = sonarr ? "series" : "movie";
+        var input = new ManagedItemInput(sonarr ? ManagerProtocol.Series : ManagerProtocol.Movie, "1",
+            new Dictionary<string, string> { [sonarr ? ManagerProtocol.Tvdb : ManagerProtocol.Tmdb] = "1001" });
+        fixture.Statuses[collection + "/1"] = HttpStatusCode.NotFound;
+        fixture.Responses[collection] = Array.Empty<object>();
+
+        var removed = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, input));
+
+        Assert.Equal(IntegrationErrorCodes.ManagedItemNotFound, removed.Code);
+        fixture.Statuses[collection] = HttpStatusCode.ServiceUnavailable;
+        var offline = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, input));
+        Assert.Null(offline.Code);
+        fixture.Statuses[collection] = HttpStatusCode.OK;
+        fixture.Responses[collection] = sonarr
+            ? new[] { new { id = 1, title = "Series", year = 2000, tvdbId = 1001, qualityProfileId = 1, monitored = false, path = "/library/series" } }
+            : new[] { Movie(1) };
+        var inconsistent = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, input));
+        Assert.Null(inconsistent.Code);
+        Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+    }
+
+    [Theory]
     [InlineData(false, "movie")]
     [InlineData(true, "video-series")]
     public async Task ListsEveryProviderLibraryWithStableRootIdentity(bool sonarr, string expectedKind) {
@@ -224,6 +250,7 @@ public sealed class ManagerLibraryTests {
 
     private sealed class Fixture : HttpMessageHandler {
         internal Dictionary<string, object> Responses { get; } = [];
+        internal Dictionary<string, HttpStatusCode> Statuses { get; } = [];
         internal List<HttpRequestMessage> Requests { get; } = [];
         internal HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
         private readonly ConnectionContext connection = new(Guid.NewGuid(), "http://manager.test/radarr/", null, new Dictionary<string, string>(), new Dictionary<string, string> { [ArrClient.ApiKey] = "test-secret" });
@@ -239,7 +266,9 @@ public sealed class ManagerLibraryTests {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
             Requests.Add(request);
             var path = request.RequestUri!.PathAndQuery.Split("/api/v3/")[1];
-            return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent(JsonSerializer.Serialize(Responses[path], IntegrationProtocol.Json)) });
+            return Task.FromResult(new HttpResponseMessage(Statuses.GetValueOrDefault(path, Status)) {
+                Content = new StringContent(JsonSerializer.Serialize(Responses.GetValueOrDefault(path), IntegrationProtocol.Json))
+            });
         }
     }
 }

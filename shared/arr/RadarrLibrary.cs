@@ -8,7 +8,8 @@ internal sealed partial class RadarrLibrary(ArrClient client) : ArrLibrary(clien
     protected override async Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken) =>
         (await Client.GetAsync<Movie[]>("movie", cancellationToken)).Select(Summary).ToArray();
     protected override async Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken) {
-        var movie = await Client.GetAsync<Movie>($"movie/{id}", cancellationToken);
+        var movie = await Client.GetOptionalAsync<Movie>($"movie/{id}", cancellationToken)
+            ?? throw new ArrHoldingNotFoundException();
         if (movie.Id != id) throw new IntegrationFailure("The application returned another movie.");
         var files = new List<ManagedLibraryFile>();
         if (movie.HasFile) {

@@ -31,7 +31,7 @@ public static class IntegrationProgram {
                     .Replace(Uri.EscapeDataString(secret), "[redacted]", StringComparison.Ordinal);
             }
             response = new(IntegrationProtocol.Name, IntegrationProtocol.Version, request?.InvocationId ?? Guid.Empty, false, null,
-                message.Length <= 4096 ? message : message[..4096]);
+                message.Length <= 4096 ? message : message[..4096], (error as IntegrationFailure)?.Code);
         }
         Console.WriteLine(JsonSerializer.Serialize(response, IntegrationProtocol.Json));
     }
