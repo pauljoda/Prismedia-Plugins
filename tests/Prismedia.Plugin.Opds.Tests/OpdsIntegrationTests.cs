@@ -85,6 +85,35 @@ public sealed class OpdsIntegrationTests {
         Assert.DoesNotContain(IntegrationOperations.Search, (await integration.ProbeAsync(default)).Capabilities[0].Operations);
     }
 
+    [Fact]
+    public async Task CrossOriginOpenSearchTemplateDoesNotDisableBrowsing() {
+        var requests = new List<Uri>();
+        using var http = new OpdsHttpClient(Connection, new Handler(request => {
+            requests.Add(request.RequestUri!);
+            if (request.RequestUri!.AbsolutePath.EndsWith("description")) return Ok("""
+              <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><Url type="application/atom+xml" template="http://other.test/ebooks/search.opds/?query={searchTerms}" /></OpenSearchDescription>
+              """);
+            return Ok("""
+              <feed xmlns="http://www.w3.org/2005/Atom"><title>Books</title><link rel="search" type="application/opensearchdescription+xml" href="description"/><entry><id>one</id><title>One</title><link rel="http://opds-spec.org/acquisition" type="application/epub+zip" href="one.epub"/></entry></feed>
+              """);
+        }));
+        var integration = new OpdsIntegration(http, Connection);
+        var probe = await integration.ProbeAsync(default);
+        Assert.DoesNotContain(IntegrationOperations.Search, probe.Capabilities[0].Operations);
+        Assert.Single((await integration.DiscoverAsync(new(MediaKinds.Book, null, null, null, 25), false, default)).Items);
+        Assert.All(requests, address => Assert.Equal("catalog.test", address.Host));
+    }
+
+    [Fact]
+    public async Task EpubVariantUrlKeepsItsDeclaredImportFormat() {
+        const string feed = "<feed xmlns='http://www.w3.org/2005/Atom'><title>Books</title><entry><id>one</id><title>One</title><link rel='http://opds-spec.org/acquisition' type='application/epub+zip' href='84.epub.noimages'/></entry></feed>";
+        using var http = new OpdsHttpClient(Connection, new Handler(_ => Ok(feed)));
+        var integration = new OpdsIntegration(http, Connection);
+        var choice = Assert.Single((await integration.DiscoverAsync(new(MediaKinds.Book, null, null, null, 25), false, default)).Items);
+        var resolved = await integration.ResolveAsync(new(choice.Selection, Assert.Single(choice.Offers).Id), default);
+        Assert.Equal("84.epub", resolved.Delivery.SuggestedFileName);
+    }
+
     private static HttpResponseMessage Ok(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
     private sealed class Handler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(respond(request));

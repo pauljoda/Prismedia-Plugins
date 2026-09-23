@@ -64,8 +64,7 @@ internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext con
         var offer = entry.Item.Offers.FirstOrDefault(item => item.Id == input.OfferId && item.Access == AcquisitionAccess.Download);
         if (offer is null || !entry.Acquisitions.TryGetValue(input.OfferId, out var acquisition)) throw new IntegrationFailure("This offer is not a direct full-publication download.");
         http.RequireScope(acquisition.Url.AbsoluteUri);
-        var filename = Path.GetFileName(acquisition.Url.LocalPath);
-        if (string.IsNullOrWhiteSpace(filename) || !Path.HasExtension(filename)) filename = "publication" + Extension(acquisition.MediaType);
+        var filename = SuggestedFileName(acquisition.Url, acquisition.MediaType);
         return new(input.Selection, offer.Id, entry.Item.Publication, offer, new(acquisition.Url.AbsoluteUri, http.Headers, filename, offer.ByteSize));
     }
 
@@ -94,7 +93,8 @@ internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext con
         if (template is null) return null;
         template = template.Replace("%7B", "{", StringComparison.OrdinalIgnoreCase).Replace("%7D", "}", StringComparison.OrdinalIgnoreCase);
         if (!SupportedTemplate(template)) return null;
-        http.RequireScope(ExpandSearch(template, "probe"));
+        if (!Uri.TryCreate(ExpandSearch(template, "probe"), UriKind.Absolute, out var searchAddress)
+            || !OpdsParser.SameOrigin(new Uri(connection.BaseUrl), searchAddress)) return null;
         return template;
     }
 
@@ -105,6 +105,14 @@ internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext con
     }
     private static string ExpandSearch(string template, string query) => template.Replace(SearchTerms, Uri.EscapeDataString(query), StringComparison.Ordinal)
         .Replace(QueryVariable, "?query=" + Uri.EscapeDataString(query), StringComparison.Ordinal);
+    private static string SuggestedFileName(Uri address, string? mediaType) {
+        var filename = Path.GetFileName(address.LocalPath);
+        var extension = Extension(mediaType);
+        if (extension == ".bin") return string.IsNullOrWhiteSpace(filename) || !Path.HasExtension(filename) ? "publication.bin" : filename;
+        if (filename.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) return filename;
+        var variant = filename.IndexOf(extension + ".", StringComparison.OrdinalIgnoreCase);
+        return variant >= 0 ? filename[..(variant + extension.Length)] : "publication" + extension;
+    }
     private static string Extension(string? type) => type switch {
         "application/epub+zip" => ".epub", "application/pdf" => ".pdf", "application/vnd.comicbook+zip" or "application/x-cbz" => ".cbz",
         "application/vnd.comicbook-rar" or "application/x-cbr" => ".cbr", "application/x-mobipocket-ebook" => ".mobi", "application/vnd.amazon.ebook" => ".azw", _ => ".bin"

@@ -620,10 +620,10 @@
   author: Prismedia Community
 - id: opds
   name: OPDS Catalogs
-  version: 1.0.1
-  date: '2026-09-18'
+  version: 1.0.3
+  date: '2026-09-23'
   path: plugins/opds/opds.zip
-  sha256: ce1a3d35725c63f08e1274b85d48f28971f619486e9c6a8540b2f727d2166053
+  sha256: ee7011178c202c83de34ce287fb106eac2493e631de0eb292a03271ad548e69d
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
