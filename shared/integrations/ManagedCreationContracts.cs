@@ -7,7 +7,7 @@ public static class ManagerCreation {
 }
 /// <summary>One finite child target requested beneath a managed container, before remote IDs are resolved.</summary>
 public sealed record ManagedLookupTarget(string EntityKind, IReadOnlyDictionary<string, string> ExternalIds,
-    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null);
+    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);
 /// <summary>Exact metadata identities, independent of an external application's local item IDs.</summary>
 public sealed record ManagedLookupInput(string EntityKind, IReadOnlyDictionary<string, string> ExternalIds,
     IReadOnlyList<ManagedLookupTarget>? Targets = null);
@@ -17,7 +17,7 @@ public sealed record ManagedCandidate(string EntityKind, string Title, int? Year
 /// <summary>One manager-resolved stable child identity corresponding to an exact requested target.</summary>
 public sealed record ManagedResolvedTarget(string RemoteId, string EntityKind,
     IReadOnlyDictionary<string, string> ExternalIds, int? SeasonNumber = null, int? EpisodeNumber = null,
-    int? AbsoluteNumber = null);
+    int? AbsoluteNumber = null, string? IssueLabel = null);
 /// <summary>Read-only lookup can reconcile an uncertain creation without repeating its mutation.</summary>
 public sealed record ManagedLookupResult(ManagedCandidate Candidate, ManagedItemSnapshot? Existing,
     IReadOnlyList<ManagedResolvedTarget>? Targets = null);

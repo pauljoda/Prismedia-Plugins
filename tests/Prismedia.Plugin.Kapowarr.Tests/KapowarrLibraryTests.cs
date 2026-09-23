@@ -27,7 +27,7 @@ public sealed class KapowarrLibraryTests {
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
         Assert.Null(probe.InstanceId);
         Assert.Equal("V1.3.2", probe.Version);
-        Assert.Equal([ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request],
+        Assert.Equal([ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup],
             Assert.Single(probe.Capabilities, c => c.Kind == ManagerProtocol.ExternalManager).Operations);
         Assert.All(probe.Capabilities, c => Assert.Equal([KapowarrCodes.ComicSeries], c.EntityKinds));
         Assert.All(fixture.Requests, r => Assert.Equal(HttpMethod.Get, r.Method));
@@ -105,11 +105,36 @@ public sealed class KapowarrLibraryTests {
         var issue = Assert.Single(snapshot.ComicIssues!);
         Assert.Equal("1", issue.RemoteId);
         Assert.Equal("12.5", issue.IssueLabel);
+        Assert.Equal("4000-2001", issue.ExternalIds![KapowarrCodes.ComicVine]);
         Assert.True(issue.Monitored);
         fixture.Results["rootfolder"] = new[] { new { id = 1, folder = "/comics/", size = 1000, free = 500 } };
         var options = Assert.IsType<ManagerOptions>(await fixture.Call(ManagerProtocol.Options, new ManagerOptionsInput(KapowarrCodes.ComicSeries)));
         Assert.Empty(options.Profiles);
         Assert.Null(Assert.Single(options.Roots).Accessible);
+    }
+
+    [Fact]
+    public async Task LookupPinsOneExistingIssueByComicVineIdentityAndExactLabelWithoutMutation() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = new[] { Volume(1), Volume(2) };
+        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "½", []), Issue(2, "0.5", [])]);
+        var work = new ManagedLookupInput(KapowarrCodes.ComicSeries,
+            new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4050-1001" },
+            [new(MediaKinds.Comic, new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4000-2001" }, IssueLabel: "½")]);
+        var result = Assert.IsType<ManagedLookupResult>(await fixture.Call(ManagerCreation.Lookup, work));
+        Assert.Equal("1", result.Existing!.Item.RemoteId);
+        var resolved = Assert.Single(result.Targets!);
+        Assert.Equal("1", resolved.RemoteId);
+        Assert.Equal("½", resolved.IssueLabel);
+        Assert.Equal("4000-2001", resolved.ExternalIds[KapowarrCodes.ComicVine]);
+        Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Lookup,
+            work with { Targets = [work.Targets![0] with { IssueLabel = "0.5" }] }));
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Lookup,
+            work with { Targets = [work.Targets![0] with { ExternalIds = new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4000-9999" } }] }));
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Lookup,
+            work with { ExternalIds = new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4050-9999" } }));
     }
 
     [Fact]

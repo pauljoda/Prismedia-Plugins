@@ -16,13 +16,14 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             throw new IntegrationFailure("Kapowarr does not report a persistent installation ID. Reconnect it with its current identity policy.");
         if (request.Operation == IntegrationOperations.Probe) return new ProbeResult(null, "Kapowarr", about.Version, [
             new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries], [KapowarrCodes.ComicSeries]),
-            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request], [KapowarrCodes.ComicSeries])
+            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup], [KapowarrCodes.ComicSeries])
         ]);
         if (request.Operation == ManagerProtocol.SearchLibrary) return await SearchAsync(request, token);
         if (request.Operation == ManagerProtocol.GetLibraryItem) return await GetAsync(Input<ManagedItemInput>(request), token);
         if (request.Operation == ManagerControls.Reconcile) return await ReconcileAsync(Input<ReconcileManagedInput>(request), token);
         if (request.Operation == ManagerControls.Configure) return await ConfigureAsync(Input<ConfigureManagedInput>(request), token);
         if (request.Operation == ManagerControls.Request) return await RequestAsync(Input<RequestManagedInput>(request), token);
+        if (request.Operation == ManagerCreation.Lookup) return await LookupAsync(Input<ManagedLookupInput>(request), token);
         if (request.Operation == ManagerProtocol.ListLibraries) {
             var roots = await client.GetAsync<KapowarrRoot[]>("rootfolder", token);
             if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw Invalid();
@@ -115,6 +116,35 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
         return new(page, items.Length > input.Limit ? scope + ":" + page[^1].RemoteId : null);
     }
 
+    private async Task<ManagedLookupResult> LookupAsync(ManagedLookupInput input, CancellationToken token) {
+        RequireKind(input.EntityKind);
+        if (input.ExternalIds is not { Count: 1 }
+            || !input.ExternalIds.TryGetValue(KapowarrCodes.ComicVine, out var seriesId)
+            || !ComicVineId(seriesId, KapowarrCodes.ComicVineSeriesPrefix)
+            || input.Targets is not { Count: 1 }) throw Invalid();
+        var target = input.Targets[0];
+        if (target.EntityKind != MediaKinds.Comic || target.ExternalIds is not { Count: 1 }
+            || !target.ExternalIds.TryGetValue(KapowarrCodes.ComicVine, out var issueId)
+            || !ComicVineId(issueId, KapowarrCodes.ComicVineIssuePrefix)
+            || string.IsNullOrWhiteSpace(target.IssueLabel) || target.IssueLabel.Length > 128
+            || target.SeasonNumber is not null || target.EpisodeNumber is not null || target.AbsoluteNumber is not null)
+            throw Invalid();
+        var volumes = await client.GetAsync<KapowarrVolume[]>("volumes", token);
+        if (volumes.Length > 100000 || volumes.Select(volume => volume.Id).Distinct().Count() != volumes.Length) throw Invalid();
+        var matches = volumes.Where(volume => KapowarrCodes.ComicVineSeriesPrefix + Id(volume.ComicVineId) == seriesId).ToArray();
+        if (matches.Length != 1)
+            throw new IntegrationFailure("The exact Comic Vine run is missing or ambiguous in Kapowarr.");
+        var item = Item(matches[0], null);
+        var snapshot = await GetAsync(new(item.EntityKind, item.RemoteId, item.ExternalIds), token);
+        var issues = snapshot.ComicIssues!.Where(issue => issue.ExternalIds?.GetValueOrDefault(KapowarrCodes.ComicVine) == issueId
+            && issue.IssueLabel == target.IssueLabel).ToArray();
+        if (issues.Length != 1)
+            throw new IntegrationFailure("The exact Comic Vine issue is missing or its label changed in Kapowarr.");
+        var issue = issues[0];
+        return new(new(item.EntityKind, item.Title, item.Year, item.ExternalIds), snapshot,
+            [new(issue.RemoteId, MediaKinds.Comic, issue.ExternalIds!, IssueLabel: issue.IssueLabel)]);
+    }
+
     private async Task<ManagedItemSnapshot> GetAsync(ManagedItemInput input, CancellationToken token) {
         RequireKind(input.EntityKind);
         if (input.ExpectedExternalIds is not { Count: > 0 and <= 64 }) throw Invalid();
@@ -127,7 +157,8 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             if (issue.VolumeId != volume.Id || issue.ComicVineId <= 0) throw Invalid();
             var label = Required(issue.IssueNumber, 128);
             return new ManagedComicIssue(Id(issue.Id), label,
-                string.IsNullOrWhiteSpace(issue.Title) ? "Issue " + label : Required(issue.Title, 512), issue.Monitored);
+                string.IsNullOrWhiteSpace(issue.Title) ? "Issue " + label : Required(issue.Title, 512), issue.Monitored,
+                new Dictionary<string, string> { [KapowarrCodes.ComicVine] = KapowarrCodes.ComicVineIssuePrefix + Id(issue.ComicVineId) });
         }).ToArray();
         var files = Files(volume);
         return new(item with { RemoteFileCount = files.Count }, Required(volume.Folder, 8192), files, DateTimeOffset.UtcNow, issues);
@@ -157,11 +188,13 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
     private static ManagedLibraryItem Item(KapowarrVolume volume, int? fileCount) {
         if (volume.Year is < 0 or > 9999) throw Invalid();
         return new(Id(volume.Id), KapowarrCodes.ComicSeries, Required(volume.Title, 512), volume.Year,
-            new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4050-" + Id(volume.ComicVineId) }, volume.Monitored, null, fileCount);
+            new Dictionary<string, string> { [KapowarrCodes.ComicVine] = KapowarrCodes.ComicVineSeriesPrefix + Id(volume.ComicVineId) }, volume.Monitored, null, fileCount);
     }
     private static void RequireKind(string kind) { if (kind != KapowarrCodes.ComicSeries) throw new IntegrationFailure("Choose a comic series from the connected library."); }
     private static string Id(int value) => value > 0 ? value.ToString(CultureInfo.InvariantCulture) : throw Invalid();
     private static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw Invalid();
+    private static bool ComicVineId(string value, string prefix) => value.StartsWith(prefix, StringComparison.Ordinal)
+        && int.TryParse(value.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0;
     private static string Required(string? value, int limit) => !string.IsNullOrWhiteSpace(value) && value.Length <= limit && !value.Any(char.IsControl) ? value : throw Invalid();
     private static string LibraryLabel(string path) {
         var trimmed = path.TrimEnd('/', '\\');

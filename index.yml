@@ -955,10 +955,10 @@
   author: Prismedia Community
 - id: kapowarr
   name: Kapowarr
-  version: 1.3.0
+  version: 1.4.0
   date: '2026-09-22'
   path: plugins/kapowarr/kapowarr.zip
-  sha256: 85f8bb4743627697d073c97c31432009105c167b527a01c5077ddcd10fe6207e
+  sha256: 43bbb5b13a28a0dad75774041b2683a1481d443a9dd88a151fb2e54f9d5ee0fe
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -987,6 +987,7 @@
           - reconcile-managed
           - configure-managed
           - request-managed
+          - lookup-managed
         entityKinds:
           - comic-series
     settings: []
