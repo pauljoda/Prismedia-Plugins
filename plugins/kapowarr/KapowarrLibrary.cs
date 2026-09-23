@@ -5,7 +5,7 @@ using System.Text.Json;
 using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Kapowarr;
 
-/// <summary>Reads existing comic runs and exact issue-to-file associations without changing remote state.</summary>
+/// <summary>Reads existing comic runs, exact issue associations, and reviewed issue state without changing remote state.</summary>
 internal sealed class KapowarrLibrary(KapowarrClient client) {
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken token) {
         var about = await client.GetAsync<KapowarrAbout>("system/about", token);
@@ -16,10 +16,11 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             throw new IntegrationFailure("Kapowarr does not report a persistent installation ID. Reconnect it with its current identity policy.");
         if (request.Operation == IntegrationOperations.Probe) return new ProbeResult(null, "Kapowarr", about.Version, [
             new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries], [KapowarrCodes.ComicSeries]),
-            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options], [KapowarrCodes.ComicSeries])
+            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, ManagerControls.Reconcile], [KapowarrCodes.ComicSeries])
         ]);
         if (request.Operation == ManagerProtocol.SearchLibrary) return await SearchAsync(request, token);
         if (request.Operation == ManagerProtocol.GetLibraryItem) return await GetAsync(Input<ManagedItemInput>(request), token);
+        if (request.Operation == ManagerControls.Reconcile) return await ReconcileAsync(Input<ReconcileManagedInput>(request), token);
         if (request.Operation == ManagerProtocol.ListLibraries) {
             var roots = await client.GetAsync<KapowarrRoot[]>("rootfolder", token);
             if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw Invalid();
@@ -34,7 +35,27 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw Invalid();
             return new ManagerOptions([], roots.Select(root => new ManagerRootChoice(Id(root.Id), Required(root.Folder, 8192), null)).ToArray());
         }
-        throw new IntegrationFailure("This Kapowarr connection supports existing library reads only.");
+        throw new IntegrationFailure("This Kapowarr connection supports existing library reads and issue observation only.");
+    }
+
+    private async Task<ManagedControlState> ReconcileAsync(ReconcileManagedInput input, CancellationToken token) {
+        if (input.Scope?.Item is null || input.Scope.Targets is not { Count: > 0 and <= 10000 }
+            || input.Scope.Targets.Select(target => target.RemoteId).Distinct(StringComparer.Ordinal).Count() != input.Scope.Targets.Count
+            || input.Scope.Targets.Any(target => target.EntityKind != MediaKinds.Comic || target.SeasonNumber is not null
+                || target.EpisodeNumber is not null || target.AbsoluteNumber is not null
+                || string.IsNullOrWhiteSpace(target.IssueLabel) || target.IssueLabel.Length > 128)) throw Invalid();
+        var snapshot = await GetAsync(input.Scope.Item, token);
+        var issues = snapshot.ComicIssues!.ToDictionary(issue => issue.RemoteId, StringComparer.Ordinal);
+        var targets = input.Scope.Targets.Select(target => {
+            if (!issues.TryGetValue(target.RemoteId, out var issue) || issue.IssueLabel != target.IssueLabel)
+                throw new IntegrationFailure("The selected comic issue changed. Refresh the connected library before using manager controls.");
+            return new ManagedTargetMonitoring(target, issue.Monitored);
+        }).ToArray();
+        var command = input.Command is { } reference
+            ? new ManagedCommandSnapshot(reference, ManagerControls.Unknown, "Kapowarr cannot establish this command's original outcome.")
+            : null;
+        return new(snapshot.Item, snapshot.Path, targets,
+            new(false, false, false, "Issue actions are not available for this connection yet."), command);
     }
 
     private async Task<ManagedLibraryPage> SearchAsync(IntegrationRequest request, CancellationToken token) {

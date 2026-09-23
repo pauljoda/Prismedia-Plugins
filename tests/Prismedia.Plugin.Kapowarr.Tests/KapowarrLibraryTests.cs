@@ -22,12 +22,12 @@ public sealed class KapowarrLibraryTests {
     }
 
     [Fact]
-    public async Task ProbeDeclaresOnlyExistingLibraryReadsWithoutInventingInstallationIdentity() {
+    public async Task ProbeDeclaresReadOnlyIssueObservationWithoutInventingInstallationIdentity() {
         using var fixture = new Fixture();
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
         Assert.Null(probe.InstanceId);
         Assert.Equal("V1.3.2", probe.Version);
-        Assert.Equal([ManagerProtocol.Options], Assert.Single(probe.Capabilities, c => c.Kind == ManagerProtocol.ExternalManager).Operations);
+        Assert.Equal([ManagerProtocol.Options, ManagerControls.Reconcile], Assert.Single(probe.Capabilities, c => c.Kind == ManagerProtocol.ExternalManager).Operations);
         Assert.All(probe.Capabilities, c => Assert.Equal([KapowarrCodes.ComicSeries], c.EntityKinds));
         Assert.All(fixture.Requests, r => Assert.Equal(HttpMethod.Get, r.Method));
     }
@@ -121,6 +121,27 @@ public sealed class KapowarrLibraryTests {
         fixture.Results["volumes/1"] = Volume(1, [new { id = 1, volume_id = 1, comicvine_id = 2001,
             issue_number = "1", title = "Issue 1", files = Array.Empty<object>() }]);
         await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, Input));
+    }
+
+    [Fact]
+    public async Task ReconcileRequiresTheExactIssueLabelAndReturnsNoWriteCapability() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "12.5", [], monitored: true), Issue(2, "13", [])]);
+        var target = new ManagedControlTarget("1", MediaKinds.Comic, IssueLabel: "12.5");
+        var scope = new ManagedControlScope(Input, [target]);
+        var state = Assert.IsType<ManagedControlState>(await fixture.Call(ManagerControls.Reconcile, new ReconcileManagedInput(scope)));
+        Assert.Null(state.Item.ProfileId);
+        Assert.True(Assert.Single(state.Targets).Monitored);
+        Assert.Equal(target, state.Targets[0].Target);
+        Assert.False(state.Capabilities.CanSearch);
+        Assert.False(state.Capabilities.CanChangeMonitoring);
+        Assert.False(state.Capabilities.CanChangeProfile);
+        Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Reconcile,
+            new ReconcileManagedInput(scope with { Targets = [target with { IssueLabel = "12" }] })));
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Reconcile,
+            new ReconcileManagedInput(scope with { Targets = [target with { RemoteId = "2" }] })));
     }
 
     [Theory]

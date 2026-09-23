@@ -17,7 +17,7 @@ public static class ManagerControls {
 }
 /// <summary>Exact target identity and numbering, independently of current bytes.</summary>
 public sealed record ManagedControlTarget(string RemoteId, string EntityKind,
-    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null);
+    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);
 /// <summary>A pinned work and finite targets, never an implicit entire-series request.</summary>
 public sealed record ManagedControlScope(ManagedItemInput Item, IReadOnlyList<ManagedControlTarget> Targets);
 /// <summary>Current monitoring of one selected target.</summary>
