@@ -22,12 +22,13 @@ public sealed class KapowarrLibraryTests {
     }
 
     [Fact]
-    public async Task ProbeDeclaresReadOnlyIssueObservationWithoutInventingInstallationIdentity() {
+    public async Task ProbeDeclaresExactIssueControlsWithoutInventingInstallationIdentity() {
         using var fixture = new Fixture();
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
         Assert.Null(probe.InstanceId);
         Assert.Equal("V1.3.2", probe.Version);
-        Assert.Equal([ManagerProtocol.Options, ManagerControls.Reconcile], Assert.Single(probe.Capabilities, c => c.Kind == ManagerProtocol.ExternalManager).Operations);
+        Assert.Equal([ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request],
+            Assert.Single(probe.Capabilities, c => c.Kind == ManagerProtocol.ExternalManager).Operations);
         Assert.All(probe.Capabilities, c => Assert.Equal([KapowarrCodes.ComicSeries], c.EntityKinds));
         Assert.All(fixture.Requests, r => Assert.Equal(HttpMethod.Get, r.Method));
     }
@@ -124,7 +125,7 @@ public sealed class KapowarrLibraryTests {
     }
 
     [Fact]
-    public async Task ReconcileRequiresTheExactIssueLabelAndReturnsNoWriteCapability() {
+    public async Task ReconcileRequiresTheExactIssueLabelAndExposesSingleIssueControls() {
         using var fixture = new Fixture();
         fixture.Results["volumes/1"] = Volume(1, [Issue(1, "12.5", [], monitored: true), Issue(2, "13", [])]);
         var target = new ManagedControlTarget("1", MediaKinds.Comic, IssueLabel: "12.5");
@@ -133,8 +134,8 @@ public sealed class KapowarrLibraryTests {
         Assert.Null(state.Item.ProfileId);
         Assert.True(Assert.Single(state.Targets).Monitored);
         Assert.Equal(target, state.Targets[0].Target);
-        Assert.False(state.Capabilities.CanSearch);
-        Assert.False(state.Capabilities.CanChangeMonitoring);
+        Assert.True(state.Capabilities.CanSearch);
+        Assert.True(state.Capabilities.CanChangeMonitoring);
         Assert.False(state.Capabilities.CanChangeProfile);
         Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
 
@@ -142,6 +143,47 @@ public sealed class KapowarrLibraryTests {
             new ReconcileManagedInput(scope with { Targets = [target with { IssueLabel = "12" }] })));
         await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Reconcile,
             new ReconcileManagedInput(scope with { Targets = [target with { RemoteId = "2" }] })));
+    }
+
+    [Fact]
+    public async Task MonitoringWritesOnlyTheReviewedIssueAndRejectsChangedState() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "½", [], monitored: false), Issue(2, "12.5", [], monitored: true)]);
+        fixture.Results["issues/1"] = Issue(1, "½", [], monitored: true);
+        var scope = new ManagedControlScope(Input, [new("1", MediaKinds.Comic, IssueLabel: "½")]);
+        var input = new ConfigureManagedInput(Guid.NewGuid(), scope, "/comics/Comic", null,
+            new Dictionary<string, bool> { ["1"] = false }, new(Monitored: true));
+        Assert.Equal(ManagerControls.Applied, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Configure, input)).Outcome);
+        var write = Assert.Single(fixture.Requests, request => request.Method == HttpMethod.Put);
+        Assert.Equal("/kapowarr/api/issues/1", write.RequestUri!.AbsolutePath);
+        Assert.Equal("{\"monitored\":true}", Assert.Single(fixture.Bodies));
+        fixture.Requests.Clear();
+        fixture.Bodies.Clear();
+        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "½", [], monitored: true), Issue(2, "12.5", [], monitored: true)]);
+        Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Configure, input)).Outcome);
+        Assert.DoesNotContain(fixture.Requests, request => request.Method == HttpMethod.Put);
+    }
+
+    [Fact]
+    public async Task SearchQueuesOnlyOneReviewedIssueAndNeverClaimsTaskCompletion() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "½", []), Issue(2, "12.5", [])]);
+        fixture.Results["system/tasks"] = new { id = 17 };
+        var scope = new ManagedControlScope(Input, [new("2", MediaKinds.Comic, IssueLabel: "12.5")]);
+        var input = new RequestManagedInput(Guid.NewGuid(), scope, "/comics/Comic", null);
+        var result = Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Request, input));
+        Assert.Equal(ManagerControls.Accepted, result.Outcome);
+        Assert.Equal("17", result.Command!.Reference.Id);
+        Assert.Equal(ManagerControls.Pending, result.Command.Status);
+        var write = Assert.Single(fixture.Requests, request => request.Method == HttpMethod.Post);
+        Assert.Equal("/kapowarr/api/system/tasks", write.RequestUri!.AbsolutePath);
+        Assert.Equal("{\"cmd\":\"auto_search_issue\",\"volume_id\":1,\"issue_id\":2}", Assert.Single(fixture.Bodies));
+        fixture.Requests.Clear();
+        fixture.Bodies.Clear();
+        var observed = Assert.IsType<ManagedControlState>(await fixture.Call(ManagerControls.Reconcile,
+            new ReconcileManagedInput(scope, result.Command.Reference)));
+        Assert.Equal(ManagerControls.Unknown, observed.Command!.Status);
+        Assert.DoesNotContain(fixture.Requests, request => request.Method != HttpMethod.Get);
     }
 
     [Theory]
@@ -186,6 +228,7 @@ public sealed class KapowarrLibraryTests {
         internal const string Secret = "fixture/secret+key";
         internal Dictionary<string, object> Results { get; } = new() { ["system/about"] = new { version = "V1.3.2" } };
         internal List<HttpRequestMessage> Requests { get; } = [];
+        internal List<string> Bodies { get; } = [];
         internal HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
         internal string? Raw { get; set; }
         internal ConnectionContext Connection { get; set; } = new(Guid.NewGuid(), "http://manager.test/kapowarr/", null,
@@ -195,10 +238,12 @@ public sealed class KapowarrLibraryTests {
             return await new KapowarrLibrary(client).DispatchAsync(new(IntegrationProtocol.Name, IntegrationProtocol.Version, Guid.NewGuid(),
                 operation, Connection, JsonSerializer.SerializeToElement(input, IntegrationProtocol.Json)), default);
         }
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
             Requests.Add(request);
+            if (request.Content is not null) Bodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
             var path = request.RequestUri!.AbsolutePath.Split("/api/")[1];
-            return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent(Raw ?? JsonSerializer.Serialize(new { error = (string?)null, result = Results.GetValueOrDefault(path) })) });
+            return new HttpResponseMessage(request.Method == HttpMethod.Post && Status == HttpStatusCode.OK ? HttpStatusCode.Created : Status) {
+                Content = new StringContent(Raw ?? JsonSerializer.Serialize(new { error = (string?)null, result = Results.GetValueOrDefault(path) })) };
         }
         protected override void Dispose(bool disposing) { }
     }

@@ -6,4 +6,5 @@ internal static class KapowarrCodes {
     internal const string ApiKeyParameter = "api_key";
     internal const string ComicSeries = "comic-series";
     internal const string ComicVine = "comicvine";
+    internal const string AutoSearchIssue = "auto_search_issue";
 }

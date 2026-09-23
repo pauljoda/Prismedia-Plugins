@@ -10,3 +10,4 @@ internal sealed record KapowarrIssue(int Id, [property: JsonPropertyName("volume
     [property: JsonPropertyName("comicvine_id")] int ComicVineId,
     [property: JsonPropertyName("issue_number")] string? IssueNumber, string? Title, [property: JsonRequired] bool Monitored, KapowarrFile[]? Files);
 internal sealed record KapowarrFile(int Id, [property: JsonPropertyName("filepath")] string? FilePath, long Size);
+internal sealed record KapowarrTaskReceipt(int Id);

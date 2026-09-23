@@ -38,8 +38,8 @@ public sealed record ReconcileManagedInput(ManagedControlScope Scope, ManagedCom
 public sealed record ManagedConfigurationChange(string? ProfileId = null, bool? Monitored = null);
 /// <summary>Reviewed changes; OperationId is host correlation and not an upstream idempotency promise.</summary>
 public sealed record ConfigureManagedInput(Guid OperationId, ManagedControlScope Scope, string ExpectedPath,
-    string ExpectedProfileId, IReadOnlyDictionary<string, bool> ExpectedMonitoring, ManagedConfigurationChange Changes);
+    string? ExpectedProfileId, IReadOnlyDictionary<string, bool> ExpectedMonitoring, ManagedConfigurationChange Changes);
 /// <summary>Exactly one scoped search with no implicit monitoring changes.</summary>
-public sealed record RequestManagedInput(Guid OperationId, ManagedControlScope Scope, string ExpectedPath, string ExpectedProfileId);
+public sealed record RequestManagedInput(Guid OperationId, ManagedControlScope Scope, string ExpectedPath, string? ExpectedProfileId);
 /// <summary>Only definite outcomes may be returned; ambiguous writes fail the invocation.</summary>
 public sealed record ManagedMutationResult(string Outcome, ManagedCommandSnapshot? Command = null, string? Problem = null);

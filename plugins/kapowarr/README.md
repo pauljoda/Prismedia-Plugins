@@ -9,8 +9,9 @@ Map a root to a dedicated **read-only** folder in Prismedia, check local access,
 ## Scope
 
 - Existing holdings only; no Comic Vine account is needed by this plugin. Kapowarr needs its own Comic Vine configuration to add new runs upstream.
-- No monitoring changes, searches for releases, downloads, renames, or deletion. External-manager support supplies root choices only; Kapowarr has no matching per-run profile choice.
-- Prismedia's acquisition ownership tracking currently covers movies and television. Comic roots can be scanned, but issue ownership and upgrade reconciliation are not yet offered.
+- A linked, locally matched issue can change its own monitoring flag or queue one immediate search. These controls never expand to sibling issues, and Kapowarr has no matching per-run profile choice.
+- Search acknowledgement means Kapowarr accepted a task. Its task IDs have no durable completion history, so Prismedia keeps the outcome unverified when the task disappears. A search does not promise a download or readable file.
+- New runs and issues with no linked Prismedia item still need to be requested in Kapowarr. This adapter does not add runs, download directly, rename, or delete.
 - Multiple files for one issue require rendition review in Kapowarr. The plugin refuses ambiguous evidence rather than choosing one arbitrarily.
 - Kapowarr exposes no persistent installation UUID. Keep the connection pointed at the same installation; individual runs are fenced with their Comic Vine identity.
 
@@ -18,6 +19,6 @@ Map a root to a dedicated **read-only** folder in Prismedia, check local access,
 
 Kapowarr authenticates API requests with an `api_key` query parameter. The adapter sends it only to the configured origin, preserves reverse-proxy prefixes, refuses redirects, bounds replies to 8 MiB, and returns sanitized failures. Configure reverse-proxy access logs to omit query strings when operating Kapowarr behind one.
 
-Validated against the released 1.3.2 API and synthetic local CBZ holdings. Authenticated Comic Vine discovery and remote acquisition are outside this validation.
+Validated against an isolated Kapowarr 1.3.2 instance with local CBZ fixtures. Exact issue monitoring and task acknowledgement were exercised; the original monitoring flags were restored. Authenticated Comic Vine discovery and adding new runs are outside this validation.
 
 Primary API reference: [released route implementation](https://github.com/Casvt/Kapowarr/blob/V1.3.2/frontend/api.py).

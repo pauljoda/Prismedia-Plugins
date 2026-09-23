@@ -2,7 +2,7 @@ using System.Text.Json;
 using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Kapowarr;
 
-/// <summary>Bounded read-only transport; query authentication never escapes the server process.</summary>
+/// <summary>Bounded Kapowarr transport; query authentication never escapes the server process.</summary>
 internal sealed class KapowarrClient : IDisposable {
     private const int MaximumBytes = 8 * 1024 * 1024;
     private readonly HttpClient client;
@@ -20,14 +20,24 @@ internal sealed class KapowarrClient : IDisposable {
         client = new(handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     }
 
-    internal async Task<T> GetAsync<T>(string relativePath, CancellationToken token) where T : class {
+    internal Task<T> GetAsync<T>(string relativePath, CancellationToken token) where T : class =>
+        SendAsync<T>(HttpMethod.Get, relativePath, null, System.Net.HttpStatusCode.OK, token);
+    internal Task<T> PutAsync<T>(string relativePath, object body, CancellationToken token) where T : class =>
+        SendAsync<T>(HttpMethod.Put, relativePath, body, System.Net.HttpStatusCode.OK, token);
+    internal Task<T> PostAsync<T>(string relativePath, object body, CancellationToken token) where T : class =>
+        SendAsync<T>(HttpMethod.Post, relativePath, body, System.Net.HttpStatusCode.Created, token);
+
+    private async Task<T> SendAsync<T>(HttpMethod method, string relativePath, object? body,
+        System.Net.HttpStatusCode expectedStatus, CancellationToken token) where T : class {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(20));
         // Only adapter-owned constant paths and validated positive IDs enter this boundary.
-        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(root, relativePath + "?" + KapowarrCodes.ApiKeyParameter + "=" + credential));
+        using var request = new HttpRequestMessage(method, new Uri(root, relativePath + "?" + KapowarrCodes.ApiKeyParameter + "=" + credential));
         request.Headers.Accept.ParseAdd("application/json");
+        if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body, IntegrationProtocol.Json),
+            System.Text.Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-        if (!response.IsSuccessStatusCode) throw new IntegrationFailure($"Kapowarr returned HTTP {(int)response.StatusCode}. Check the connection and API key.");
+        if (response.StatusCode != expectedStatus) throw new IntegrationFailure($"Kapowarr returned HTTP {(int)response.StatusCode}. Check the connection and API key.");
         if (response.Content.Headers.ContentLength > MaximumBytes) throw Oversized();
         await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
         using var bytes = new MemoryStream();

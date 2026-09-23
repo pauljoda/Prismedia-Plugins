@@ -5,7 +5,7 @@ using System.Text.Json;
 using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Kapowarr;
 
-/// <summary>Reads existing comic runs, exact issue associations, and reviewed issue state without changing remote state.</summary>
+/// <summary>Reads existing comic runs and applies reviewed actions to one exact issue.</summary>
 internal sealed class KapowarrLibrary(KapowarrClient client) {
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken token) {
         var about = await client.GetAsync<KapowarrAbout>("system/about", token);
@@ -16,11 +16,13 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             throw new IntegrationFailure("Kapowarr does not report a persistent installation ID. Reconnect it with its current identity policy.");
         if (request.Operation == IntegrationOperations.Probe) return new ProbeResult(null, "Kapowarr", about.Version, [
             new(ManagerProtocol.ConnectedLibrary, [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries], [KapowarrCodes.ComicSeries]),
-            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, ManagerControls.Reconcile], [KapowarrCodes.ComicSeries])
+            new(ManagerProtocol.ExternalManager, [ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request], [KapowarrCodes.ComicSeries])
         ]);
         if (request.Operation == ManagerProtocol.SearchLibrary) return await SearchAsync(request, token);
         if (request.Operation == ManagerProtocol.GetLibraryItem) return await GetAsync(Input<ManagedItemInput>(request), token);
         if (request.Operation == ManagerControls.Reconcile) return await ReconcileAsync(Input<ReconcileManagedInput>(request), token);
+        if (request.Operation == ManagerControls.Configure) return await ConfigureAsync(Input<ConfigureManagedInput>(request), token);
+        if (request.Operation == ManagerControls.Request) return await RequestAsync(Input<RequestManagedInput>(request), token);
         if (request.Operation == ManagerProtocol.ListLibraries) {
             var roots = await client.GetAsync<KapowarrRoot[]>("rootfolder", token);
             if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw Invalid();
@@ -35,7 +37,7 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             if (roots.Length > 1000 || roots.Select(root => root.Id).Distinct().Count() != roots.Length) throw Invalid();
             return new ManagerOptions([], roots.Select(root => new ManagerRootChoice(Id(root.Id), Required(root.Folder, 8192), null)).ToArray());
         }
-        throw new IntegrationFailure("This Kapowarr connection supports existing library reads and issue observation only.");
+        throw new IntegrationFailure("This Kapowarr operation is not supported.");
     }
 
     private async Task<ManagedControlState> ReconcileAsync(ReconcileManagedInput input, CancellationToken token) {
@@ -55,7 +57,41 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
             ? new ManagedCommandSnapshot(reference, ManagerControls.Unknown, "Kapowarr cannot establish this command's original outcome.")
             : null;
         return new(snapshot.Item, snapshot.Path, targets,
-            new(false, false, false, "Issue actions are not available for this connection yet."), command);
+            new(input.Scope.Targets.Count == 1, input.Scope.Targets.Count == 1, false,
+                input.Scope.Targets.Count == 1 ? null : "Select one exact issue to change monitoring or search."), command);
+    }
+
+    private async Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) {
+        if (input.OperationId == Guid.Empty || input.Changes is null || input.Changes.ProfileId is not null
+            || input.Changes.Monitored is not { } desired || input.ExpectedProfileId is not null
+            || input.ExpectedMonitoring is null || input.Scope?.Targets is not { Count: 1 }) throw Invalid();
+        var state = await ReconcileAsync(new(input.Scope), token);
+        var target = state.Targets[0];
+        if (state.Path != input.ExpectedPath || input.ExpectedMonitoring.Count != 1
+            || !input.ExpectedMonitoring.TryGetValue(target.Target.RemoteId, out var expected) || target.Monitored != expected)
+            return new(ManagerControls.Rejected);
+        if (target.Monitored == desired) return new(ManagerControls.Applied);
+        var issue = await client.PutAsync<KapowarrIssue>("issues/" + Id(ParseId(target.Target.RemoteId)),
+            new { monitored = desired }, token);
+        if (issue.Id != ParseId(target.Target.RemoteId) || issue.VolumeId != ParseId(input.Scope.Item.RemoteId)
+            || issue.IssueNumber != target.Target.IssueLabel || issue.Monitored != desired)
+            throw new IntegrationFailure("Kapowarr did not confirm the selected issue's monitoring change.");
+        return new(ManagerControls.Applied);
+    }
+
+    private async Task<ManagedMutationResult> RequestAsync(RequestManagedInput input, CancellationToken token) {
+        if (input.OperationId == Guid.Empty || input.ExpectedProfileId is not null
+            || input.Scope?.Targets is not { Count: 1 }) throw Invalid();
+        var state = await ReconcileAsync(new(input.Scope), token);
+        if (state.Path != input.ExpectedPath) return new(ManagerControls.Rejected);
+        var issueId = ParseId(state.Targets[0].Target.RemoteId);
+        var volumeId = ParseId(input.Scope.Item.RemoteId);
+        var receipt = await client.PostAsync<KapowarrTaskReceipt>("system/tasks",
+            new { cmd = KapowarrCodes.AutoSearchIssue, volume_id = volumeId, issue_id = issueId }, token);
+        if (receipt.Id <= 0) throw new IntegrationFailure("Kapowarr did not return a search task ID.");
+        // Kapowarr's task IDs have no durable timestamp or completed history. Preserve the receipt,
+        // but reconciliation must report Unknown instead of inferring that a vanished task succeeded.
+        return new(ManagerControls.Accepted, new(new(Id(receipt.Id), DateTimeOffset.UtcNow), ManagerControls.Pending));
     }
 
     private async Task<ManagedLibraryPage> SearchAsync(IntegrationRequest request, CancellationToken token) {
