@@ -17,6 +17,7 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 | Plugin | Version | Runtime | Capabilities | NSFW | Description |
 |---|---|---|---|---|---|
 | [Kapowarr](./plugins/kapowarr) | 1.4.0 | .NET process | Connected comic library and provider libraries | No | Exact issue identities, existing-run lookup, and per-issue controls |
+| [LazyLibrarian](./plugins/lazylibrarian) | 1.1.0 | .NET process | Connected Book library and existing-work management | No | Separate ebook and audiobook roots, exact catalogued-work lookup, monitoring, and search |
 | [Google Books](./plugins/googlebooks) | 1.0.1 | .NET process | `book`, `book-volume` lookup/search | No | Edition-specific metadata with reviewed title and ISBN searches |
 | [Metron](./plugins/metron) | 1.0.1 | .NET process | `comic-series` lookup/search/cascade, `comic-installment` lookup/search | No | Western comic runs and exact issue designations with creator credits and cross-provider identities |
 | [TMDB](./plugins/tmdb) | 1.1.15 | .NET process | `movie`, `video`, `video-episode`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |

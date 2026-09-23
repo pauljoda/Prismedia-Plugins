@@ -42,7 +42,8 @@ internal sealed class LazyLibrarianClient : IDisposable {
 
     /// <summary>Accepts a mutating command only when LazyLibrarian returns its explicit OK acknowledgement.</summary>
     internal async Task AcknowledgeAsync(string command, IReadOnlyDictionary<string, string> arguments, CancellationToken token) {
-        if (command != LazyLibrarianCodes.QueueBook) throw Invalid();
+        if (command is not (LazyLibrarianCodes.QueueBook or LazyLibrarianCodes.UnqueueBook
+                or LazyLibrarianCodes.SearchBook)) throw Invalid();
         var bytes = await SendAsync(command, arguments, token);
         if (!string.Equals(System.Text.Encoding.UTF8.GetString(bytes).Trim(), LazyLibrarianCodes.Ok, StringComparison.Ordinal))
             throw Invalid();

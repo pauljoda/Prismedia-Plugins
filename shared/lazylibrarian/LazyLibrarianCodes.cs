@@ -14,6 +14,8 @@ internal static class LazyLibrarianCodes {
     internal const string GetVersion = "getVersion";
     internal const string GetFileDirect = "getFileDirect";
     internal const string QueueBook = "queueBook";
+    internal const string UnqueueBook = "unqueueBook";
+    internal const string SearchBook = "searchBook";
     internal const string Ebook = "eBook";
     internal const string Audiobook = "AudioBook";
     internal const string EbookRendition = "ebook";
@@ -21,6 +23,9 @@ internal static class LazyLibrarianCodes {
     internal const string EbookRoot = "ebookRoot";
     internal const string AudiobookRoot = "audiobookRoot";
     internal const string OpenLibraryWork = "openlibrarywork";
+    internal const string OpenLibraryPrefix = "OL";
+    internal const char OpenLibraryWorkSuffix = 'W';
     internal const string LazyLibrarianWork = "lazylibrarianwork";
+    internal const string Wanted = "Wanted";
     internal const string TestedVersion = "2b48097a";
 }

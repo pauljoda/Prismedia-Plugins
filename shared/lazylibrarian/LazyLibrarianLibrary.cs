@@ -7,7 +7,7 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.LazyLibrarian;
 
 /// <summary>Exposes one Book work with independently inspected readable and audio files from a tested LazyLibrarian build.</summary>
-internal sealed class LazyLibrarianLibrary(LazyLibrarianClient client, ConnectionContext connection) {
+internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, ConnectionContext connection) {
     private readonly LazyLibrarianBooks books = new(client);
 
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken token) {
@@ -24,7 +24,10 @@ internal sealed class LazyLibrarianLibrary(LazyLibrarianClient client, Connectio
             return new ProbeResult(null, "LazyLibrarian", version.CurrentVersion, [
                 new(ManagerProtocol.ConnectedLibrary,
                     [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries],
-                    [MediaKinds.Book])
+                    [MediaKinds.Book]),
+                new(ManagerProtocol.ExternalManager,
+                    [ManagerProtocol.Options, ManagerCreation.Lookup, ManagerControls.Reconcile,
+                        ManagerControls.Configure, ManagerControls.Request], [MediaKinds.Book])
             ]);
         }
         if (request.Operation == ManagerProtocol.SearchLibrary)
@@ -36,6 +39,16 @@ internal sealed class LazyLibrarianLibrary(LazyLibrarianClient client, Connectio
                 new(LazyLibrarianCodes.EbookRendition, "Ebooks", ebookRoot, [MediaKinds.Book], connection.BaseUrl),
                 new(LazyLibrarianCodes.AudiobookRendition, "Audiobooks", audiobookRoot, [MediaKinds.Book], connection.BaseUrl)
             ]);
+        if (request.Operation == ManagerProtocol.Options)
+            return Options(Input<ManagerOptionsInput>(request), ebookRoot, audiobookRoot);
+        if (request.Operation == ManagerCreation.Lookup)
+            return await LookupAsync(Input<ManagedLookupInput>(request), ebookRoot, audiobookRoot, token);
+        if (request.Operation == ManagerControls.Reconcile)
+            return await ReconcileAsync(Input<ReconcileManagedInput>(request), ebookRoot, audiobookRoot, token);
+        if (request.Operation == ManagerControls.Configure)
+            return await ConfigureAsync(Input<ConfigureManagedInput>(request), ebookRoot, audiobookRoot, token);
+        if (request.Operation == ManagerControls.Request)
+            return await RequestAsync(Input<RequestManagedInput>(request), ebookRoot, audiobookRoot, token);
         throw new IntegrationFailure("This LazyLibrarian operation is not supported.");
     }
 
@@ -84,7 +97,11 @@ internal sealed class LazyLibrarianLibrary(LazyLibrarianClient client, Connectio
                 : new ManagedFileTarget(row.BookID! + ":audio-1", ManagerProtocol.AudioTrack, row.BookName!);
             files.Add(new(row.BookID! + ":" + input.BookRendition, path, size, null, [target]));
         }
-        return new(item, path is null or "" ? root : Path.GetDirectoryName(path)!, files, DateTimeOffset.UtcNow);
+        // LazyLibrarian has no work-level folder identity when no file exists. Keep a
+        // stable logical holding path inside the mapped root across file arrival.
+        var pathPart = Uri.EscapeDataString(row.BookID!);
+        if (pathPart is "." or "..") pathPart = "work-" + pathPart;
+        return new(item, root + "/" + pathPart, files, DateTimeOffset.UtcNow);
     }
 
     private string Root(string key) {
@@ -102,15 +119,16 @@ internal sealed class LazyLibrarianLibrary(LazyLibrarianClient client, Connectio
     private static ManagedLibraryItem Item(LazyLibrarianBookRow row, int? fileCount, string? rendition = null) {
         if (row.BookID is null || row.BookName is null) throw Invalid();
         var identities = new Dictionary<string, string> {
-            [row.BookID.StartsWith("OL", StringComparison.Ordinal) && row.BookID.EndsWith('W')
+            [row.BookID.StartsWith(LazyLibrarianCodes.OpenLibraryPrefix, StringComparison.Ordinal)
+                && row.BookID.EndsWith(LazyLibrarianCodes.OpenLibraryWorkSuffix)
                 && long.TryParse(row.BookID.AsSpan(2, row.BookID.Length - 3), NumberStyles.None,
                     CultureInfo.InvariantCulture, out var number) && number > 0
                 ? LazyLibrarianCodes.OpenLibraryWork : LazyLibrarianCodes.LazyLibrarianWork] = row.BookID
         };
         var status = rendition == LazyLibrarianCodes.Audiobook ? row.AudioStatus : row.Status;
         var monitored = rendition is null
-            ? row.Status == "Wanted" || row.AudioStatus == "Wanted"
-            : status == "Wanted";
+            ? row.Status == LazyLibrarianCodes.Wanted || row.AudioStatus == LazyLibrarianCodes.Wanted
+            : status == LazyLibrarianCodes.Wanted;
         return new(row.BookID, MediaKinds.Book, row.BookName, null, identities,
             monitored, null, fileCount);
     }

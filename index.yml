@@ -1067,10 +1067,10 @@
     settings: []
 - id: lazylibrarian
   name: LazyLibrarian
-  version: 1.0.0
+  version: 1.1.0
   date: '2026-09-23'
   path: plugins/lazylibrarian/lazylibrarian.zip
-  sha256: a66729fae56c76e93eaf992485a8a8bea6a4c3008ca0a75d0c467889a9ca1c33
+  sha256: 491e715318e745d82f69f25d29c7c9c2ca3ba3df3ba68ac32456ef23fb7d875c
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -1091,6 +1091,15 @@
           - search-library
           - get-library-item
           - list-libraries
+        entityKinds:
+          - book
+      - kind: external-manager
+        operations:
+          - manager-options
+          - lookup-managed
+          - reconcile-managed
+          - configure-managed
+          - request-managed
         entityKinds:
           - book
     settings:

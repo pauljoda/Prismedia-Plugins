@@ -3,7 +3,7 @@
   "apiTags": ["prismedia"],
   "id": "lazylibrarian",
   "name": "LazyLibrarian",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "date": "2026-09-23",
   "icon": "assets/icon.svg",
   "runtime": "dotnet-process",
@@ -25,6 +25,11 @@
       {
         "kind": "connected-library",
         "operations": ["search-library", "get-library-item", "list-libraries"],
+        "entityKinds": ["book"]
+      },
+      {
+        "kind": "external-manager",
+        "operations": ["manager-options", "lookup-managed", "reconcile-managed", "configure-managed", "request-managed"],
         "entityKinds": ["book"]
       }
     ],
