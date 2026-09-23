@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const VALID_ACTIONS = new Set(["lookup-id", "lookup-url", "search"]);
 const VALID_FIELD_TYPES = new Set(["text", "number", "year"]);
 const VALID_ENTITY_KINDS = new Set([
@@ -274,6 +276,18 @@ function validateIntegration(integration, auth, pluginId) {
     if (url.protocol !== "https:" || !url.hostname || url.username || url.password
       || (pathStart >= 0 && value.slice(pathStart) !== "/") || normalizedOrigins.has(url.origin)) throw invalidOrigins();
     normalizedOrigins.add(url.origin);
+  }
+  const suffixes = integration.anonymousArtifactHostSuffixes ?? [];
+  const invalidSuffixes = () => new Error(`${pluginId} anonymous artifact host suffixes must be unique bounded DNS hosts for acquisition sources`);
+  if (!Array.isArray(suffixes) || suffixes.length + origins.length > 8) throw invalidSuffixes();
+  if (suffixes.length && !capabilities.some(item => item.kind === "acquisition-source" && item.operations.includes("resolve"))) throw invalidSuffixes();
+  const normalizedSuffixes = new Set();
+  for (const value of suffixes) {
+    if (typeof value !== "string" || value.length > 253 || isIP(value)
+      || !value.includes(".") || !value.split(".").every(label => label.length > 0 && label.length <= 63
+        && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/iu.test(label))
+      || normalizedSuffixes.has(value.toLowerCase())) throw invalidSuffixes();
+    normalizedSuffixes.add(value.toLowerCase());
   }
   const settings = requireArray(integration.settings, "integration.settings", pluginId, { allowEmpty: true });
   if (settings.length > 32) throw new Error(`${pluginId} has too many connection settings`);

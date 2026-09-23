@@ -7,6 +7,7 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
+  archiveorg: {},
   commons: {},
   metron: {
     "comic-series": { identities: ["metronseries"], fields: ["seriesTitle", "year", "volume", "publisher", "language"] },
@@ -389,4 +390,20 @@ test("anonymous artifact origins are bounded HTTPS origins for acquisition sourc
   ]) assert.throws(() => validateManifest({ ...manifest, integration: { ...integration, anonymousArtifactOrigins: origins } }), /artifact origins/);
   assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
     capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["book"] }] } }), /artifact origins/);
+});
+
+test("anonymous artifact host suffixes require exact DNS host declarations", () => {
+  const integration = { protocolVersion: 1, settings: [],
+    capabilities: [{ kind: "acquisition-source", operations: ["resolve"], entityKinds: ["comic-installment"] }],
+    anonymousArtifactHostSuffixes: ["archive.org"] };
+  const manifest = validManifest({ integration });
+  assert.equal(validateManifest(manifest), manifest);
+  for (const suffixes of [
+    ["com"], ["127.0.0.1"], ["archive.org", "ARCHIVE.ORG"], ["archive.org/path"],
+    ["archive..org"], [".archive.org"], ["archive.org."], ["archive.org:443"],
+    [null], "archive.org", Array.from({ length: 9 }, (_, index) => `files${index}.archive.org`),
+  ]) assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
+    anonymousArtifactHostSuffixes: suffixes } }), /host suffixes/);
+  assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
+    capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["comic-installment"] }] } }), /host suffixes/);
 });
