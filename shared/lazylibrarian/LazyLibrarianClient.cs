@@ -28,7 +28,7 @@ internal sealed class LazyLibrarianClient : IDisposable {
 
     /// <summary>Reads a JSON API command and rejects success-shaped HTTP responses containing API errors.</summary>
     internal async Task<T> ReadAsync<T>(string command, IReadOnlyDictionary<string, string>? arguments, CancellationToken token) {
-        if (command is not (LazyLibrarianCodes.GetAllBooks or LazyLibrarianCodes.GetAuthor)) throw Invalid();
+        if (command is not (LazyLibrarianCodes.GetAllBooks or LazyLibrarianCodes.GetAuthor or LazyLibrarianCodes.GetVersion)) throw Invalid();
         var bytes = await SendAsync(command, arguments, token);
         try {
             using var document = JsonDocument.Parse(bytes);
@@ -48,23 +48,31 @@ internal sealed class LazyLibrarianClient : IDisposable {
             throw Invalid();
     }
 
-    private async Task<byte[]> SendAsync(string command, IReadOnlyDictionary<string, string>? arguments, CancellationToken token) {
-        if (string.IsNullOrWhiteSpace(command) || command.Any(ch => !char.IsAsciiLetter(ch))) throw Invalid();
+    /// <summary>Gets final-file size without downloading bytes; a ZIP response cannot stand in for mapped audio tracks.</summary>
+    internal async Task<long> FileSizeAsync(string bookId, string rendition, string reportedPath, CancellationToken token) {
+        var extension = Path.GetExtension(reportedPath).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(bookId) || bookId.Length > 512
+            || rendition == LazyLibrarianCodes.Ebook && extension is not (".epub" or ".pdf")
+            || rendition == LazyLibrarianCodes.Audiobook && extension is not (".m4b" or ".m4a" or ".mp3")
+            || rendition is not (LazyLibrarianCodes.Ebook or LazyLibrarianCodes.Audiobook)) throw Invalid();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(20));
-        var query = new List<KeyValuePair<string, string>> {
-            new(LazyLibrarianCodes.ApiKeyParameter, apiKey), new(LazyLibrarianCodes.CommandParameter, command)
-        };
-        if (arguments is not null) {
-            if (arguments.Count > 8 || arguments.Any(pair => string.IsNullOrWhiteSpace(pair.Key)
-                || pair.Key.Length > 32 || pair.Value is null || pair.Value.Length > 8192
-                || pair.Key is LazyLibrarianCodes.ApiKeyParameter or LazyLibrarianCodes.CommandParameter)) throw Invalid();
-            query.AddRange(arguments);
-        }
-        var builder = new UriBuilder(endpoint) {
-            Query = string.Join('&', query.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)))
-        };
-        using var request = new HttpRequestMessage(HttpMethod.Get, builder.Uri);
+        using var request = new HttpRequestMessage(HttpMethod.Head, Address(LazyLibrarianCodes.GetFileDirect,
+            new Dictionary<string, string> { [LazyLibrarianCodes.IdParameter] = bookId,
+                [LazyLibrarianCodes.TypeParameter] = rendition }));
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+        var name = response.Content.Headers.ContentDisposition?.FileNameStar
+            ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+        if (response.StatusCode != HttpStatusCode.OK || response.Content.Headers.ContentLength is not > 0
+            || name is null || !Path.GetExtension(name).Equals(extension, StringComparison.OrdinalIgnoreCase))
+            throw new IntegrationFailure("LazyLibrarian did not confirm the exact supported file for this book rendition. Multi-file audio needs explicit track evidence.");
+        return response.Content.Headers.ContentLength.Value;
+    }
+
+    private async Task<byte[]> SendAsync(string command, IReadOnlyDictionary<string, string>? arguments, CancellationToken token) {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(20));
+        using var request = new HttpRequestMessage(HttpMethod.Get, Address(command, arguments));
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (response.StatusCode != HttpStatusCode.OK)
             throw new IntegrationFailure($"LazyLibrarian returned HTTP {(int)response.StatusCode}. Check the connection and API key.");
@@ -78,6 +86,23 @@ internal sealed class LazyLibrarianClient : IDisposable {
             if (output.Length + count > MaximumBytes) throw Oversized();
             output.Write(buffer, 0, count);
         }
+    }
+
+    private Uri Address(string command, IReadOnlyDictionary<string, string>? arguments) {
+        if (string.IsNullOrWhiteSpace(command) || command.Any(ch => !char.IsAsciiLetter(ch))) throw Invalid();
+        var query = new List<KeyValuePair<string, string>> {
+            new(LazyLibrarianCodes.ApiKeyParameter, apiKey), new(LazyLibrarianCodes.CommandParameter, command)
+        };
+        if (arguments is not null) {
+            if (arguments.Count > 8 || arguments.Any(pair => string.IsNullOrWhiteSpace(pair.Key)
+                || pair.Key.Length > 32 || pair.Value is null || pair.Value.Length > 8192
+                || pair.Key is LazyLibrarianCodes.ApiKeyParameter or LazyLibrarianCodes.CommandParameter)) throw Invalid();
+            query.AddRange(arguments);
+        }
+        var builder = new UriBuilder(endpoint) {
+            Query = string.Join('&', query.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)))
+        };
+        return builder.Uri;
     }
 
     private static IntegrationFailure Invalid() => new("LazyLibrarian returned an invalid or rejected API response.");

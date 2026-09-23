@@ -1065,3 +1065,44 @@
         entityKinds:
           - comic-installment
     settings: []
+- id: lazylibrarian
+  name: LazyLibrarian
+  version: 1.0.0
+  date: '2026-09-23'
+  path: plugins/lazylibrarian/lazylibrarian.zip
+  sha256: a66729fae56c76e93eaf992485a8a8bea6a4c3008ca0a75d0c467889a9ca1c33
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/lazylibrarian/assets/icon.svg
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+          - list-libraries
+        entityKinds:
+          - book
+    settings:
+      - key: ebookRoot
+        label: LazyLibrarian ebook root
+        type: text
+        required: true
+        placeholder: /books
+        help: Absolute path as reported by LazyLibrarian. Map it to a Prismedia library folder.
+      - key: audiobookRoot
+        label: LazyLibrarian audiobook root
+        type: text
+        required: true
+        placeholder: /audiobooks
+        help: Absolute path as reported by LazyLibrarian. Map it to a Prismedia library folder.

@@ -18,3 +18,8 @@ internal sealed record LazyLibrarianBookRow(
 // prism-vocab: external — getAuthor returns the complete rows under books.
 internal sealed record LazyLibrarianAuthorRow(
     [property: JsonPropertyName("books")] IReadOnlyList<LazyLibrarianBookRow>? Books);
+
+// prism-vocab: external — getVersion is checked before declaring connected-library support.
+internal sealed record LazyLibrarianVersionRow(
+    [property: JsonPropertyName("Success")] bool Success,
+    [property: JsonPropertyName("current_version")] string? CurrentVersion);

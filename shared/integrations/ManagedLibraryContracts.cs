@@ -11,6 +11,7 @@ public static class ManagerProtocol {
     public const string Movie = "movie";
     public const string Series = "video-series";
     public const string Episode = "video-episode";
+    public const string AudioTrack = "audio-track";
     public const string Tmdb = "tmdb";
     public const string Tvdb = "tvdb";
     public const string Imdb = "imdb";
@@ -33,7 +34,8 @@ public sealed record ProviderLibraryDescriptor(string RemoteId, string Label, st
 /// <summary>The complete bounded provider library catalog.</summary>
 public sealed record ProviderLibraryCatalog(IReadOnlyList<ProviderLibraryDescriptor> Libraries);
 /// <summary>Stable metadata identities fence reuse of an application's numeric item ID.</summary>
-public sealed record ManagedItemInput(string EntityKind, string RemoteId, IReadOnlyDictionary<string, string> ExpectedExternalIds);
+public sealed record ManagedItemInput(string EntityKind, string RemoteId, IReadOnlyDictionary<string, string> ExpectedExternalIds,
+    string? BookRendition = null);
 /// <summary>Exact content targets represented by a remote file, including combined episodes.</summary>
 public sealed record ManagedFileTarget(string RemoteId, string EntityKind, string Title,
     int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);

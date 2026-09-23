@@ -14,6 +14,7 @@ const expectedContracts = {
   },
   archiver: {},
   kapowarr: {},
+  lazylibrarian: {},
   googlebooks: {
     book: { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
     "book-volume": { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
