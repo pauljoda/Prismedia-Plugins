@@ -8,5 +8,5 @@ internal sealed record KapowarrVolume(int Id, [property: JsonPropertyName("comic
     string? Title, int? Year, bool Monitored, string? Folder, KapowarrIssue[]? Issues);
 internal sealed record KapowarrIssue(int Id, [property: JsonPropertyName("volume_id")] int VolumeId,
     [property: JsonPropertyName("comicvine_id")] int ComicVineId,
-    [property: JsonPropertyName("issue_number")] string? IssueNumber, string? Title, KapowarrFile[]? Files);
+    [property: JsonPropertyName("issue_number")] string? IssueNumber, string? Title, bool Monitored, KapowarrFile[]? Files);
 internal sealed record KapowarrFile(int Id, [property: JsonPropertyName("filepath")] string? FilePath, long Size);

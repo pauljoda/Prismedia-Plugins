@@ -66,8 +66,14 @@ internal sealed class KapowarrLibrary(KapowarrClient client) {
         if (item.RemoteId != input.RemoteId || input.ExpectedExternalIds.Any(pair => item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
             throw new IntegrationFailure("The remote run now has different identities. Refresh the connected library.");
         if (volume.Issues is null || volume.Issues.Length > 10000 || volume.Issues.Select(issue => issue.Id).Distinct().Count() != volume.Issues.Length) throw Invalid();
+        var issues = volume.Issues.Select(issue => {
+            if (issue.VolumeId != volume.Id || issue.ComicVineId <= 0) throw Invalid();
+            var label = Required(issue.IssueNumber, 128);
+            return new ManagedComicIssue(Id(issue.Id), label,
+                string.IsNullOrWhiteSpace(issue.Title) ? "Issue " + label : Required(issue.Title, 512), issue.Monitored);
+        }).ToArray();
         var files = Files(volume);
-        return new(item with { RemoteFileCount = files.Count }, Required(volume.Folder, 8192), files, DateTimeOffset.UtcNow);
+        return new(item with { RemoteFileCount = files.Count }, Required(volume.Folder, 8192), files, DateTimeOffset.UtcNow, issues);
     }
 
     private static IReadOnlyList<ManagedLibraryFile> Files(KapowarrVolume volume) {

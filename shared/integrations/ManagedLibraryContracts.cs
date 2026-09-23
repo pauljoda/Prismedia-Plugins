@@ -39,8 +39,11 @@ public sealed record ManagedFileTarget(string RemoteId, string EntityKind, strin
     int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);
 /// <summary>File evidence uses the external server's path namespace and is not a byte-transfer authorization.</summary>
 public sealed record ManagedLibraryFile(string RemoteId, string Path, long SizeBytes, DateTimeOffset? AddedAt, IReadOnlyList<ManagedFileTarget> Targets);
-/// <summary>Current remote item and its exact final file associations.</summary>
-public sealed record ManagedItemSnapshot(ManagedLibraryItem Item, string Path, IReadOnlyList<ManagedLibraryFile> Files, DateTimeOffset ObservedAt);
+/// <summary>One issue in a connected comic run, including issues with no final file yet.</summary>
+public sealed record ManagedComicIssue(string RemoteId, string IssueLabel, string Title, bool Monitored);
+/// <summary>Current remote item, exact final file associations, and optional complete comic issue list.</summary>
+public sealed record ManagedItemSnapshot(ManagedLibraryItem Item, string Path, IReadOnlyList<ManagedLibraryFile> Files, DateTimeOffset ObservedAt,
+    IReadOnlyList<ManagedComicIssue>? ComicIssues = null);
 /// <summary>Kind whose manager choices are requested.</summary>
 public sealed record ManagerOptionsInput(string EntityKind);
 /// <summary>Opaque external profile identity and display name.</summary>

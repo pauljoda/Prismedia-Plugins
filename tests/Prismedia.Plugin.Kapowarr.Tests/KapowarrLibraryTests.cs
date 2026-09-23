@@ -98,9 +98,13 @@ public sealed class KapowarrLibraryTests {
     [Fact]
     public async Task MissingFilesRemainMissingAndExternalRootsDoNotInventProfilesOrReadability() {
         using var fixture = new Fixture();
-        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "12.5", [])]);
+        fixture.Results["volumes/1"] = Volume(1, [Issue(1, "12.5", [], monitored: true)]);
         var snapshot = Assert.IsType<ManagedItemSnapshot>(await fixture.Call(ManagerProtocol.GetLibraryItem, Input));
         Assert.Empty(snapshot.Files);
+        var issue = Assert.Single(snapshot.ComicIssues!);
+        Assert.Equal("1", issue.RemoteId);
+        Assert.Equal("12.5", issue.IssueLabel);
+        Assert.True(issue.Monitored);
         fixture.Results["rootfolder"] = new[] { new { id = 1, folder = "/comics/", size = 1000, free = 500 } };
         var options = Assert.IsType<ManagerOptions>(await fixture.Call(ManagerProtocol.Options, new ManagerOptionsInput(KapowarrCodes.ComicSeries)));
         Assert.Empty(options.Profiles);
@@ -142,8 +146,8 @@ public sealed class KapowarrLibraryTests {
     private static object Volume(int id, object[]? issues = null) => new { id, comicvine_id = 1000 + id, title = "Comic " + id, year = 2024,
         monitored = false, folder = "/comics/Comic", issues_downloaded = 20, issues = issues ?? [], general_files = new[] { new { id = 500, filepath = "/comics/Comic/cover.jpg", size = 50 } } };
     private static object File(int id, long size = 128) => new { id, filepath = $"/comics/Comic/issue{id}.cbz", size };
-    private static object Issue(int id, string label, object[] files, int volumeId = 1) => new { id, volume_id = volumeId, comicvine_id = 2000 + id,
-        issue_number = label, calculated_issue_number = 0.5, title = "Chapter " + id, monitored = false, files };
+    private static object Issue(int id, string label, object[] files, int volumeId = 1, bool monitored = false) => new { id, volume_id = volumeId, comicvine_id = 2000 + id,
+        issue_number = label, calculated_issue_number = 0.5, title = "Chapter " + id, monitored, files };
 
     private sealed class Fixture : HttpMessageHandler {
         internal const string Secret = "fixture/secret+key";

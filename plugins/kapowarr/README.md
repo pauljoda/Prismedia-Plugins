@@ -2,7 +2,7 @@
 
 Connect an existing **Kapowarr 1.3.x** installation through Prismedia's Connections settings. Each connection has its own base URL and API key, available in Kapowarr's settings.
 
-The plugin searches existing comic runs, reads exact issue-to-file associations, and lists every configured root folder as a provider library with its stable root ID, path, comic-series type, and Kapowarr management link. It preserves fractional and special issue labels, distinguishes Comic Vine run identities (`4050-…`), and groups combined issues under their actual file. Downloaded issue counts are not presented as file counts. Cover images and other general files are excluded.
+The plugin searches existing comic runs, lists every issue including those without a file, reads exact issue-to-file associations, and lists every configured root folder as a provider library with its stable root ID, path, comic-series type, and Kapowarr management link. It preserves fractional and special issue labels, shows each issue's current monitoring flag, distinguishes Comic Vine run identities (`4050-…`), and groups combined issues under their actual file. Downloaded issue counts are not presented as file counts. Cover images and other general files are excluded.
 
 Map a root to a dedicated **read-only** folder in Prismedia, check local access, then enable its library scan when ready. Remote file reports alone do not establish local readability. Kapowarr continues organizing the files.
 
