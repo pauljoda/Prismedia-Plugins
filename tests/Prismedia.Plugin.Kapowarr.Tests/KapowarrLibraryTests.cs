@@ -111,6 +111,18 @@ public sealed class KapowarrLibraryTests {
         Assert.Null(Assert.Single(options.Roots).Accessible);
     }
 
+    [Fact]
+    public async Task MissingMonitorFlagsAreRejectedInsteadOfReportedAsOff() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes/1"] = new { id = 1, comicvine_id = 1001, title = "Comic 1", year = 2024,
+            folder = "/comics/Comic", issues = new[] { Issue(1, "1", []) } };
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, Input));
+
+        fixture.Results["volumes/1"] = Volume(1, [new { id = 1, volume_id = 1, comicvine_id = 2001,
+            issue_number = "1", title = "Issue 1", files = Array.Empty<object>() }]);
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, Input));
+    }
+
     [Theory]
     [InlineData("2.0.0")]
     [InlineData("1.2.0")]

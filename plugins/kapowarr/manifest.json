@@ -5,7 +5,7 @@
   ],
   "id": "kapowarr",
   "name": "Kapowarr",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "date": "2026-09-22",
   "icon": "assets/icon.png",
   "runtime": "dotnet-process",
