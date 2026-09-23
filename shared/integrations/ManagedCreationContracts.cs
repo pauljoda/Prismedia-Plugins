@@ -10,7 +10,7 @@ public sealed record ManagedLookupTarget(string EntityKind, IReadOnlyDictionary<
     int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);
 /// <summary>Exact metadata identities, independent of an external application's local item IDs.</summary>
 public sealed record ManagedLookupInput(string EntityKind, IReadOnlyDictionary<string, string> ExternalIds,
-    IReadOnlyList<ManagedLookupTarget>? Targets = null);
+    IReadOnlyList<ManagedLookupTarget>? Targets = null, string? BookRendition = null);
 /// <summary>A work confirmed by the manager's metadata source; it is not evidence of owned files.</summary>
 public sealed record ManagedCandidate(string EntityKind, string Title, int? Year,
     IReadOnlyDictionary<string, string> ExternalIds, ManagedDiscoveryMetadata? Metadata = null);

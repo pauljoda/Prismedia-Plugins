@@ -48,7 +48,7 @@ public sealed record ManagedComicIssue(string RemoteId, string IssueLabel, strin
 public sealed record ManagedItemSnapshot(ManagedLibraryItem Item, string Path, IReadOnlyList<ManagedLibraryFile> Files, DateTimeOffset ObservedAt,
     IReadOnlyList<ManagedComicIssue>? ComicIssues = null);
 /// <summary>Kind whose manager choices are requested.</summary>
-public sealed record ManagerOptionsInput(string EntityKind);
+public sealed record ManagerOptionsInput(string EntityKind, string? BookRendition = null);
 /// <summary>Opaque external profile identity and display name.</summary>
 public sealed record ManagerChoice(string Id, string Label);
 /// <summary>External root evidence; never used directly as a local destination.</summary>
