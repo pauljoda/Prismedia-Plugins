@@ -61,6 +61,39 @@ public sealed class LazyLibrarianLibraryTests {
     }
 
     [Fact]
+    public async Task MappedAudiobookReportsEverySiblingAudioPartWithStableTargets() {
+        var root = Path.Combine(Path.GetTempPath(), "prismedia-lazy-parts-" + Guid.NewGuid().ToString("N"));
+        var folder = Path.Combine(root, "example");
+        Directory.CreateDirectory(folder);
+        try {
+            await File.WriteAllBytesAsync(Path.Combine(folder, "example.m4b"), new byte[34080]);
+            await File.WriteAllBytesAsync(Path.Combine(folder, "part-two.mp3"), [1, 2, 3]);
+            await File.WriteAllBytesAsync(Path.Combine(root, "unrelated.mp3"), [4]);
+            using var handler = new StubHandler { AudioPath = "/audio/example/example.m4b" };
+            var connection = Connection() with { LibraryMounts = [new(
+                LazyLibrarianCodes.AudiobookRendition, "/audio", root)] };
+            using var client = new LazyLibrarianClient(connection, handler);
+            var library = new LazyLibrarianLibrary(client, connection);
+            var input = new ManagedItemInput(MediaKinds.Book, "OL450063W",
+                new Dictionary<string, string> { [LazyLibrarianCodes.OpenLibraryWork] = "OL450063W" },
+                LazyLibrarianCodes.AudiobookRendition);
+
+            var first = Assert.IsType<ManagedItemSnapshot>(await library.DispatchAsync(
+                Request(connection, ManagerProtocol.GetLibraryItem, input), default));
+            var second = Assert.IsType<ManagedItemSnapshot>(await library.DispatchAsync(
+                Request(connection, ManagerProtocol.GetLibraryItem, input), default));
+            Assert.Equal(2, first.Item.RemoteFileCount);
+            Assert.Equal(["/audio/example/example.m4b", "/audio/example/part-two.mp3"],
+                first.Files.Select(file => file.Path).ToArray());
+            Assert.Equal(first.Files.Select(file => file.RemoteId), second.Files.Select(file => file.RemoteId));
+            Assert.Equal(3, first.Files[1].SizeBytes);
+            Assert.Equal(2, first.Files.SelectMany(file => file.Targets).Select(target => target.RemoteId).Distinct().Count());
+        } finally {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task ExistingWorkCanBeReviewedAndControlledPerRendition() {
         using var handler = new StubHandler();
         var connection = Connection();
@@ -119,6 +152,7 @@ public sealed class LazyLibrarianLibraryTests {
     private sealed class StubHandler : HttpMessageHandler {
         public bool ZipAudio { get; set; }
         public bool EscapingPath { get; set; }
+        public string AudioPath { get; set; } = "/audio/example.m4b";
         public string EbookStatus { get; private set; } = "Open";
         public string AudioStatus { get; private set; } = "Open";
         public string SearchReply { get; set; } = LazyLibrarianCodes.Ok;
@@ -158,7 +192,7 @@ public sealed class LazyLibrarianLibraryTests {
                 : query.Contains("cmd=getAllBooks", StringComparison.Ordinal)
                 ? "[{\"BookID\":\"OL450063W\",\"AuthorID\":\"author-1\",\"AuthorName\":\"Author\",\"BookName\":\"Example\",\"Status\":\"" + EbookStatus + "\",\"AudioStatus\":\"" + AudioStatus + "\"}]"
                 : "{\"books\":[{\"BookID\":\"OL450063W\",\"AuthorID\":\"author-1\",\"BookName\":\"Example\",\"Status\":\"" + EbookStatus + "\",\"AudioStatus\":\"" + AudioStatus + "\",\"BookFile\":\"/books/example.epub\",\"AudioFile\":\""
-                    + (EscapingPath ? "/outside/example.m4b" : "/audio/example.m4b") + "\"}]}";
+                    + (EscapingPath ? "/outside/example.m4b" : AudioPath) + "\"}]}";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
         }
     }

@@ -96,7 +96,10 @@ internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, C
                 ? new ManagedFileTarget(row.BookID!, MediaKinds.Book, row.BookName!)
                 : new ManagedFileTarget(row.BookID! + ":audio-1", ManagerProtocol.AudioTrack, row.BookName!);
             files.Add(new(row.BookID! + ":" + input.BookRendition, path, size, null, [target]));
+            if (rendition == LazyLibrarianCodes.Audiobook)
+                files.AddRange(InventoryAudioParts(row, audiobookRoot, path, token));
         }
+        item = item with { RemoteFileCount = files.Count };
         // LazyLibrarian has no work-level folder identity when no file exists. Keep a
         // stable logical holding path inside the mapped root across file arrival.
         var pathPart = Uri.EscapeDataString(row.BookID!);
@@ -115,6 +118,56 @@ internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, C
     private static bool UnderRoot(string root, string path) => path.StartsWith(root + "/", StringComparison.Ordinal)
         && path.Length <= 8192 && !path.Any(char.IsControl)
         && !path.Split('/').Any(part => part is "." or "..");
+
+    private IReadOnlyList<ManagedLibraryFile> InventoryAudioParts(
+        LazyLibrarianBookRow row, string remoteRoot, string anchorPath, CancellationToken token) {
+        var mounts = connection.LibraryMounts?.Where(mount =>
+            mount.RemoteRootId == LazyLibrarianCodes.AudiobookRendition
+            && mount.RemotePath == remoteRoot).ToArray() ?? [];
+        if (mounts.Length == 0) return [];
+        if (mounts.Length != 1) throw Invalid();
+        var relative = anchorPath[(remoteRoot.Length + 1)..].Split('/');
+        if (relative.Length < 2 || relative.Any(part => part.Length == 0 || part is "." or "..")) return [];
+        var localRoot = Path.GetFullPath(mounts[0].LocalPath);
+        if (!Path.IsPathFullyQualified(localRoot) || !Directory.Exists(localRoot)) return [];
+        var folder = localRoot;
+        foreach (var part in relative[..^1]) {
+            folder = Path.Combine(folder, part);
+            if (!Directory.Exists(folder)) return [];
+            if ((File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0)
+                throw new IntegrationFailure("The mapped audiobook folder contains a link. Review this library boundary.");
+        }
+        var anchorLocal = Path.Combine(folder, relative[^1]);
+        if (!File.Exists(anchorLocal)) return [];
+        if ((File.GetAttributes(anchorLocal) & FileAttributes.ReparsePoint) != 0)
+            throw new IntegrationFailure("The mapped audiobook anchor is a link. Review this library boundary.");
+        var parts = new List<ManagedLibraryFile>();
+        try {
+            foreach (var candidate in Directory.EnumerateFiles(folder)) {
+                token.ThrowIfCancellationRequested();
+                if (!AudioExtensions.Contains(Path.GetExtension(candidate))) continue;
+                if (parts.Count >= 999)
+                    throw new IntegrationFailure("The mapped audiobook folder has too many audio parts to review as one work.");
+                if ((File.GetAttributes(candidate) & FileAttributes.ReparsePoint) != 0)
+                    throw new IntegrationFailure("The mapped audiobook folder contains an audio link. Review this library boundary.");
+                if (Path.GetFileName(candidate) == relative[^1]) continue;
+                var name = Path.GetFileName(candidate);
+                var remotePath = remoteRoot + "/" + string.Join('/', relative[..^1]) + "/" + name;
+                var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(remotePath)))[..24];
+                var target = new ManagedFileTarget(row.BookID! + ":audio-" + digest,
+                    ManagerProtocol.AudioTrack, Path.GetFileNameWithoutExtension(name));
+                parts.Add(new(row.BookID! + ":audio-file-" + digest, remotePath,
+                    new FileInfo(candidate).Length, null, [target]));
+            }
+        } catch (Exception error) when (error is IOException or UnauthorizedAccessException) {
+            throw new IntegrationFailure("The mapped audiobook folder could not be inventoried. Review its access.");
+        }
+        return parts.OrderBy(file => file.Path, StringComparer.Ordinal).ToArray();
+    }
+
+    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase) {
+        ".m4b", ".m4a", ".mp3"
+    };
 
     private static ManagedLibraryItem Item(LazyLibrarianBookRow row, int? fileCount, string? rendition = null) {
         if (row.BookID is null || row.BookName is null) throw Invalid();

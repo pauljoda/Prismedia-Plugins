@@ -52,7 +52,10 @@ public static class AcquisitionAccess {
     public const string External = "external";
 }
 /// <summary>Instance configuration and decrypted credentials supplied only for this invocation.</summary>
-public sealed record ConnectionContext(Guid Id, string BaseUrl, string? ExpectedInstanceId, IReadOnlyDictionary<string, string> Settings, IReadOnlyDictionary<string, string> Auth);
+public sealed record ConnectionContext(Guid Id, string BaseUrl, string? ExpectedInstanceId, IReadOnlyDictionary<string, string> Settings,
+    IReadOnlyDictionary<string, string> Auth, IReadOnlyList<IntegrationLibraryMount>? LibraryMounts = null);
+/// <summary>A reviewed remote-to-local library boundary, available only for library operations.</summary>
+public sealed record IntegrationLibraryMount(string RemoteRootId, string RemotePath, string LocalPath);
 /// <summary>Correlated host request with a separately versioned integration protocol.</summary>
 public sealed record IntegrationRequest(string Protocol, int ProtocolVersion, Guid InvocationId, string Operation, ConnectionContext Connection, JsonElement Input);
 /// <summary>Correlated success or safe failure emitted by an integration executable.</summary>
