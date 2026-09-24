@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -6,109 +5,136 @@ using Prismedia.Plugin.Integrations;
 
 namespace Prismedia.Plugin.LazyLibrarian;
 
-/// <summary>Exposes one Book work with independently inspected readable and audio files from a tested LazyLibrarian build.</summary>
+/// <summary>
+/// Exposes one Book work with independently inspected ebook and audiobook files. Supported commands
+/// are probed from LazyLibrarian's API help on every invocation instead of pinning one build: reads
+/// need the core catalog commands, and each write needs its command declared for the book format.
+/// </summary>
 internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, ConnectionContext connection) {
+    #region Variables
     private readonly LazyLibrarianBooks books = new(client);
+    private LazyLibrarianApiHelp? help;
 
+    /// <summary>The commands probed for this invocation.</summary>
+    private LazyLibrarianApiHelp Help => help
+        ?? throw new InvalidOperationException("LazyLibrarian's API help is read at the start of every dispatch.");
+    #endregion
+
+    #region Actions - Dispatch
+    /// <summary>Probes LazyLibrarian's commands, then runs one integration operation.</summary>
+    /// <param name="request">The correlated host request.</param>
+    /// <param name="token">Invocation deadline.</param>
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken token) {
-        var version = await client.ReadAsync<LazyLibrarianVersionRow>(LazyLibrarianCodes.GetVersion, null, token);
-        if (!version.Success || version.CurrentVersion is null
-            || !version.CurrentVersion.StartsWith(LazyLibrarianCodes.TestedVersion, StringComparison.Ordinal))
-            throw new IntegrationFailure("This adapter is verified only with the tested LazyLibrarian API build.");
+        help = await client.ReadHelpAsync(token);
+        Help.RequireReads();
         if (connection.ExpectedInstanceId is not null)
             throw new IntegrationFailure("LazyLibrarian does not report a persistent installation ID. Reconnect it with its current identity policy.");
-        var ebookRoot = Root(LazyLibrarianCodes.EbookRoot);
-        var audiobookRoot = Root(LazyLibrarianCodes.AudiobookRoot);
-        if (request.Operation == IntegrationOperations.Probe) {
-            await books.ListAsync(token);
-            return new ProbeResult(null, "LazyLibrarian", version.CurrentVersion, [
-                new(ManagerProtocol.ConnectedLibrary,
-                    [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries],
-                    [MediaKinds.Book]),
-                new(ManagerProtocol.ExternalManager,
-                    [ManagerProtocol.Options, ManagerCreation.Lookup, ManagerControls.Reconcile,
-                        ManagerControls.Configure, ManagerControls.Request], [MediaKinds.Book])
-            ]);
-        }
+        foreach (var rendition in LazyLibrarianRendition.All) _ = Root(rendition);
+        if (request.Operation == IntegrationOperations.Probe) return await ProbeAsync(token);
         if (request.Operation == ManagerProtocol.SearchLibrary)
             return await SearchAsync(Input<ManagedLibraryQuery>(request), token);
         if (request.Operation == ManagerProtocol.GetLibraryItem)
-            return await GetAsync(Input<ManagedItemInput>(request), ebookRoot, audiobookRoot, token);
+            return await GetLibraryItemAsync(Input<ManagedItemInput>(request), token);
         if (request.Operation == ManagerProtocol.ListLibraries)
-            return new ProviderLibraryCatalog([
-                new(LazyLibrarianCodes.EbookRendition, "Ebooks", ebookRoot, [MediaKinds.Book], connection.BaseUrl),
-                new(LazyLibrarianCodes.AudiobookRendition, "Audiobooks", audiobookRoot, [MediaKinds.Book], connection.BaseUrl)
-            ]);
+            return new ProviderLibraryCatalog(LazyLibrarianRendition.All.Select(rendition =>
+                new ProviderLibraryDescriptor(rendition.Code, rendition.LibraryLabel, Root(rendition), [MediaKinds.Book], connection.BaseUrl)).ToArray());
         if (request.Operation == ManagerProtocol.Options)
-            return Options(Input<ManagerOptionsInput>(request), ebookRoot, audiobookRoot);
+            return Options(Input<ManagerOptionsInput>(request));
         if (request.Operation == ManagerCreation.Lookup)
-            return await LookupAsync(Input<ManagedLookupInput>(request), ebookRoot, audiobookRoot, token);
+            return await LookupAsync(Input<ManagedLookupInput>(request), token);
         if (request.Operation == ManagerControls.Reconcile)
-            return await ReconcileAsync(Input<ReconcileManagedInput>(request), ebookRoot, audiobookRoot, token);
+            return await ReconcileAsync(Input<ReconcileManagedInput>(request), token);
         if (request.Operation == ManagerControls.Configure)
-            return await ConfigureAsync(Input<ConfigureManagedInput>(request), ebookRoot, audiobookRoot, token);
+            return await ConfigureAsync(Input<ConfigureManagedInput>(request), token);
         if (request.Operation == ManagerControls.Request)
-            return await RequestAsync(Input<RequestManagedInput>(request), ebookRoot, audiobookRoot, token);
+            return await RequestAsync(Input<RequestManagedInput>(request), token);
         throw new IntegrationFailure("This LazyLibrarian operation is not supported.");
     }
 
+    /// <summary>Declares only the controls this installation's API help lists for both book formats.</summary>
+    private async Task<ProbeResult> ProbeAsync(CancellationToken token) {
+        await books.ListAsync(token);
+        var version = Help.Supports(LazyLibrarianCommand.GetVersion)
+            ? await client.ReadAsync<LazyLibrarianVersionRow>(LazyLibrarianCommand.GetVersion, null, token)
+            : null;
+        bool SupportsEveryFormat(params LazyLibrarianCommand[] commands) => commands.All(command =>
+            LazyLibrarianRendition.All.All(rendition => Help.Supports(command, rendition)));
+        List<string> managerOperations = [ManagerProtocol.Options, ManagerCreation.Lookup, ManagerControls.Reconcile];
+        if (SupportsEveryFormat(LazyLibrarianCommand.QueueBook, LazyLibrarianCommand.UnqueueBook))
+            managerOperations.Add(ManagerControls.Configure);
+        if (SupportsEveryFormat(LazyLibrarianCommand.SearchBook)) managerOperations.Add(ManagerControls.Request);
+        return new ProbeResult(null, "LazyLibrarian", version is { Success: true } ? version.CurrentVersion : null, [
+            new(ManagerProtocol.ConnectedLibrary,
+                [ManagerProtocol.SearchLibrary, ManagerProtocol.GetLibraryItem, ManagerProtocol.ListLibraries], [MediaKinds.Book]),
+            new(ManagerProtocol.ExternalManager, managerOperations, [MediaKinds.Book])
+        ]);
+    }
+    #endregion
+
+    #region Actions - Library
     private async Task<ManagedLibraryPage> SearchAsync(ManagedLibraryQuery input, CancellationToken token) {
         if (input.EntityKind != MediaKinds.Book || input.Limit is < 1 or > 100
-            || input.Query?.Length > 512 || input.Cursor?.Length > 8192) throw Invalid();
+            || input.Query?.Length > 512 || input.Cursor?.Length > 8192)
+            throw new IntegrationFailure("Search Books with a page size from 1 to 100 and a query of up to 512 characters.");
         var query = input.Query?.Trim() ?? "";
         var scope = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
             JsonSerializer.Serialize(new { connection.Id, input.EntityKind, Query = query, input.Limit }))));
         var after = "";
         if (!string.IsNullOrWhiteSpace(input.Cursor)) {
             var parts = input.Cursor.Split(':', 2);
-            if (parts.Length != 2 || parts[0] != scope || parts[1].Length is < 1 or > 512) throw Invalid();
+            if (parts.Length != 2 || parts[0] != scope || parts[1].Length is < 1 or > 512)
+                throw new IntegrationFailure("This library page belongs to another search. Start the search again.");
             after = parts[1];
         }
-        var rows = (await books.ListAsync(token)).Where(row => row.BookID is not null
-            && string.CompareOrdinal(row.BookID, after) > 0
+        var rows = (await books.ListAsync(token)).Where(row => string.CompareOrdinal(row.BookID, after) > 0
             && (query.Length == 0 || row.BookName!.Contains(query, StringComparison.OrdinalIgnoreCase)
                 || row.AuthorName!.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || row.BookID.Contains(query, StringComparison.OrdinalIgnoreCase)))
+                || row.BookID!.Contains(query, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(row => row.BookID, StringComparer.Ordinal).Take(input.Limit + 1).ToArray();
         var page = rows.Take(input.Limit).Select(row => Item(row, null)).ToArray();
         return new(page, rows.Length > input.Limit ? scope + ":" + page[^1].RemoteId : null);
     }
 
-    private async Task<ManagedItemSnapshot> GetAsync(
-        ManagedItemInput input, string ebookRoot, string audiobookRoot, CancellationToken token) {
-        if (input.EntityKind != MediaKinds.Book || input.BookRendition is not
-                (LazyLibrarianCodes.EbookRendition or LazyLibrarianCodes.AudiobookRendition)
-            || input.ExpectedExternalIds is not { Count: > 0 and <= 64 }) throw Invalid();
-        var row = await books.GetAsync(input.RemoteId, token);
-        var rendition = input.BookRendition == LazyLibrarianCodes.EbookRendition
-            ? LazyLibrarianCodes.Ebook : LazyLibrarianCodes.Audiobook;
-        var root = rendition == LazyLibrarianCodes.Ebook ? ebookRoot : audiobookRoot;
-        var path = rendition == LazyLibrarianCodes.Ebook ? row.BookFile : row.AudioFile;
-        if (!string.IsNullOrWhiteSpace(path) && !UnderRoot(root, path))
-            throw new IntegrationFailure("The reported book file is outside this rendition's configured library root.");
-        var item = Item(row, string.IsNullOrWhiteSpace(path) ? 0 : 1, rendition);
-        if (input.ExpectedExternalIds.Any(pair => item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
-            throw new IntegrationFailure("This book's pinned identity changed. Refresh the connected library.");
-        var files = new List<ManagedLibraryFile>();
-        if (!string.IsNullOrWhiteSpace(path)) {
-            var size = await client.FileSizeAsync(row.BookID!, rendition, path, token);
-            var target = rendition == LazyLibrarianCodes.Ebook
-                ? new ManagedFileTarget(row.BookID!, MediaKinds.Book, row.BookName!)
-                : new ManagedFileTarget(row.BookID! + ":audio-1", ManagerProtocol.AudioTrack, row.BookName!);
-            files.Add(new(row.BookID! + ":" + input.BookRendition, path, size, null, [target]));
-            if (rendition == LazyLibrarianCodes.Audiobook)
-                files.AddRange(InventoryAudioParts(row, audiobookRoot, path, token));
-        }
-        item = item with { RemoteFileCount = files.Count };
-        // LazyLibrarian has no work-level folder identity when no file exists. Keep a
-        // stable logical holding path inside the mapped root across file arrival.
-        var pathPart = Uri.EscapeDataString(row.BookID!);
-        if (pathPart is "." or "..") pathPart = "work-" + pathPart;
-        return new(item, root + "/" + pathPart, files, DateTimeOffset.UtcNow);
+    /// <summary>
+    /// Reads one rendition with its file evidence. Only this read may report confirmed removal, and
+    /// only when the complete, validated catalog omits the book.
+    /// </summary>
+    private async Task<ManagedItemSnapshot> GetLibraryItemAsync(ManagedItemInput input, CancellationToken token) {
+        var rendition = LazyLibrarianRendition.Require(input.EntityKind, input.BookRendition);
+        var row = await books.FindAsync(input.RemoteId, token)
+            ?? throw new IntegrationFailure("This book was removed from LazyLibrarian's catalog.", IntegrationErrorCodes.ManagedItemNotFound);
+        return await SnapshotAsync(row, rendition, input.ExpectedExternalIds, token);
     }
 
-    private string Root(string key) {
-        var root = connection.Settings.GetValueOrDefault(key)?.TrimEnd('/');
+    private async Task<ManagedItemSnapshot> SnapshotAsync(LazyLibrarianBookRow row, LazyLibrarianRendition rendition,
+        IReadOnlyDictionary<string, string>? expectedIds, CancellationToken token) {
+        var (item, path) = Holding(row, rendition, expectedIds);
+        var files = rendition.FileOf(row) is { } reported ? await FilesAsync(row, rendition, reported, token) : [];
+        return new(item with { RemoteFileCount = files.Count }, path, files, DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>
+    /// The rendition's item and stable holding path, without file evidence. LazyLibrarian has no
+    /// work-level folder identity when no file exists, so the path is a logical holding inside the
+    /// mapped root that stays the same across file arrival.
+    /// </summary>
+    private (ManagedLibraryItem Item, string Path) Holding(LazyLibrarianBookRow row, LazyLibrarianRendition rendition,
+        IReadOnlyDictionary<string, string>? expectedIds) {
+        if (expectedIds is not { Count: > 0 and <= 64 })
+            throw new ManagedMutationRejection("Select a book with its known identities.");
+        var root = Root(rendition);
+        if (rendition.FileOf(row) is { } reported && !UnderRoot(root, reported))
+            throw new IntegrationFailure($"The reported {rendition.Noun} file is outside this rendition's configured library root.");
+        var item = Item(row, rendition);
+        if (expectedIds.Any(pair => item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
+            throw new ManagedMutationRejection("This book's pinned identity changed. Refresh the connected library.");
+        var pathPart = Uri.EscapeDataString(row.BookID!);
+        if (pathPart is "." or "..") pathPart = "work-" + pathPart;
+        return (item, root + "/" + pathPart);
+    }
+
+    private string Root(LazyLibrarianRendition rendition) {
+        var root = connection.Settings.GetValueOrDefault(rendition.RootSetting)?.TrimEnd('/');
         if (root is null || root.Length < 2 || root.Length > 8192 || !root.StartsWith('/')
             || root.Any(char.IsControl) || root.Split('/').Any(part => part is "." or ".."))
             throw new IntegrationFailure("Configure absolute ebook and audiobook roots from LazyLibrarian's library settings.");
@@ -119,75 +145,22 @@ internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, C
         && path.Length <= 8192 && !path.Any(char.IsControl)
         && !path.Split('/').Any(part => part is "." or "..");
 
-    private IReadOnlyList<ManagedLibraryFile> InventoryAudioParts(
-        LazyLibrarianBookRow row, string remoteRoot, string anchorPath, CancellationToken token) {
-        var mounts = connection.LibraryMounts?.Where(mount =>
-            mount.RemoteRootId == LazyLibrarianCodes.AudiobookRendition
-            && mount.RemotePath == remoteRoot).ToArray() ?? [];
-        if (mounts.Length == 0) return [];
-        if (mounts.Length != 1) throw Invalid();
-        var relative = anchorPath[(remoteRoot.Length + 1)..].Split('/');
-        if (relative.Length < 2 || relative.Any(part => part.Length == 0 || part is "." or "..")) return [];
-        var localRoot = Path.GetFullPath(mounts[0].LocalPath);
-        if (!Path.IsPathFullyQualified(localRoot) || !Directory.Exists(localRoot)) return [];
-        var folder = localRoot;
-        foreach (var part in relative[..^1]) {
-            folder = Path.Combine(folder, part);
-            if (!Directory.Exists(folder)) return [];
-            if ((File.GetAttributes(folder) & FileAttributes.ReparsePoint) != 0)
-                throw new IntegrationFailure("The mapped audiobook folder contains a link. Review this library boundary.");
-        }
-        var anchorLocal = Path.Combine(folder, relative[^1]);
-        if (!File.Exists(anchorLocal)) return [];
-        if ((File.GetAttributes(anchorLocal) & FileAttributes.ReparsePoint) != 0)
-            throw new IntegrationFailure("The mapped audiobook anchor is a link. Review this library boundary.");
-        var parts = new List<ManagedLibraryFile>();
-        try {
-            foreach (var candidate in Directory.EnumerateFiles(folder)) {
-                token.ThrowIfCancellationRequested();
-                if (!AudioExtensions.Contains(Path.GetExtension(candidate))) continue;
-                if (parts.Count >= 999)
-                    throw new IntegrationFailure("The mapped audiobook folder has too many audio parts to review as one work.");
-                if ((File.GetAttributes(candidate) & FileAttributes.ReparsePoint) != 0)
-                    throw new IntegrationFailure("The mapped audiobook folder contains an audio link. Review this library boundary.");
-                if (Path.GetFileName(candidate) == relative[^1]) continue;
-                var name = Path.GetFileName(candidate);
-                var remotePath = remoteRoot + "/" + string.Join('/', relative[..^1]) + "/" + name;
-                var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(remotePath)))[..24];
-                var target = new ManagedFileTarget(row.BookID! + ":audio-" + digest,
-                    ManagerProtocol.AudioTrack, Path.GetFileNameWithoutExtension(name));
-                parts.Add(new(row.BookID! + ":audio-file-" + digest, remotePath,
-                    new FileInfo(candidate).Length, null, [target]));
-            }
-        } catch (Exception error) when (error is IOException or UnauthorizedAccessException) {
-            throw new IntegrationFailure("The mapped audiobook folder could not be inventoried. Review its access.");
-        }
-        return parts.OrderBy(file => file.Path, StringComparer.Ordinal).ToArray();
-    }
-
-    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase) {
-        ".m4b", ".m4a", ".mp3"
-    };
-
-    private static ManagedLibraryItem Item(LazyLibrarianBookRow row, int? fileCount, string? rendition = null) {
-        if (row.BookID is null || row.BookName is null) throw Invalid();
-        var identities = new Dictionary<string, string> {
-            [row.BookID.StartsWith(LazyLibrarianCodes.OpenLibraryPrefix, StringComparison.Ordinal)
-                && row.BookID.EndsWith(LazyLibrarianCodes.OpenLibraryWorkSuffix)
-                && long.TryParse(row.BookID.AsSpan(2, row.BookID.Length - 3), NumberStyles.None,
-                    CultureInfo.InvariantCulture, out var number) && number > 0
-                ? LazyLibrarianCodes.OpenLibraryWork : LazyLibrarianCodes.LazyLibrarianWork] = row.BookID
-        };
-        var status = rendition == LazyLibrarianCodes.Audiobook ? row.AudioStatus : row.Status;
+    /// <summary>
+    /// The host item for one book. With a rendition, monitoring is that format's; without one, a book
+    /// counts as monitored when either format is.
+    /// </summary>
+    private static ManagedLibraryItem Item(LazyLibrarianBookRow row, LazyLibrarianRendition? rendition) {
         var monitored = rendition is null
-            ? row.Status == LazyLibrarianCodes.Wanted || row.AudioStatus == LazyLibrarianCodes.Wanted
-            : status == LazyLibrarianCodes.Wanted;
-        return new(row.BookID, MediaKinds.Book, row.BookName, null, identities,
-            monitored, null, fileCount);
+            ? LazyLibrarianRendition.All.Any(format => format.StatusOf(row).IsMonitored)
+            : rendition.StatusOf(row).IsMonitored;
+        return new(row.BookID!, MediaKinds.Book, row.BookName!, null, LazyLibrarianBookIdentity.Identities(row.BookID!),
+            monitored, null, null);
     }
 
     private static T Input<T>(IntegrationRequest request) =>
-        request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw Invalid();
+        request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
+
     private static IntegrationFailure Invalid() =>
         new("LazyLibrarian returned invalid or ambiguous book library evidence.");
+    #endregion
 }
