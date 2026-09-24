@@ -58,7 +58,7 @@ internal sealed partial class SonarrLibrary {
             acknowledgement = await Client.WriteAsync<SeriesCreationAcknowledgement>(HttpMethod.Post, "series",
                 new AddSeries(lookup.Candidate.Title, tvdb, profile, root.Path, false, true,
                     new(ArrCreation.Unmonitored, false, false)), token);
-        } catch (ArrRequestRejectedException error) { return new(ManagerControls.Rejected, Problem: error.Message); }
+        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
 
         // Any failure after the POST is uncertain. Recovery must use exact lookup, which adopts
         // an existing series and waits for its asynchronous episode catalog without adding again.

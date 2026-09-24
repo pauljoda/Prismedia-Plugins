@@ -48,7 +48,7 @@ internal sealed partial class SonarrLibrary {
             var accepted = await Client.WriteAsync<EpisodeAcknowledgement[]>(HttpMethod.Put, "episode/monitor", new EpisodeMonitor(ids, input.Changes.Monitored!.Value), token);
             if (accepted.Length != ids.Length || !accepted.Select(episode => episode.Id).Order().SequenceEqual(ids))
                 throw new IntegrationFailure("The monitoring reply did not confirm the exact selected episodes. Reconcile before another change.");
-        } catch (ArrRequestRejectedException error) { return new(ManagerControls.Rejected, Problem: error.Message); }
+        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
         var (after, updated) = await RequireScopeAsync(input.Scope, token);
         RequireConfiguration(after, input.ExpectedPath, input.ExpectedProfileId);
         if (updated.Any(episode => episode.Monitored != input.Changes.Monitored))
@@ -67,7 +67,7 @@ internal sealed partial class SonarrLibrary {
         try {
             command = await Client.WriteAsync<EpisodeCommand>(HttpMethod.Post, "command",
                 new EpisodeSearch(ArrCommands.EpisodeSearch, episodes.Select(episode => episode.Id).Order().ToArray()), token);
-        } catch (ArrRequestRejectedException error) { return new(ManagerControls.Rejected, Problem: error.Message); }
+        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
         if (!MatchesCommand(command, episodes)) throw new IntegrationFailure("The accepted command did not confirm the exact selected episodes. Inspect the application before another search.");
         return new(ManagerControls.Accepted, MapCommand(command));
     }

@@ -5,7 +5,11 @@ using Prismedia.Plugin.Integrations;
 
 namespace Prismedia.Plugin.Arr;
 
-/// <summary>Bounded transport for the configured API origin; never retries writes or follows credential-bearing redirects.</summary>
+/// <summary>
+/// Bounded transport for the configured API origin; never retries writes or follows credential-bearing
+/// redirects. A write the application definitely refuses with a 4xx before changing anything is a
+/// <see cref="ManagedMutationRejection"/>; every other write failure stays uncertain.
+/// </summary>
 internal sealed class ArrClient : IDisposable {
     internal const string ApiKey = "apiKey";
     private const int MaximumBytes = 8 * 1024 * 1024;
@@ -26,6 +30,13 @@ internal sealed class ArrClient : IDisposable {
         (await SendAsync<T>(HttpMethod.Get, relativePath, null, false, cancellationToken))!;
     internal Task<T?> GetOptionalAsync<T>(string relativePath, CancellationToken cancellationToken) where T : class =>
         SendAsync<T>(HttpMethod.Get, relativePath, null, true, cancellationToken);
+    /// <summary>
+    /// Sends one POST or PUT and decodes its reply. HTTP 400, 401, 403, 404, and 405 mean the application
+    /// refused the request before changing anything. Timeouts, redirects, oversized or invalid replies,
+    /// and server errors are never classified that way.
+    /// </summary>
+    /// <exception cref="ManagedMutationRejection">The application definitely refused the write.</exception>
+    /// <exception cref="IntegrationFailure">The write's outcome is uncertain.</exception>
     internal async Task<T> WriteAsync<T>(HttpMethod method, string relativePath, object body, CancellationToken cancellationToken) where T : class {
         if (method != HttpMethod.Post && method != HttpMethod.Put) throw new IntegrationFailure("Unsupported manager mutation.");
         return (await SendAsync<T>(method, relativePath, body, false, cancellationToken))!;
@@ -40,7 +51,7 @@ internal sealed class ArrClient : IDisposable {
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (method != HttpMethod.Get && response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Unauthorized
             or HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed)
-            throw new ArrRequestRejectedException(response.StatusCode);
+            throw new ManagedMutationRejection($"The connected application rejected the request (HTTP {(int)response.StatusCode}).");
         if (allowMissing && response.StatusCode == HttpStatusCode.NotFound) return null;
         if (response.StatusCode == HttpStatusCode.NotFound) throw new IntegrationFailure("The remote holding or API endpoint no longer exists. Refresh the connected library.");
         if (!response.IsSuccessStatusCode) throw new IntegrationFailure($"The connected application returned HTTP {(int)response.StatusCode}.");
@@ -58,7 +69,3 @@ internal sealed class ArrClient : IDisposable {
     }
     public void Dispose() => client.Dispose();
 }
-
-/// <summary>A definitive API rejection; timeouts, redirects, oversized replies and server failures are never classified this way.</summary>
-internal sealed class ArrRequestRejectedException(HttpStatusCode status)
-    : Exception($"The connected application rejected the request (HTTP {(int)status}).");

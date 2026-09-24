@@ -57,7 +57,7 @@ internal sealed partial class RadarrLibrary {
                 input.Changes.ProfileId is null ? null : ParseId(input.Changes.ProfileId)), token);
             if (updated.Length != 1 || updated[0].Id != movie.Id)
                 throw new IntegrationFailure("The configuration response did not confirm the selected movie. Reconcile its state before another change.");
-        } catch (ArrRequestRejectedException error) { return Rejected(error.Message); }
+        } catch (ManagedMutationRejection error) { return Rejected(error.Message); }
         var observed = await RequireMovieAsync(input.Scope, token);
         RequirePath(observed, input.ExpectedPath);
         if (!MatchesChanges(observed, input.Changes)) throw new IntegrationFailure("The submitted configuration could not be confirmed. Reconcile it before another change.");
@@ -75,7 +75,7 @@ internal sealed partial class RadarrLibrary {
         ArrCommand command;
         try {
             command = await Client.WriteAsync<ArrCommand>(HttpMethod.Post, "command", new MoviesSearch(ArrCommands.MoviesSearch, [movie.Id]), token);
-        } catch (ArrRequestRejectedException error) { return Rejected(error.Message); }
+        } catch (ManagedMutationRejection error) { return Rejected(error.Message); }
         if (!MatchesCommand(command, movie.Id)) throw new IntegrationFailure("The returned command did not confirm the submitted work and scope. Reconcile the application before searching again.");
         return new(ManagerControls.Accepted, MapCommand(command));
     }

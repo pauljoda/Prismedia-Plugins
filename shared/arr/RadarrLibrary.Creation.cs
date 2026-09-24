@@ -42,7 +42,7 @@ internal sealed partial class RadarrLibrary {
         try {
             acknowledgement = await Client.WriteAsync<MovieCreationAcknowledgement>(HttpMethod.Post, "movie",
                 new AddMovie(tmdb, profile, root.Path, false, ArrCreation.Released, new(false, ArrCreation.Unmonitored)), token);
-        } catch (ArrRequestRejectedException error) { return new(ManagerControls.Rejected, Problem: error.Message); }
+        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
         // Any failure from this point is uncertain. The host must look up the exact identity, never
         // retry a timed-out POST on the assumption that no movie was added.
         var observed = await GetAsync(ParseId(Id(acknowledgement.Id)), token);
