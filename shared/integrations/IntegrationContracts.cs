@@ -93,8 +93,12 @@ public sealed record HttpArtifactDelivery(string Url, IReadOnlyDictionary<string
 /// <summary>Revalidated full-publication offer and its server-only delivery instructions.</summary>
 public sealed record ResolvedSourceOffer(SourceSelection Selection, string OfferId, CatalogPublication Publication, CatalogOffer Offer, HttpArtifactDelivery Delivery);
 
-/// <summary>Actionable failure whose text is safe to expose to the connection owner.</summary>
-public sealed class IntegrationFailure(string message, string? code = null) : Exception(message) {
+/// <summary>
+/// Actionable failure whose text is safe to expose to the connection owner. When raised from a
+/// manager mutation it means the outcome is uncertain; <see cref="ManagedMutationRejection"/> marks a
+/// definite refusal instead.
+/// </summary>
+public class IntegrationFailure(string message, string? code = null) : Exception(message) {
     /// <summary>Optional classification backed by affirmative adapter evidence.</summary>
     public string? Code { get; } = code;
 }
