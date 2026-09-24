@@ -9,12 +9,16 @@ Map a root to a dedicated **read-only** folder in Prismedia, check local access,
 ## Scope
 
 - Existing holdings work without a Comic Vine account in Prismedia. Kapowarr needs its own Comic Vine API key to look up and add a new run.
-- A linked, locally matched issue can change its own monitoring flag or queue one immediate search. These controls never expand to sibling issues, and Kapowarr has no matching per-run profile choice.
+- A linked, locally matched issue can change its own monitoring or queue one immediate search. These controls never expand to sibling issues, and Kapowarr has no matching per-run profile choice.
+- Kapowarr searches an issue only when both the issue and its run are monitored and the issue has no file, so an issue counts as monitored only inside a monitored run. Turning an issue's monitoring on also sets its run's own monitoring flag. That write carries no monitoring scheme, so other issues keep their flags and new-issue monitoring stays as it is. The adapter refuses instead when monitoring the run would widen Kapowarr's searches: the run monitors new issues, or other issues without files are already monitored.
+- Search is offered only when Kapowarr's automatic issue search would actually run. A request for an unmonitored run or issue, or for an issue that already has a file, is rejected with that reason instead of queueing a task that does nothing.
 - Comic Vine catalog search returns run identities for review. Read-only lookup resolves one exact issue in an existing run, or confirms an unadded run by its Comic Vine ID. It fails if an existing issue is absent or its label changed.
 - A reviewed creation intent can add one missing run to its mapped root with run monitoring, issue monitoring, and automatic search off. The adapter then re-reads the run and pins the requested Comic Vine issue before the host can apply issue controls. A lost add response remains uncertain until exact identity lookup reconciles it.
 - Search acknowledgement means Kapowarr accepted a task. Its task IDs have no durable completion history, so Prismedia keeps the outcome unverified when the task disappears. A search does not promise a download or readable file.
 - The current Prismedia comic review page starts from an existing connected run. A new-run review entry point still needs to be wired in the host UI. The adapter does not download directly, rename, or delete.
-- Multiple files for one issue require rendition review in Kapowarr. The plugin refuses ambiguous evidence rather than choosing one arbitrarily.
+- An issue with several files cannot be matched to one exact file. The run stays readable: that issue keeps its entry, but its files, and any other issue sharing them, are left out of the file list. Controls, lookups, and requests that target those issues fail with the reason until Kapowarr keeps one file per issue. The plugin never chooses one file arbitrarily.
+- A run that Kapowarr reports as missing is reported to Prismedia as removed only when Kapowarr's complete run list also omits it. A 404 alone, such as from a misrouted proxy, is an ordinary failure.
+- A definite refusal from Kapowarr (HTTP 4xx) before any change is reported as a rejected action with its reason. Timeouts, server errors, and unconfirmed results stay uncertain and are never repeated automatically.
 - Kapowarr exposes no persistent installation UUID. Keep the connection pointed at the same installation; individual runs are fenced with their Comic Vine identity.
 
 ## Transport
