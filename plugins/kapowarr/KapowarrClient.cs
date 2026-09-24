@@ -32,7 +32,8 @@ internal sealed class KapowarrClient : IDisposable {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(TimeSpan.FromSeconds(20));
         // Only adapter-owned constant paths and validated positive IDs enter this boundary.
-        using var request = new HttpRequestMessage(method, new Uri(root, relativePath + "?" + KapowarrCodes.ApiKeyParameter + "=" + credential));
+        var separator = relativePath.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        using var request = new HttpRequestMessage(method, new Uri(root, relativePath + separator + KapowarrCodes.ApiKeyParameter + "=" + credential));
         request.Headers.Accept.ParseAdd("application/json");
         if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body, IntegrationProtocol.Json),
             System.Text.Encoding.UTF8, "application/json");

@@ -9,4 +9,5 @@ internal static class KapowarrCodes {
     internal const string ComicVineSeriesPrefix = "4050-";
     internal const string ComicVineIssuePrefix = "4000-";
     internal const string AutoSearchIssue = "auto_search_issue";
+    internal const string MonitorNone = "none";
 }

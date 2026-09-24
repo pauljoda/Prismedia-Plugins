@@ -8,11 +8,12 @@ Map a root to a dedicated **read-only** folder in Prismedia, check local access,
 
 ## Scope
 
-- Existing holdings only; no Comic Vine account is needed by this plugin. Kapowarr needs its own Comic Vine configuration to add new runs upstream.
+- Existing holdings work without a Comic Vine account in Prismedia. Kapowarr needs its own Comic Vine API key to look up and add a new run.
 - A linked, locally matched issue can change its own monitoring flag or queue one immediate search. These controls never expand to sibling issues, and Kapowarr has no matching per-run profile choice.
-- Read-only lookup can resolve one missing issue in an existing run by its Comic Vine ID and exact issue label. It fails if the run or issue is absent or ambiguous; it does not add a run or issue.
+- Comic Vine catalog search returns run identities for review. Read-only lookup resolves one exact issue in an existing run, or confirms an unadded run by its Comic Vine ID. It fails if an existing issue is absent or its label changed.
+- A reviewed creation intent can add one missing run to its mapped root with run monitoring, issue monitoring, and automatic search off. The adapter then re-reads the run and pins the requested Comic Vine issue before the host can apply issue controls. A lost add response remains uncertain until exact identity lookup reconciles it.
 - Search acknowledgement means Kapowarr accepted a task. Its task IDs have no durable completion history, so Prismedia keeps the outcome unverified when the task disappears. A search does not promise a download or readable file.
-- New runs and issues with no linked Prismedia item still need to be requested in Kapowarr. This adapter does not add runs, download directly, rename, or delete.
+- The current Prismedia comic review page starts from an existing connected run. A new-run review entry point still needs to be wired in the host UI. The adapter does not download directly, rename, or delete.
 - Multiple files for one issue require rendition review in Kapowarr. The plugin refuses ambiguous evidence rather than choosing one arbitrarily.
 - Kapowarr exposes no persistent installation UUID. Keep the connection pointed at the same installation; individual runs are fenced with their Comic Vine identity.
 
@@ -20,6 +21,6 @@ Map a root to a dedicated **read-only** folder in Prismedia, check local access,
 
 Kapowarr authenticates API requests with an `api_key` query parameter. The adapter sends it only to the configured origin, preserves reverse-proxy prefixes, refuses redirects, bounds replies to 8 MiB, and returns sanitized failures. Configure reverse-proxy access logs to omit query strings when operating Kapowarr behind one.
 
-Validated against an isolated Kapowarr 1.3.2 instance with local CBZ fixtures. Exact issue monitoring and task acknowledgement were exercised; the original monitoring flags were restored. Authenticated Comic Vine discovery and adding new runs are outside this validation.
+Validated against an isolated Kapowarr 1.3.2 instance with local CBZ fixtures. Exact issue monitoring and task acknowledgement were exercised; the original monitoring flags were restored. The isolated instance has no Comic Vine API key, so new-run lookup and creation have contract tests but no real upstream acceptance yet.
 
 Primary API reference: [released route implementation](https://github.com/Casvt/Kapowarr/blob/V1.3.2/frontend/api.py).

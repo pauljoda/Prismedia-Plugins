@@ -27,7 +27,7 @@ public sealed class KapowarrLibraryTests {
         var probe = Assert.IsType<ProbeResult>(await fixture.Call(IntegrationOperations.Probe, new { }));
         Assert.Null(probe.InstanceId);
         Assert.Equal("V1.3.2", probe.Version);
-        Assert.Equal([ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup],
+        Assert.Equal([ManagerDiscovery.Search, ManagerProtocol.Options, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup, ManagerCreation.Ensure],
             Assert.Single(probe.Capabilities, c => c.Kind == ManagerProtocol.ExternalManager).Operations);
         Assert.All(probe.Capabilities, c => Assert.Equal([KapowarrCodes.ComicSeries], c.EntityKinds));
         Assert.All(fixture.Requests, r => Assert.Equal(HttpMethod.Get, r.Method));
@@ -138,6 +138,114 @@ public sealed class KapowarrLibraryTests {
     }
 
     [Fact]
+    public async Task MissingRunLookupConfirmsExactComicVineCandidateWithoutMutation() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = Array.Empty<object>();
+        fixture.Results["volumes/search"] = new[] { new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null } };
+
+        var result = Assert.IsType<ManagedLookupResult>(await fixture.Call(ManagerCreation.Lookup, Work()));
+
+        Assert.Null(result.Existing);
+        Assert.Null(result.Targets);
+        Assert.Equal("4050-1001", result.Candidate.ExternalIds[KapowarrCodes.ComicVine]);
+        Assert.Contains(fixture.Requests, request => request.RequestUri!.Query.Contains("query=4050-1001", StringComparison.Ordinal));
+        Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+    }
+
+    [Fact]
+    public async Task CatalogDiscoveryCarriesExactRunIdsWithoutMutatingKapowarr() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes/search"] = new[] {
+            new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null },
+            new { comicvine_id = 1002, title = "Comic 2", year = 2025, already_added = (int?)2 }
+        };
+
+        var page = Assert.IsType<ManagedDiscoveryPage>(await fixture.Call(ManagerDiscovery.Search,
+            new ManagedDiscoveryQuery(KapowarrCodes.ComicSeries, "Comic", 1)));
+
+        var candidate = Assert.Single(page.Items);
+        Assert.Equal("4050-1001", candidate.ExternalIds[KapowarrCodes.ComicVine]);
+        Assert.Equal("Comic 1", candidate.Title);
+        Assert.All(fixture.Requests, request => Assert.Equal(HttpMethod.Get, request.Method));
+        Assert.Contains("query=Comic", Assert.Single(fixture.Requests, request => request.RequestUri!.AbsolutePath.EndsWith("/volumes/search", StringComparison.Ordinal)).RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task EnsureAddsUnmonitoredRunWithoutSearchingAndPinsTheSelectedIssue() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = Array.Empty<object>();
+        fixture.Results["volumes/search"] = new[] { new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null } };
+        fixture.Results["rootfolder"] = new[] { new { id = 7, folder = "/comics/" } };
+        fixture.PostResults["volumes"] = new { id = 17 };
+        fixture.Results["volumes/17"] = new { id = 17, comicvine_id = 1001, title = "Comic 1", year = 2024,
+            monitored = false, folder = "/comics/Comic 1", issues = new[] {
+                new { id = 24, volume_id = 17, comicvine_id = 2001, issue_number = "½", title = "Half",
+                    monitored = false, files = Array.Empty<object>() }
+            } };
+
+        var result = Assert.IsType<EnsureManagedResult>(await fixture.Call(ManagerCreation.Ensure, Intent()));
+
+        Assert.Equal(ManagerControls.Applied, result.Outcome);
+        Assert.True(result.Created);
+        Assert.Equal("17", result.Holding!.Item.RemoteId);
+        Assert.Equal("24", Assert.Single(result.Targets!).RemoteId);
+        using var body = JsonDocument.Parse(Assert.Single(fixture.Bodies));
+        Assert.Equal(1001, body.RootElement.GetProperty("comicvine_id").GetInt32());
+        Assert.Equal(7, body.RootElement.GetProperty("root_folder_id").GetInt32());
+        Assert.False(body.RootElement.GetProperty("monitor").GetBoolean());
+        Assert.Equal(KapowarrCodes.MonitorNone, body.RootElement.GetProperty("monitoring_scheme").GetString());
+        Assert.False(body.RootElement.GetProperty("monitor_new_issues").GetBoolean());
+        Assert.False(body.RootElement.GetProperty("auto_search").GetBoolean());
+    }
+
+    [Fact]
+    public async Task EnsureCanAddOnlyTheRunBeforeAnIssueIsSelected() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = Array.Empty<object>();
+        fixture.Results["volumes/search"] = new[] { new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null } };
+        fixture.Results["rootfolder"] = new[] { new { id = 7, folder = "/comics/" } };
+        fixture.PostResults["volumes"] = new { id = 17 };
+        fixture.Results["volumes/17"] = new { id = 17, comicvine_id = 1001, title = "Comic 1", year = 2024,
+            monitored = false, folder = "/comics/Comic 1", issues = Array.Empty<object>() };
+
+        var result = Assert.IsType<EnsureManagedResult>(await fixture.Call(ManagerCreation.Ensure,
+            Intent() with { Work = RunWork() }));
+
+        Assert.Equal(ManagerControls.Applied, result.Outcome);
+        Assert.True(result.Created);
+        Assert.Empty(result.Holding!.Files);
+        Assert.Null(result.Targets);
+    }
+
+    [Fact]
+    public async Task EnsureRejectsChangedRootBeforeMutation() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = Array.Empty<object>();
+        fixture.Results["volumes/search"] = new[] { new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null } };
+        fixture.Results["rootfolder"] = new[] { new { id = 7, folder = "/other/" } };
+
+        var result = Assert.IsType<EnsureManagedResult>(await fixture.Call(ManagerCreation.Ensure, Intent()));
+
+        Assert.Equal(ManagerControls.Rejected, result.Outcome);
+        Assert.Empty(fixture.Bodies);
+    }
+
+    [Fact]
+    public async Task EnsureTreatsAnUnconfirmedIssueAfterAddAsUncertain() {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = Array.Empty<object>();
+        fixture.Results["volumes/search"] = new[] { new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null } };
+        fixture.Results["rootfolder"] = new[] { new { id = 7, folder = "/comics/" } };
+        fixture.PostResults["volumes"] = new { id = 17 };
+        fixture.Results["volumes/17"] = new { id = 17, comicvine_id = 1001, title = "Comic 1", year = 2024,
+            monitored = false, folder = "/comics/Comic 1", issues = Array.Empty<object>() };
+
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
+
+        Assert.Single(fixture.Bodies);
+    }
+
+    [Fact]
     public async Task MissingMonitorFlagsAreRejectedInsteadOfReportedAsOff() {
         using var fixture = new Fixture();
         fixture.Results["volumes/1"] = new { id = 1, comicvine_id = 1001, title = "Comic 1", year = 2024,
@@ -243,6 +351,11 @@ public sealed class KapowarrLibraryTests {
     }
 
     internal static ManagedItemInput Input => new(KapowarrCodes.ComicSeries, "1", new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4050-1001" });
+    private static ManagedLookupInput Work() => new(KapowarrCodes.ComicSeries,
+        new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4050-1001" },
+        [new(MediaKinds.Comic, new Dictionary<string, string> { [KapowarrCodes.ComicVine] = "4000-2001" }, IssueLabel: "½")]);
+    private static ManagedLookupInput RunWork() => Work() with { Targets = null };
+    private static EnsureManagedInput Intent() => new(Guid.NewGuid(), Work(), null!, "7", "/comics/");
     private static object Volume(int id, object[]? issues = null) => new { id, comicvine_id = 1000 + id, title = "Comic " + id, year = 2024,
         monitored = false, folder = "/comics/Comic", issues_downloaded = 20, issues = issues ?? [], general_files = new[] { new { id = 500, filepath = "/comics/Comic/cover.jpg", size = 50 } } };
     private static object File(int id, long size = 128) => new { id, filepath = $"/comics/Comic/issue{id}.cbz", size };
@@ -252,6 +365,7 @@ public sealed class KapowarrLibraryTests {
     private sealed class Fixture : HttpMessageHandler {
         internal const string Secret = "fixture/secret+key";
         internal Dictionary<string, object> Results { get; } = new() { ["system/about"] = new { version = "V1.3.2" } };
+        internal Dictionary<string, object> PostResults { get; } = new();
         internal List<HttpRequestMessage> Requests { get; } = [];
         internal List<string> Bodies { get; } = [];
         internal HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
@@ -268,7 +382,9 @@ public sealed class KapowarrLibraryTests {
             if (request.Content is not null) Bodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
             var path = request.RequestUri!.AbsolutePath.Split("/api/")[1];
             return new HttpResponseMessage(request.Method == HttpMethod.Post && Status == HttpStatusCode.OK ? HttpStatusCode.Created : Status) {
-                Content = new StringContent(Raw ?? JsonSerializer.Serialize(new { error = (string?)null, result = Results.GetValueOrDefault(path) })) };
+                Content = new StringContent(Raw ?? JsonSerializer.Serialize(new { error = (string?)null,
+                    result = request.Method == HttpMethod.Post && PostResults.TryGetValue(path, out var posted)
+                        ? posted : Results.GetValueOrDefault(path) })) };
         }
         protected override void Dispose(bool disposing) { }
     }
