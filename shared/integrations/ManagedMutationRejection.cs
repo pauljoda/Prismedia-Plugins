@@ -43,5 +43,21 @@ public sealed class ManagedMutationRejection(string problem) : IntegrationFailur
             return new(ManagerControls.Rejected, Problem: rejection.Problem);
         }
     }
+
+    /// <summary>
+    /// Runs work that follows a sent write, such as a second write or a confirming read. A refusal
+    /// raised there can no longer mean that nothing changed, so it becomes an uncertain failure.
+    /// </summary>
+    /// <param name="followUp">The follow-up write or confirmation to run.</param>
+    /// <param name="unconfirmed">Sentence naming what the earlier write may already have changed.</param>
+    /// <returns>The follow-up's own result.</returns>
+    /// <exception cref="IntegrationFailure">The follow-up raised a refusal after the earlier write.</exception>
+    public static async Task<TResult> AfterWriteAsync<TResult>(Func<Task<TResult>> followUp, string unconfirmed) {
+        try {
+            return await followUp().ConfigureAwait(false);
+        } catch (ManagedMutationRejection rejection) {
+            throw new IntegrationFailure(unconfirmed + " " + rejection.Problem);
+        }
+    }
     #endregion
 }

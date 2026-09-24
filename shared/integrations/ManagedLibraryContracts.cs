@@ -12,6 +12,7 @@ public static class ManagerProtocol {
     public const string Series = "video-series";
     public const string Episode = "video-episode";
     public const string AudioTrack = "audio-track";
+    public const string ComicSeries = "comic-series";
     public const string Tmdb = "tmdb";
     public const string Tvdb = "tvdb";
     public const string Imdb = "imdb";
