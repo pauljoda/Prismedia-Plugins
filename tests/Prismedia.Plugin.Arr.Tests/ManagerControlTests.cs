@@ -55,6 +55,24 @@ public sealed class ManagerControlTests {
         Assert.Empty(fixture.Writes);
     }
 
+    [Theory]
+    [InlineData("movie/1")]
+    [InlineData("qualityprofile")]
+    public async Task PreconditionReadFailureStaysUncertainInsteadOfRejected(string failingRead) {
+        using var fixture = new Fixture { FailingRead = failingRead };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Configure, fixture.Configure(new(ProfileId: "2"))));
+        Assert.Equal("The connected application returned HTTP 500.", error.Message);
+        Assert.Empty(fixture.Writes);
+    }
+
+    [Fact]
+    public async Task RefusedConfirmationAfterTheWriteIsUncertainRatherThanRejected() {
+        using var fixture = new Fixture { MovePathAfterWrite = true };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Configure, fixture.Configure(new(Monitored: true))));
+        Assert.StartsWith("Radarr accepted the movie's configuration change, but it could not be confirmed.", error.Message);
+        Assert.Single(fixture.Writes);
+    }
+
     [Fact]
     public async Task LostConfigurationResponseIsUncertainAndReadOnlyReconciliationCanObserveItsEffect() {
         using var fixture = new Fixture { LoseResponse = true };
@@ -75,8 +93,11 @@ public sealed class ManagerControlTests {
     public async Task OnlyDefiniteWriteRejectionsAreReportedAsRejected(HttpStatusCode status, bool rejected) {
         using var fixture = new Fixture { WriteStatus = status };
         var action = () => fixture.Call(ManagerControls.Request, fixture.Search());
-        if (rejected) Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await action()).Outcome);
-        else await Assert.ThrowsAsync<IntegrationFailure>(action);
+        if (rejected) {
+            var result = Assert.IsType<ManagedMutationResult>(await action());
+            Assert.Equal(ManagerControls.Rejected, result.Outcome);
+            Assert.Equal($"The connected application rejected the request (HTTP {(int)status}).", result.Problem);
+        } else await Assert.ThrowsAsync<IntegrationFailure>(action);
         Assert.Single(fixture.Writes);
     }
 
@@ -149,6 +170,8 @@ public sealed class ManagerControlTests {
         internal string CommandResult { get; set; } = ArrCommands.Unknown;
         internal int CommandMovieId { get; set; } = 1;
         internal bool CommandMissing { get; set; }
+        internal string? FailingRead { get; set; }
+        internal bool MovePathAfterWrite { get; set; }
         internal List<CapturedWrite> Writes { get; } = [];
         private readonly ConnectionContext connection = new(Guid.NewGuid(), "http://manager.test/radarr/", null, new Dictionary<string, string>(), new Dictionary<string, string> { [ArrClient.ApiKey] = "test-secret" });
         private readonly ArrClient client;
@@ -163,6 +186,7 @@ public sealed class ManagerControlTests {
             body = new { name = ArrCommands.MoviesSearch, movieIds = new[] { CommandMovieId } } };
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) {
             var path = request.RequestUri!.PathAndQuery.Split("/api/v3/")[1];
+            if (request.Method == HttpMethod.Get && path == FailingRead) return new(HttpStatusCode.InternalServerError);
             if (request.Method == HttpMethod.Get) return path switch {
                 "system/status" => Response(new { appName = "Radarr", version = "6.1.1.10360" }),
                 "movie/1" => Response(Movie()),
@@ -176,6 +200,7 @@ public sealed class ManagerControlTests {
             if (path == "movie/editor") {
                 if (body.TryGetProperty("monitored", out var monitored)) Monitored = monitored.GetBoolean();
                 if (body.TryGetProperty("qualityProfileId", out var profile)) Profile = profile.GetInt32();
+                if (MovePathAfterWrite) Path = "/library/moved";
             } else Assert.Equal("command", path);
             if (LoseResponse) throw new HttpRequestException("Simulated response loss after acceptance");
             // Radarr 6 editor replies omit hasFile; only the subsequent authoritative GET has that field.

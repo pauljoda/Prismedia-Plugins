@@ -31,55 +31,64 @@ internal sealed partial class RadarrLibrary {
         return ControlState(input.Scope, movie, command);
     }
 
-    private async Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) {
-        Movie movie;
-        try {
+    /// <summary>
+    /// Changes only the reviewed profile and monitoring fields of one movie, then confirms them through a
+    /// complete re-read. An intent that already holds is applied without a write.
+    /// </summary>
+    private Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) =>
+        ManagedMutationRejection.CaptureAsync(async () => {
             if (input.OperationId == Guid.Empty || input.Changes is null || input.Changes is { ProfileId: null, Monitored: null })
-                throw new IntegrationFailure("Select explicit configuration changes and a durable operation ID.");
-            movie = await RequireMovieAsync(input.Scope, token);
+                throw new ManagedMutationRejection("Select explicit configuration changes and a durable operation ID.");
+            var movie = await RequireMovieAsync(input.Scope, token);
             RequirePath(movie, input.ExpectedPath);
             if (MatchesChanges(movie, input.Changes)) return new(ManagerControls.Applied);
+            int? desiredProfile = null;
             if (input.Changes.ProfileId is not null) {
-                if (Id(movie.QualityProfileId) != input.ExpectedProfileId) throw new IntegrationFailure("The movie's profile changed since review. Refresh its settings.");
-                var desired = ParseId(input.Changes.ProfileId);
+                if (Id(movie.QualityProfileId) != input.ExpectedProfileId)
+                    throw new ManagedMutationRejection("The movie's profile changed since review. Refresh its settings.");
+                desiredProfile = ParseSelectedId(input.Changes.ProfileId);
                 var profiles = await Client.GetAsync<ArrProfile[]>("qualityprofile", token);
-                if (!profiles.Any(profile => profile.Id == desired)) throw new IntegrationFailure("The selected external profile no longer exists.");
+                if (!profiles.Any(profile => profile.Id == desiredProfile))
+                    throw new ManagedMutationRejection("The selected external profile no longer exists.");
             }
             if (input.Changes.Monitored is not null && (input.ExpectedMonitoring is null || input.ExpectedMonitoring.Count != 1
                 || !input.ExpectedMonitoring.TryGetValue(Id(movie.Id), out var expected) || expected != movie.Monitored))
-                throw new IntegrationFailure("The movie's monitoring changed since review. Refresh its settings.");
-        } catch (IntegrationFailure error) { return Rejected(error.Message); }
-
-        // The editor endpoint changes only supplied fields. No paths, tags, availability settings,
-        // file moves or deletions are included. A response failure after this point is uncertain.
-        try {
-            var updated = await Client.WriteAsync<MovieEditAcknowledgement[]>(HttpMethod.Put, "movie/editor", new MovieEdit([movie.Id], input.Changes.Monitored,
-                input.Changes.ProfileId is null ? null : ParseId(input.Changes.ProfileId)), token);
+                throw new ManagedMutationRejection("The movie's monitoring changed since review. Refresh its settings.");
+            // The editor endpoint changes only supplied fields. No paths, tags, availability settings,
+            // file moves or deletions are included. A response failure after this point is uncertain.
+            var updated = await Client.WriteAsync<MovieEditAcknowledgement[]>(HttpMethod.Put, "movie/editor",
+                new MovieEdit([movie.Id], input.Changes.Monitored, desiredProfile), token);
             if (updated.Length != 1 || updated[0].Id != movie.Id)
                 throw new IntegrationFailure("The configuration response did not confirm the selected movie. Reconcile its state before another change.");
-        } catch (ManagedMutationRejection error) { return Rejected(error.Message); }
-        var observed = await RequireMovieAsync(input.Scope, token);
-        RequirePath(observed, input.ExpectedPath);
-        if (!MatchesChanges(observed, input.Changes)) throw new IntegrationFailure("The submitted configuration could not be confirmed. Reconcile it before another change.");
-        return new(ManagerControls.Applied);
-    }
+            return await ManagedMutationRejection.AfterWriteAsync(async () => {
+                var observed = await RequireMovieAsync(input.Scope, token);
+                RequirePath(observed, input.ExpectedPath);
+                if (!MatchesChanges(observed, input.Changes))
+                    throw new IntegrationFailure("The submitted configuration could not be confirmed. Reconcile it before another change.");
+                return new ManagedMutationResult(ManagerControls.Applied);
+            }, "Radarr accepted the movie's configuration change, but it could not be confirmed.");
+        });
 
-    private async Task<ManagedMutationResult> RequestAsync(RequestManagedInput input, CancellationToken token) {
-        Movie movie;
-        try {
-            if (input.OperationId == Guid.Empty) throw new IntegrationFailure("A durable operation ID is required.");
-            movie = await RequireMovieAsync(input.Scope, token);
+    /// <summary>
+    /// Queues one search for exactly the reviewed movie without changing its monitoring or profile.
+    /// </summary>
+    private Task<ManagedMutationResult> RequestAsync(RequestManagedInput input, CancellationToken token) =>
+        ManagedMutationRejection.CaptureAsync(async () => {
+            if (input.OperationId == Guid.Empty) throw new ManagedMutationRejection("A durable operation ID is required.");
+            var movie = await RequireMovieAsync(input.Scope, token);
             RequirePath(movie, input.ExpectedPath);
-            if (Id(movie.QualityProfileId) != input.ExpectedProfileId) throw new IntegrationFailure("The movie's profile changed since review. Refresh it before searching.");
-        } catch (IntegrationFailure error) { return Rejected(error.Message); }
-        ArrCommand command;
-        try {
-            command = await Client.WriteAsync<ArrCommand>(HttpMethod.Post, "command", new MoviesSearch(ArrCommands.MoviesSearch, [movie.Id]), token);
-        } catch (ManagedMutationRejection error) { return Rejected(error.Message); }
-        if (!MatchesCommand(command, movie.Id)) throw new IntegrationFailure("The returned command did not confirm the submitted work and scope. Reconcile the application before searching again.");
-        return new(ManagerControls.Accepted, MapCommand(command));
-    }
+            if (Id(movie.QualityProfileId) != input.ExpectedProfileId)
+                throw new ManagedMutationRejection("The movie's profile changed since review. Refresh it before searching.");
+            var command = await Client.WriteAsync<ArrCommand>(HttpMethod.Post, "command",
+                new MoviesSearch(ArrCommands.MoviesSearch, [movie.Id]), token);
+            if (!MatchesCommand(command, movie.Id))
+                throw new IntegrationFailure("The returned command did not confirm the submitted work and scope. Reconcile the application before searching again.");
+            return new(ManagerControls.Accepted, MapCommand(command));
+        });
 
+    /// <summary>Reads the one movie a control scope pins and requires it to still match that scope.</summary>
+    /// <exception cref="ManagedMutationRejection">The scope is not exactly one pinned movie, or the movie's identity or path no longer matches it.</exception>
+    /// <exception cref="IntegrationFailure">The movie could not be read.</exception>
     private async Task<Movie> RequireMovieAsync(ManagedControlScope scope, CancellationToken token) {
         var id = RequireMovieScope(scope);
         var movie = await Client.GetAsync<Movie>($"movie/{id}", token);
@@ -98,23 +107,28 @@ internal sealed partial class RadarrLibrary {
         return ArrReleaseScopeObservation.Present(ControlState(scope, RequireMovieMatch(scope, id, movie)));
     }
 
+    /// <summary>Requires a control scope to pin exactly one movie by its canonical manager and TMDB IDs.</summary>
+    /// <exception cref="ManagedMutationRejection">The scope names anything other than exactly this movie.</exception>
     private static int RequireMovieScope(ManagedControlScope scope) {
         if (scope?.Item is null || scope.Item.EntityKind != ManagerProtocol.Movie || scope.Targets is not { Count: 1 }
             || scope.Item.ExpectedExternalIds is not { Count: > 0 and <= 64 }
             || !scope.Item.ExpectedExternalIds.ContainsKey(ManagerProtocol.Tmdb))
-            throw new IntegrationFailure("Select one movie with its known TMDB identity.");
-        var id = ParseId(scope.Item.RemoteId);
-        var tmdbId = ParseId(scope.Item.ExpectedExternalIds[ManagerProtocol.Tmdb]);
+            throw new ManagedMutationRejection("Select one movie with its known TMDB identity.");
+        var id = ParseSelectedId(scope.Item.RemoteId);
+        var tmdbId = ParseSelectedId(scope.Item.ExpectedExternalIds[ManagerProtocol.Tmdb]);
         if (Id(id) != scope.Item.RemoteId || scope.Targets[0] is not { EntityKind: ManagerProtocol.Movie, SeasonNumber: null, EpisodeNumber: null, AbsoluteNumber: null } target
             || target.RemoteId != scope.Item.RemoteId || Id(tmdbId) != scope.Item.ExpectedExternalIds[ManagerProtocol.Tmdb])
-            throw new IntegrationFailure("The selected scope must contain exactly this movie.");
+            throw new ManagedMutationRejection("The selected scope must contain exactly this movie.");
         return id;
     }
 
+    /// <summary>Requires the read movie to keep the scope's pinned identities and a usable library path.</summary>
+    /// <exception cref="ManagedMutationRejection">The movie's identity changed or it has no valid library path.</exception>
     private Movie RequireMovieMatch(ManagedControlScope scope, int id, Movie movie) {
         if (movie.Id != id || scope.Item.ExpectedExternalIds.Any(pair => Summary(movie).ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
-            throw new IntegrationFailure("The remote movie now has different metadata identities. Refresh it before using manager controls.");
-        if (string.IsNullOrWhiteSpace(movie.Path) || movie.Path.Length > 8192) throw new IntegrationFailure("The remote movie did not supply a valid library path.");
+            throw new ManagedMutationRejection("The remote movie now has different metadata identities. Refresh it before using manager controls.");
+        if (string.IsNullOrWhiteSpace(movie.Path) || movie.Path.Length > 8192)
+            throw new ManagedMutationRejection("The remote movie did not supply a valid library path.");
         return movie;
     }
 
@@ -129,7 +143,7 @@ internal sealed partial class RadarrLibrary {
         && (changes.Monitored is null || movie.Monitored == changes.Monitored.Value);
     private static void RequirePath(Movie movie, string expectedPath) {
         if (string.IsNullOrWhiteSpace(expectedPath) || movie.Path != expectedPath)
-            throw new IntegrationFailure("The movie's managed path changed since review. Refresh its library association.");
+            throw new ManagedMutationRejection("The movie's managed path changed since review. Refresh its library association.");
     }
     private static bool MatchesCommand(ArrCommand command, int movieId) => command.Id > 0 && command.Queued.Year >= 1970
         && command.Name == ArrCommands.MoviesSearch && command.Body?.Name == ArrCommands.MoviesSearch
@@ -147,7 +161,6 @@ internal sealed partial class RadarrLibrary {
         };
     }
     private static ManagedCommandSnapshot Unknown(ManagedCommandReference reference, string problem) => new(reference, ManagerControls.Unknown, problem);
-    private static ManagedMutationResult Rejected(string problem) => new(ManagerControls.Rejected, Problem: problem);
 
     // Typed records are the single external API v3 encode/decode boundary.
     private sealed record MovieEdit(int[] MovieIds, bool? Monitored, int? QualityProfileId);

@@ -127,6 +127,21 @@ public sealed class ManagerCreationTests {
         Assert.Empty(fixture.Writes);
     }
     [Fact]
+    public async Task PreconditionReadFailureBeforeCreationStaysUncertain() {
+        using var fixture = new Fixture { FailingRead = "rootfolder" };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
+        Assert.Equal("The connected application returned HTTP 500.", error.Message);
+        Assert.Empty(fixture.Writes);
+    }
+    [Fact]
+    public async Task DefiniteCreationRefusalIsRejectedWithItsProblem() {
+        using var fixture = new Fixture { WriteStatus = HttpStatusCode.BadRequest };
+        var result = Assert.IsType<EnsureManagedResult>(await fixture.Call(ManagerCreation.Ensure, Intent()));
+        Assert.Equal(ManagerControls.Rejected, result.Outcome);
+        Assert.Equal("The connected application rejected the request (HTTP 400).", result.Problem);
+        Assert.Single(fixture.Writes);
+    }
+    [Fact]
     public async Task DifferentAcknowledgedIdentityRemainsUncertainAfterWrite() {
         using var fixture = new Fixture { ChangeIdentityAfterWrite = true };
         await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
@@ -137,6 +152,8 @@ public sealed class ManagerCreationTests {
         internal bool Accessible = true;
         internal int Profile = 2, ReturnedTmdb = 1001;
         internal string MoviePath = "/library/film";
+        internal string? FailingRead;
+        internal HttpStatusCode? WriteStatus;
         internal List<JsonElement> Writes { get; } = [];
         internal List<string> Reads { get; } = [];
         internal object?[] Credits { get; set; } = [
@@ -157,6 +174,7 @@ public sealed class ManagerCreationTests {
             var path = request.RequestUri!.PathAndQuery.Split("/api/v3/")[1];
             if (request.Method == HttpMethod.Get) {
                 Reads.Add(path);
+                if (path == FailingRead) return new(HttpStatusCode.InternalServerError);
                 return path switch {
                 "system/status" => Response(new { appName = "Radarr", version = "6.1.1.10360" }),
                 "movie?tmdbId=1001" => Response(Exists ? new[] { Movie() } : []),
@@ -170,6 +188,7 @@ public sealed class ManagerCreationTests {
             }
             Assert.Equal(HttpMethod.Post, request.Method); Assert.Equal("movie", path);
             Writes.Add(JsonSerializer.Deserialize<JsonElement>(await request.Content!.ReadAsStringAsync(token)));
+            if (WriteStatus is { } status) return new(status) { Content = new StringContent("{}") };
             Exists = true;
             if (ChangeIdentityAfterWrite) ReturnedTmdb = 999;
             if (LoseResponse) throw new HttpRequestException("Simulated accepted creation with lost response");

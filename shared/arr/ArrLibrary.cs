@@ -8,6 +8,7 @@ namespace Prismedia.Plugin.Arr;
 
 /// <summary>Common manager protocol, with concrete adapters declaring and translating only their supported controls.</summary>
 internal abstract class ArrLibrary(ArrClient client, string appName, int supportedMajor, string kind) {
+    private const string InvalidIdentityProblem = "Select a valid remote item identity.";
     protected ArrClient Client => client;
     protected string Kind => kind;
     protected virtual IReadOnlyList<string> ControlOperations => [];
@@ -74,7 +75,13 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
             return new ManagerOptions(profiles.Select(profile => new ManagerChoice(Id(profile.Id), profile.Name)).ToArray(),
                 roots.Select(root => new ManagerRootChoice(Id(root.Id), root.Path, root.Accessible)).ToArray());
         }
-        return await DispatchControlAsync(request, cancellationToken);
+        try {
+            return await DispatchControlAsync(request, cancellationToken);
+        } catch (ManagedMutationRejection rejection) {
+            // Mutations capture their refusals as rejected outcomes, so a refusal reaching this point
+            // came from a precondition check that a read shares with them. Reads report it as a plain failure.
+            throw new IntegrationFailure(rejection.Problem);
+        }
     }
     protected virtual Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken cancellationToken) =>
         throw new IntegrationFailure("This operation is not implemented by the installed adapter.");
@@ -97,7 +104,10 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
             throw new IntegrationFailure("The managed holding is present in the connected library. Refresh its association before releasing ownership.");
     }
     protected static string Id(int id) => id > 0 ? id.ToString(CultureInfo.InvariantCulture) : throw new IntegrationFailure("The application returned an invalid item identity.");
-    protected static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new IntegrationFailure("Select a valid remote item identity.");
+    protected static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new IntegrationFailure(InvalidIdentityProblem);
+    /// <summary>Parses a host-selected positive ID that a manager mutation relies on.</summary>
+    /// <exception cref="ManagedMutationRejection">The selection is not a positive decimal ID.</exception>
+    protected static int ParseSelectedId(string? value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new ManagedMutationRejection(InvalidIdentityProblem);
     private static string Required(string? value, int maximum) => !string.IsNullOrWhiteSpace(value) && value.Length <= maximum
         && !value.Any(char.IsControl) ? value : throw new IntegrationFailure("The application returned an invalid library path.");
     private static string LibraryLabel(string path) {
