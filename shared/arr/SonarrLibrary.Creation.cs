@@ -3,6 +3,14 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class SonarrLibrary {
+    /// <summary>
+    /// Resolves one exact TVDB or TMDB series, and optionally its exact episodes, without mutating Sonarr:
+    /// the existing holding for that identity, or otherwise the metadata lookup's candidate.
+    /// </summary>
+    /// <exception cref="ManagedMutationRejection">
+    /// The identity or episode selection is not exact, several holdings share it, or the manager does not
+    /// resolve the series or each episode exactly once.
+    /// </exception>
     private async Task<ManagedLookupResult> LookupAsync(ManagedLookupInput input, CancellationToken token) {
         var identity = RequireCreationIdentity(input);
         ValidateTargets(input.Targets, required: false);
@@ -17,7 +25,7 @@ internal sealed partial class SonarrLibrary {
         var results = await Client.GetAsync<Series[]>($"series/lookup?term={Uri.EscapeDataString(term)}", token);
         if (results.Length > 1000) throw new IntegrationFailure("The manager returned excessive series lookup results.");
         var matches = results.Where(result => MatchesIdentity(result, input)).ToArray();
-        if (matches.Length != 1) throw new IntegrationFailure("The manager did not resolve the exact TVDB/TMDB series identity uniquely.");
+        if (matches.Length != 1) throw new ManagedMutationRejection("The manager did not resolve the exact TVDB/TMDB series identity uniquely.");
         candidate = matches[0];
         var confirmed = Candidate(candidate, input);
 
@@ -27,46 +35,50 @@ internal sealed partial class SonarrLibrary {
             : await ExistingResultAsync(holding, input, token);
     }
 
-    private async Task<EnsureManagedResult> EnsureAsync(EnsureManagedInput input, CancellationToken token) {
-        int profile;
-        ArrRoot root;
-        ManagedLookupResult lookup;
-        try {
+    /// <summary>
+    /// Adds one reviewed series unmonitored, without a search, under the reviewed root and profile, then
+    /// confirms it and resolves the selected episodes through complete re-reads. An existing holding is
+    /// returned unchanged. A lost add response stays uncertain so the host resolves the exact identity
+    /// instead of adding again.
+    /// </summary>
+    private Task<EnsureManagedResult> EnsureAsync(EnsureManagedInput input, CancellationToken token) =>
+        ManagedMutationRejection.CaptureCreationAsync(async () => {
             if (input.OperationId == Guid.Empty || string.IsNullOrWhiteSpace(input.ExpectedRootPath) || input.ExpectedRootPath.Length > 8192)
-                throw new IntegrationFailure("Choose reviewed creation settings and a durable operation ID.");
+                throw new ManagedMutationRejection("Choose reviewed creation settings and a durable operation ID.");
             RequireCreationIdentity(input.Work);
             ValidateTargets(input.Work.Targets, required: true);
-            profile = ParseId(input.ProfileId);
-            var rootId = ParseId(input.RootId);
-            lookup = await LookupAsync(input.Work, token);
+            var profile = ParseSelectedId(input.ProfileId);
+            var rootId = ParseSelectedId(input.RootId);
+            var lookup = await LookupAsync(input.Work, token);
             if (lookup.Existing is { } existing)
                 return new(ManagerControls.Applied, existing, Targets: lookup.Targets);
 
             var profiles = await Client.GetAsync<ArrProfile[]>("qualityprofile", token);
             if (profiles.Count(item => item.Id == profile) != 1)
-                throw new IntegrationFailure("The selected profile no longer exists uniquely.");
+                throw new ManagedMutationRejection("The selected profile no longer exists uniquely.");
             var roots = await Client.GetAsync<ArrRoot[]>("rootfolder", token);
             var matches = roots.Where(item => item.Id == rootId).ToArray();
             if (matches.Length != 1 || matches[0].Accessible == false || matches[0].Path != input.ExpectedRootPath)
-                throw new IntegrationFailure("The selected root changed or is not accessible. Refresh the creation settings.");
-            root = matches[0];
-        } catch (IntegrationFailure error) { return new(ManagerControls.Rejected, Problem: error.Message); }
+                throw new ManagedMutationRejection("The selected root changed or is not accessible. Refresh the creation settings.");
+            var root = matches[0];
 
-        var tvdb = ParseId(lookup.Candidate.ExternalIds[ManagerProtocol.Tvdb]);
-        SeriesCreationAcknowledgement acknowledgement;
-        try {
-            acknowledgement = await Client.WriteAsync<SeriesCreationAcknowledgement>(HttpMethod.Post, "series",
+            var tvdb = ParseId(lookup.Candidate.ExternalIds[ManagerProtocol.Tvdb]);
+            var acknowledgement = await Client.WriteAsync<SeriesCreationAcknowledgement>(HttpMethod.Post, "series",
                 new AddSeries(lookup.Candidate.Title, tvdb, profile, root.Path, false, true,
                     new(ArrCreation.Unmonitored, false, false)), token);
-        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
+            // Any failure after the POST is uncertain. Recovery must use exact lookup, which adopts
+            // an existing series and waits for its asynchronous episode catalog without adding again.
+            return await ManagedMutationRejection.AfterWriteAsync(() => ConfirmAddedAsync(input, acknowledgement, root, token),
+                "Sonarr accepted the series, but it could not be confirmed.");
+        });
 
-        // Any failure after the POST is uncertain. Recovery must use exact lookup, which adopts
-        // an existing series and waits for its asynchronous episode catalog without adding again.
-        var observed = await GetAsync(ParseId(Id(acknowledgement.Id)), token);
+    private async Task<EnsureManagedResult> ConfirmAddedAsync(EnsureManagedInput input, SeriesCreationAcknowledgement added,
+        ArrRoot root, CancellationToken token) {
+        var observed = await GetAsync(ParseId(Id(added.Id)), token);
         Candidate(observed.Item.Title, observed.Item.Year, observed.Item.ExternalIds, input.Work);
         if (observed.Item.Monitored || observed.Item.ProfileId != input.ProfileId || !InsideRemoteRoot(observed.Path, root.Path))
             throw new IntegrationFailure("The added series settings or root could not be confirmed. Reconcile it before any acquisition action.");
-        var targets = await ResolveTargetsAsync(acknowledgement.Id, input.Work.Targets, token);
+        var targets = await ResolveTargetsAsync(added.Id, input.Work.Targets, token);
         return new(ManagerControls.Applied, observed, true, Targets: targets);
     }
 
@@ -80,7 +92,7 @@ internal sealed partial class SonarrLibrary {
     private async Task<Series?> FindExistingAsync(int tvdbId, CancellationToken token) {
         var existing = await Client.GetAsync<Series[]>($"series?tvdbId={tvdbId}", token);
         if (existing.Length > 1 || existing.Any(series => series.TvdbId != tvdbId))
-            throw new IntegrationFailure("The manager returned ambiguous holdings for this TVDB identity.");
+            throw new ManagedMutationRejection("The manager returned ambiguous holdings for this TVDB identity.");
         return existing.SingleOrDefault();
     }
 
@@ -99,7 +111,7 @@ internal sealed partial class SonarrLibrary {
         foreach (var target in requested) {
             var matches = episodes.Where(episode => MatchesTarget(episode, target)).ToArray();
             if (matches.Length != 1 || !used.Add(matches[0].Id))
-                throw new IntegrationFailure("The manager did not resolve every selected episode exactly once.");
+                throw new ManagedMutationRejection("The manager did not resolve every selected episode exactly once.");
             var episode = matches[0];
             IReadOnlyDictionary<string, string> externalIds = episode.TvdbId > 0
                 ? new Dictionary<string, string> { [ManagerProtocol.Tvdb] = Id(episode.TvdbId) }
@@ -115,7 +127,7 @@ internal sealed partial class SonarrLibrary {
             || input.ExternalIds.Keys.Any(key => key is not (ManagerProtocol.Tvdb or ManagerProtocol.Tmdb or ManagerProtocol.Imdb))
             || input.ExternalIds.Values.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 512 || value.Any(char.IsControl))
             || !input.ExternalIds.ContainsKey(ManagerProtocol.Tvdb) && !input.ExternalIds.ContainsKey(ManagerProtocol.Tmdb))
-            throw new IntegrationFailure("Select an exact TVDB or TMDB series identity and, optionally, its matching identities.");
+            throw new ManagedMutationRejection("Select an exact TVDB or TMDB series identity and, optionally, its matching identities.");
         var tvdb = ParseOptionalIdentity(input.ExternalIds, ManagerProtocol.Tvdb);
         var tmdb = ParseOptionalIdentity(input.ExternalIds, ManagerProtocol.Tmdb);
         return new(tvdb, tmdb);
@@ -123,22 +135,22 @@ internal sealed partial class SonarrLibrary {
 
     private static int? ParseOptionalIdentity(IReadOnlyDictionary<string, string> identities, string key) {
         if (!identities.TryGetValue(key, out var value)) return null;
-        var parsed = ParseId(value);
-        if (Id(parsed) != value) throw new IntegrationFailure("Use canonical numeric TVDB and TMDB identities.");
+        var parsed = ParseSelectedId(value);
+        if (Id(parsed) != value) throw new ManagedMutationRejection("Use canonical numeric TVDB and TMDB identities.");
         return parsed;
     }
 
     private static void ValidateTargets(IReadOnlyList<ManagedLookupTarget>? targets, bool required) {
         if (targets is null or { Count: 0 }) {
-            if (required) throw new IntegrationFailure("Select a finite nonempty episode scope.");
+            if (required) throw new ManagedMutationRejection("Select a finite nonempty episode scope.");
             return;
         }
-        if (targets.Count > 10000) throw new IntegrationFailure("Select a finite nonempty episode scope.");
+        if (targets.Count > 10000) throw new ManagedMutationRejection("Select a finite nonempty episode scope.");
         foreach (var target in targets) {
             if (target is null || target.EntityKind != ManagerProtocol.Episode || target.ExternalIds is null or { Count: > 1 }
                 || target.ExternalIds.Keys.Any(key => key != ManagerProtocol.Tvdb)
                 || target.SeasonNumber is null or < 0 || target.EpisodeNumber is null or < 0 || target.AbsoluteNumber is < 0)
-                throw new IntegrationFailure("Each selected target must be one exact Sonarr episode with canonical coordinates.");
+                throw new ManagedMutationRejection("Each selected target must be one exact Sonarr episode with canonical coordinates.");
             ParseOptionalIdentity(target.ExternalIds, ManagerProtocol.Tvdb);
         }
     }
@@ -164,7 +176,7 @@ internal sealed partial class SonarrLibrary {
     private static ManagedCandidate Candidate(string title, int? year, IReadOnlyDictionary<string, string> ids, ManagedLookupInput expected) {
         if (string.IsNullOrWhiteSpace(title) || title.Length > 512 || year is < 0 or > 9999
             || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))
-            throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
+            throw new ManagedMutationRejection("The manager returned a different or incomplete metadata identity.");
         return new(ManagerProtocol.Series, title, year, ids);
     }
 

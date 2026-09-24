@@ -136,6 +136,14 @@ public sealed class SonarrCreationTests {
     }
 
     [Fact]
+    public async Task PreconditionReadFailureBeforeAddStaysUncertain() {
+        using var fixture = new Fixture { FailingRead = "qualityprofile" };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
+        Assert.Equal("The connected application returned HTTP 500.", error.Message);
+        Assert.Empty(fixture.Writes);
+    }
+
+    [Fact]
     public async Task DifferentAcknowledgedIdentityOrSettingsRemainUncertainAfterWrite() {
         using var identity = new Fixture { CatalogReadyAfterWrite = true, ChangeIdentityAfterWrite = true };
         await Assert.ThrowsAsync<IntegrationFailure>(() => identity.Call(ManagerCreation.Ensure, Intent()));
@@ -152,6 +160,7 @@ public sealed class SonarrCreationTests {
         internal bool Accessible = true;
         internal int Profile = 2, ReturnedTvdb = 1001, ReturnedTmdb = 2001;
         internal string SeriesPath = "/library/Series";
+        internal string? FailingRead;
         internal object[]? Episodes { get; set; }
         internal List<string> Reads { get; } = [];
         internal List<(string Path, JsonElement Body)> Writes { get; } = [];
@@ -178,6 +187,7 @@ public sealed class SonarrCreationTests {
             var path = request.RequestUri!.PathAndQuery.Split("/api/v3/")[1];
             if (request.Method == HttpMethod.Get) {
                 Reads.Add(path);
+                if (path == FailingRead) return new(HttpStatusCode.InternalServerError);
                 if (path == "system/status") return Response(new { appName = "Sonarr", version = "4.0.17.2952" });
                 if (path.StartsWith("series?tvdbId=", StringComparison.Ordinal))
                     return Response(Exists && path == $"series?tvdbId={ReturnedTvdb}" ? new[] { Series() } : []);

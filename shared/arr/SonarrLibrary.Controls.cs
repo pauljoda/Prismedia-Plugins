@@ -29,49 +29,53 @@ internal sealed partial class SonarrLibrary {
         return ControlState(input.Scope, series, episodes, command);
     }
 
-    private async Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) {
-        Series series; Episode[] episodes;
-        try {
-            if (input.OperationId == Guid.Empty || input.Changes is not { ProfileId: null, Monitored: not null })
-                throw new IntegrationFailure("Choose an episode monitoring change. A series-wide profile cannot be changed through a finite episode scope.");
-            (series, episodes) = await RequireScopeAsync(input.Scope, token);
+    /// <summary>
+    /// Changes only the selected episodes' monitoring flags, then confirms them through a complete
+    /// re-read. It never changes the series' profile or parent monitoring.
+    /// </summary>
+    private Task<ManagedMutationResult> ConfigureAsync(ConfigureManagedInput input, CancellationToken token) =>
+        ManagedMutationRejection.CaptureAsync(async () => {
+            if (input.OperationId == Guid.Empty || input.Changes is not { ProfileId: null, Monitored: { } desired })
+                throw new ManagedMutationRejection("Choose an episode monitoring change. A series-wide profile cannot be changed through a finite episode scope.");
+            var (series, episodes) = await RequireScopeAsync(input.Scope, token);
             RequireConfiguration(series, input.ExpectedPath, input.ExpectedProfileId);
-            if (episodes.All(episode => episode.Monitored == input.Changes.Monitored)) return new(ManagerControls.Applied);
-            if (!series.Monitored) throw new IntegrationFailure("Series monitoring is disabled. This scope does not authorize changing its parent monitoring setting.");
+            if (episodes.All(episode => episode.Monitored == desired)) return new(ManagerControls.Applied);
+            if (!series.Monitored)
+                throw new ManagedMutationRejection("Series monitoring is disabled. This scope does not authorize changing its parent monitoring setting.");
             if (input.ExpectedMonitoring is null || input.ExpectedMonitoring.Count != episodes.Length
                 || episodes.Any(episode => !input.ExpectedMonitoring.TryGetValue(Id(episode.Id), out var expected) || expected != episode.Monitored))
-                throw new IntegrationFailure("Episode monitoring changed since review. Refresh the selected episodes.");
-        } catch (IntegrationFailure error) { return new(ManagerControls.Rejected, Problem: error.Message); }
-
-        var ids = episodes.Select(episode => episode.Id).Order().ToArray();
-        try {
-            var accepted = await Client.WriteAsync<EpisodeAcknowledgement[]>(HttpMethod.Put, "episode/monitor", new EpisodeMonitor(ids, input.Changes.Monitored!.Value), token);
+                throw new ManagedMutationRejection("Episode monitoring changed since review. Refresh the selected episodes.");
+            var ids = episodes.Select(episode => episode.Id).Order().ToArray();
+            var accepted = await Client.WriteAsync<EpisodeAcknowledgement[]>(HttpMethod.Put, "episode/monitor", new EpisodeMonitor(ids, desired), token);
             if (accepted.Length != ids.Length || !accepted.Select(episode => episode.Id).Order().SequenceEqual(ids))
                 throw new IntegrationFailure("The monitoring reply did not confirm the exact selected episodes. Reconcile before another change.");
-        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
-        var (after, updated) = await RequireScopeAsync(input.Scope, token);
-        RequireConfiguration(after, input.ExpectedPath, input.ExpectedProfileId);
-        if (updated.Any(episode => episode.Monitored != input.Changes.Monitored))
-            throw new IntegrationFailure("The requested episode flags could not be confirmed. Reconcile their state before another change.");
-        return new(ManagerControls.Applied);
-    }
+            return await ManagedMutationRejection.AfterWriteAsync(async () => {
+                var (after, updated) = await RequireScopeAsync(input.Scope, token);
+                RequireConfiguration(after, input.ExpectedPath, input.ExpectedProfileId);
+                if (updated.Any(episode => episode.Monitored != desired))
+                    throw new IntegrationFailure("The requested episode flags could not be confirmed. Reconcile their state before another change.");
+                return new ManagedMutationResult(ManagerControls.Applied);
+            }, "Sonarr accepted the episode monitoring change, but it could not be confirmed.");
+        });
 
-    private async Task<ManagedMutationResult> RequestAsync(RequestManagedInput input, CancellationToken token) {
-        Episode[] episodes;
-        try {
-            if (input.OperationId == Guid.Empty) throw new IntegrationFailure("A durable operation ID is required.");
-            var scope = await RequireScopeAsync(input.Scope, token); episodes = scope.Episodes;
-            RequireConfiguration(scope.Series, input.ExpectedPath, input.ExpectedProfileId);
-        } catch (IntegrationFailure error) { return new(ManagerControls.Rejected, Problem: error.Message); }
-        EpisodeCommand command;
-        try {
-            command = await Client.WriteAsync<EpisodeCommand>(HttpMethod.Post, "command",
+    /// <summary>
+    /// Queues one search for exactly the selected episodes without changing any monitoring or profile.
+    /// </summary>
+    private Task<ManagedMutationResult> RequestAsync(RequestManagedInput input, CancellationToken token) =>
+        ManagedMutationRejection.CaptureAsync(async () => {
+            if (input.OperationId == Guid.Empty) throw new ManagedMutationRejection("A durable operation ID is required.");
+            var (series, episodes) = await RequireScopeAsync(input.Scope, token);
+            RequireConfiguration(series, input.ExpectedPath, input.ExpectedProfileId);
+            var command = await Client.WriteAsync<EpisodeCommand>(HttpMethod.Post, "command",
                 new EpisodeSearch(ArrCommands.EpisodeSearch, episodes.Select(episode => episode.Id).Order().ToArray()), token);
-        } catch (ManagedMutationRejection error) { return new(ManagerControls.Rejected, Problem: error.Message); }
-        if (!MatchesCommand(command, episodes)) throw new IntegrationFailure("The accepted command did not confirm the exact selected episodes. Inspect the application before another search.");
-        return new(ManagerControls.Accepted, MapCommand(command));
-    }
+            if (!MatchesCommand(command, episodes))
+                throw new IntegrationFailure("The accepted command did not confirm the exact selected episodes. Inspect the application before another search.");
+            return new(ManagerControls.Accepted, MapCommand(command));
+        });
 
+    /// <summary>Reads the series and episodes a control scope pins and requires them to still match that scope.</summary>
+    /// <exception cref="ManagedMutationRejection">The scope is invalid, or the series or an episode no longer matches it.</exception>
+    /// <exception cref="IntegrationFailure">The series or its episodes could not be read or were inconsistent.</exception>
     private async Task<(Series Series, Episode[] Episodes)> RequireScopeAsync(ManagedControlScope scope, CancellationToken token) {
         var id = RequireScopeIdentity(scope);
         var series = await Client.GetAsync<Series>($"series/{id}", token);
@@ -91,20 +95,28 @@ internal sealed partial class SonarrLibrary {
         return ArrReleaseScopeObservation.Present(ControlState(scope, matched.Series, matched.Episodes));
     }
 
+    /// <summary>Requires a control scope to pin one TVDB series and unique, exactly numbered episodes.</summary>
+    /// <exception cref="ManagedMutationRejection">The scope is not a finite, canonical episode selection.</exception>
     private static int RequireScopeIdentity(ManagedControlScope scope) {
         if (scope?.Item is null || scope.Item.EntityKind != ManagerProtocol.Series || scope.Targets is not { Count: > 0 and <= 10000 }
             || scope.Item.ExpectedExternalIds is not { Count: > 0 and <= 64 } || !scope.Item.ExpectedExternalIds.ContainsKey(ManagerProtocol.Tvdb))
-            throw new IntegrationFailure("Select a pinned TVDB series and explicit episode targets.");
-        var id = ParseId(scope.Item.RemoteId);
-        var tvdbId = ParseId(scope.Item.ExpectedExternalIds[ManagerProtocol.Tvdb]);
+            throw new ManagedMutationRejection("Select a pinned TVDB series and explicit episode targets.");
+        var id = ParseSelectedId(scope.Item.RemoteId);
+        var tvdbId = ParseSelectedId(scope.Item.ExpectedExternalIds[ManagerProtocol.Tvdb]);
         if (Id(id) != scope.Item.RemoteId || scope.Targets.Any(target => target is null || target.EntityKind != ManagerProtocol.Episode
-            || target.SeasonNumber is null or < 0 || target.EpisodeNumber is null or < 0 || Id(ParseId(target.RemoteId)) != target.RemoteId)
+            || target.SeasonNumber is null or < 0 || target.EpisodeNumber is null or < 0 || Id(ParseSelectedId(target.RemoteId)) != target.RemoteId)
             || scope.Targets.Select(target => target.RemoteId).Distinct(StringComparer.Ordinal).Count() != scope.Targets.Count
             || Id(tvdbId) != scope.Item.ExpectedExternalIds[ManagerProtocol.Tvdb])
-            throw new IntegrationFailure("The scope must contain unique canonical episode IDs and exact numbering.");
+            throw new ManagedMutationRejection("The scope must contain unique canonical episode IDs and exact numbering.");
         return id;
     }
 
+    /// <summary>
+    /// Requires the read series to keep the scope's pinned identity and a complete configuration, then
+    /// resolves each selected episode by its exact coordinates.
+    /// </summary>
+    /// <exception cref="ManagedMutationRejection">The series' identity or configuration, or an episode's identity or coordinates, changed.</exception>
+    /// <exception cref="IntegrationFailure">The episodes could not be read or were inconsistent.</exception>
     private async Task<(Series Series, Episode[] Episodes)> RequireScopeMatchAsync(
         ManagedControlScope scope,
         int id,
@@ -112,7 +124,7 @@ internal sealed partial class SonarrLibrary {
         CancellationToken token) {
         if (series.Id != id || series.QualityProfileId <= 0 || string.IsNullOrWhiteSpace(series.Path) || series.Path.Length > 8192
             || scope.Item.ExpectedExternalIds.Any(pair => Summary(series).ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
-            throw new IntegrationFailure("The remote series no longer has the pinned metadata identity or a complete configuration.");
+            throw new ManagedMutationRejection("The remote series no longer has the pinned metadata identity or a complete configuration.");
         var episodes = await Client.GetAsync<Episode[]>($"episode?seriesId={id}", token);
         if (episodes.Length > 100000 || episodes.Any(episode => episode.Id <= 0 || episode.SeriesId != id)
             || episodes.Select(episode => episode.Id).Distinct().Count() != episodes.Length)
@@ -120,7 +132,7 @@ internal sealed partial class SonarrLibrary {
         var byId = episodes.ToDictionary(episode => Id(episode.Id), StringComparer.Ordinal);
         if (scope.Targets.Any(target => !byId.TryGetValue(target.RemoteId, out var episode) || target.SeasonNumber != episode.SeasonNumber
             || target.EpisodeNumber != episode.EpisodeNumber || target.AbsoluteNumber != episode.AbsoluteEpisodeNumber))
-            throw new IntegrationFailure("An episode identity or coordinate changed. Review its saved association before changing this scope.");
+            throw new ManagedMutationRejection("An episode identity or coordinate changed. Review its saved association before changing this scope.");
         return (series, scope.Targets.Select(target => byId[target.RemoteId]).ToArray());
     }
 
@@ -136,9 +148,9 @@ internal sealed partial class SonarrLibrary {
                 : "Series monitoring is disabled in Sonarr. Enable it there before changing episode monitoring here; Prismedia will not change that series-wide setting."),
             command);
     }
-    private static void RequireConfiguration(Series series, string path, string profile) {
+    private static void RequireConfiguration(Series series, string path, string? profile) {
         if (string.IsNullOrWhiteSpace(path) || series.Path != path || Id(series.QualityProfileId) != profile)
-            throw new IntegrationFailure("The series folder or profile changed since review. Refresh before continuing.");
+            throw new ManagedMutationRejection("The series folder or profile changed since review. Refresh before continuing.");
     }
     private static bool MatchesCommand(EpisodeCommand command, Episode[] episodes) => command.Id > 0 && command.Queued.Year >= 1970
         && command.Name == ArrCommands.EpisodeSearch && command.Body?.Name == ArrCommands.EpisodeSearch

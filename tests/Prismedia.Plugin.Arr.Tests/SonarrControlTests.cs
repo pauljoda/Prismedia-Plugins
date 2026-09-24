@@ -38,7 +38,7 @@ public sealed class SonarrControlTests {
         Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Configure, request)).Outcome);
         Assert.Empty(fixture.Writes);
     }
-    [Fact] public async Task ChangedEpisodeCoordinatesProviderIdentityOrForeignSeriesRejectBeforeWriting() {
+    [Fact] public async Task ChangedEpisodeCoordinatesOrProviderIdentityRejectBeforeWriting() {
         using var fixture = new Fixture();
         foreach (var scope in new[] {
             Scope() with { Targets = [Scope().Targets[0] with { EpisodeNumber = 99 }] },
@@ -47,9 +47,23 @@ public sealed class SonarrControlTests {
             Scope() with { Targets = [] },
             Scope() with { Item = Scope().Item with { ExpectedExternalIds = new Dictionary<string, string> { [ManagerProtocol.Tvdb] = "999" } } }
         }) Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Request, fixture.Search() with { Scope = scope })).Outcome);
-        fixture.ForeignEpisode = true;
-        Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Request, fixture.Search())).Outcome);
         Assert.Empty(fixture.Writes);
+    }
+    [Fact] public async Task InconsistentOrFailedPreconditionReadsStayUncertainBeforeWriting() {
+        using var foreign = new Fixture { ForeignEpisode = true };
+        var inconsistent = await Assert.ThrowsAsync<IntegrationFailure>(() => foreign.Call(ManagerControls.Request, foreign.Search()));
+        Assert.Equal("The series returned inconsistent episode identities.", inconsistent.Message);
+        Assert.Empty(foreign.Writes);
+        using var offline = new Fixture { FailingRead = "episode?seriesId=1" };
+        var failed = await Assert.ThrowsAsync<IntegrationFailure>(() => offline.Call(ManagerControls.Configure, offline.Configure()));
+        Assert.Equal("The connected application returned HTTP 500.", failed.Message);
+        Assert.Empty(offline.Writes);
+    }
+    [Fact] public async Task RefusedConfirmationAfterTheWriteIsUncertainRatherThanRejected() {
+        using var fixture = new Fixture { MoveFolderAfterWrite = true };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Configure, fixture.Configure()));
+        Assert.StartsWith("Sonarr accepted the episode monitoring change, but it could not be confirmed.", error.Message);
+        Assert.Single(fixture.Writes);
     }
     [Fact] public async Task ChangedProfileFolderOrExpectedFlagsRejectBeforeWrites() {
         using var fixture = new Fixture();
@@ -99,7 +113,9 @@ public sealed class SonarrControlTests {
     private sealed record Write(HttpMethod Method, string Path, JsonElement Body);
     private sealed class Fixture : HttpMessageHandler {
         internal Dictionary<int, bool> Flags = new() { [1] = false, [2] = false, [3] = false };
-        internal bool ParentMonitored = true, ForeignEpisode, LoseResponse, MissingCommand;
+        internal bool ParentMonitored = true, ForeignEpisode, LoseResponse, MissingCommand, MoveFolderAfterWrite;
+        internal string Folder = "/series/show";
+        internal string? FailingRead;
         internal int Profile = 7;
         internal string Status = ArrCommands.Queued;
         internal int[] CommandIds = [1, 2];
@@ -111,13 +127,14 @@ public sealed class SonarrControlTests {
         internal RequestManagedInput Search() => new(Guid.NewGuid(), Scope(), "/series/show", "7");
         internal Task<object> Call(string operation, object input) => library.DispatchAsync(new(IntegrationProtocol.Name, IntegrationProtocol.Version, Guid.NewGuid(), operation,
             connection, JsonSerializer.SerializeToElement(input, IntegrationProtocol.Json)), default);
-        private object Series() => new { id = 1, title = "Show", tvdbId = 42, monitored = ParentMonitored, qualityProfileId = Profile, path = "/series/show", statistics = new { episodeFileCount = 0 } };
+        private object Series() => new { id = 1, title = "Show", tvdbId = 42, monitored = ParentMonitored, qualityProfileId = Profile, path = Folder, statistics = new { episodeFileCount = 0 } };
         private object[] Episodes() => Flags.Select(pair => (object)new { id = pair.Key, seriesId = ForeignEpisode ? 2 : 1, title = "Episode", seasonNumber = 0, episodeNumber = pair.Key,
             absoluteEpisodeNumber = pair.Key == 2 ? (int?)2 : null, monitored = pair.Value, hasFile = false, episodeFileId = 0 }).ToArray();
         private object Command() => new { id = 9, name = ArrCommands.EpisodeSearch, status = Status, result = ArrCommands.Successful,
             queued = "2026-09-16T12:00:00.1234567Z", body = new { name = ArrCommands.EpisodeSearch, episodeIds = CommandIds } };
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) {
             var path = request.RequestUri!.PathAndQuery.Split("/api/v3/")[1];
+            if (request.Method == HttpMethod.Get && path == FailingRead) return new(HttpStatusCode.InternalServerError);
             if (request.Method == HttpMethod.Get) return path switch {
                 "system/status" => Response(new { appName = "Sonarr", version = "4.0.17.2952" }),
                 "series/1" => Response(Series()), "episode?seriesId=1" => Response(Episodes()),
@@ -128,6 +145,7 @@ public sealed class SonarrControlTests {
             Writes.Add(new(request.Method, path, body));
             if (path == "episode/monitor") foreach (var id in body.GetProperty("episodeIds").EnumerateArray()) Flags[id.GetInt32()] = body.GetProperty("monitored").GetBoolean();
             else Assert.Equal("command", path);
+            if (MoveFolderAfterWrite) Folder = "/series/moved";
             if (LoseResponse) throw new HttpRequestException("Response lost after acceptance");
             return Response(path == "episode/monitor" ? new[] { new { id = 1 }, new { id = 2 } } : Command(), HttpStatusCode.Accepted);
         }
