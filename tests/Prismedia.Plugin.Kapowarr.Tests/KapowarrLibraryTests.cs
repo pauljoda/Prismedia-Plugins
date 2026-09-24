@@ -171,6 +171,16 @@ public sealed class KapowarrLibraryTests {
     }
 
     [Fact]
+    public async Task CatalogBadRequestNamesTheComicVineSettingWithoutLeakingItsResponse() {
+        using var fixture = new Fixture { SearchStatus = HttpStatusCode.BadRequest };
+        var error = await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerDiscovery.Search,
+            new ManagedDiscoveryQuery(KapowarrCodes.ComicSeries, "Comic", 1)));
+
+        Assert.Contains("Comic Vine API key", error.Message);
+        Assert.DoesNotContain(Fixture.Secret, error.Message);
+    }
+
+    [Fact]
     public async Task EnsureAddsUnmonitoredRunWithoutSearchingAndPinsTheSelectedIssue() {
         using var fixture = new Fixture();
         fixture.Results["volumes"] = Array.Empty<object>();
@@ -369,6 +379,7 @@ public sealed class KapowarrLibraryTests {
         internal List<HttpRequestMessage> Requests { get; } = [];
         internal List<string> Bodies { get; } = [];
         internal HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
+        internal HttpStatusCode? SearchStatus { get; set; }
         internal string? Raw { get; set; }
         internal ConnectionContext Connection { get; set; } = new(Guid.NewGuid(), "http://manager.test/kapowarr/", null,
             new Dictionary<string, string>(), new Dictionary<string, string> { [KapowarrCodes.ApiKey] = Secret });
@@ -381,7 +392,8 @@ public sealed class KapowarrLibraryTests {
             Requests.Add(request);
             if (request.Content is not null) Bodies.Add(await request.Content.ReadAsStringAsync(cancellationToken));
             var path = request.RequestUri!.AbsolutePath.Split("/api/")[1];
-            return new HttpResponseMessage(request.Method == HttpMethod.Post && Status == HttpStatusCode.OK ? HttpStatusCode.Created : Status) {
+            var status = path == "volumes/search" ? SearchStatus ?? Status : Status;
+            return new HttpResponseMessage(request.Method == HttpMethod.Post && status == HttpStatusCode.OK ? HttpStatusCode.Created : status) {
                 Content = new StringContent(Raw ?? JsonSerializer.Serialize(new { error = (string?)null,
                     result = request.Method == HttpMethod.Post && PostResults.TryGetValue(path, out var posted)
                         ? posted : Results.GetValueOrDefault(path) })) };

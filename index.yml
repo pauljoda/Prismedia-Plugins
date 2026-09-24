@@ -955,10 +955,10 @@
   author: Prismedia Community
 - id: kapowarr
   name: Kapowarr
-  version: 1.5.0
+  version: 1.5.1
   date: '2026-09-23'
   path: plugins/kapowarr/kapowarr.zip
-  sha256: 3e2b5d7361c555778bc0b29428f79e5a21d701a440c9c538c24763459d116865
+  sha256: c81d41c58e55c3347db042ea5442daaaafff673d7487069fac433b07d2d7baaa
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2

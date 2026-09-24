@@ -38,7 +38,12 @@ internal sealed class KapowarrClient : IDisposable {
         if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body, IntegrationProtocol.Json),
             System.Text.Encoding.UTF8, "application/json");
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-        if (response.StatusCode != expectedStatus) throw new IntegrationFailure($"Kapowarr returned HTTP {(int)response.StatusCode}. Check the connection and API key.");
+        if (response.StatusCode != expectedStatus) {
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest
+                && relativePath.StartsWith("volumes/search?", StringComparison.Ordinal))
+                throw new IntegrationFailure("Kapowarr could not search Comic Vine. Check its Comic Vine API key in Kapowarr settings.");
+            throw new IntegrationFailure($"Kapowarr returned HTTP {(int)response.StatusCode}. Check the connection and API key.");
+        }
         if (response.Content.Headers.ContentLength > MaximumBytes) throw Oversized();
         await using var stream = await response.Content.ReadAsStreamAsync(deadline.Token);
         using var bytes = new MemoryStream();
