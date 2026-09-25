@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Canonical wire values for finite manager controls; command completion is not file availability.</summary>
 public static class ManagerControls {
+    #region Static Variables
     public const string Reconcile = "reconcile-managed";
     public const string Configure = "configure-managed";
     public const string Request = "request-managed";
@@ -14,6 +15,7 @@ public static class ManagerControls {
     public const string Failed = "failed";
     public const string Cancelled = "cancelled";
     public const string Unknown = "unknown";
+    #endregion
 }
 /// <summary>Exact target identity and numbering, independently of current bytes.</summary>
 public sealed record ManagedControlTarget(string RemoteId, string EntityKind,

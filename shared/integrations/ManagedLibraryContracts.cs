@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Canonical wire vocabulary for connected holdings and manager reads.</summary>
 public static class ManagerProtocol {
+    #region Static Variables
     public const string SearchLibrary = "search-library";
     public const string GetLibraryItem = "get-library-item";
     public const string ListLibraries = "list-libraries";
@@ -16,6 +17,7 @@ public static class ManagerProtocol {
     public const string Tmdb = "tmdb";
     public const string Tvdb = "tvdb";
     public const string Imdb = "imdb";
+    #endregion
 }
 /// <summary>Read-only holdings query; pagination remains connection-scoped.</summary>
 public sealed record ManagedLibraryQuery(string EntityKind, string? Query, string? Cursor, int Limit);

@@ -2,16 +2,20 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Canonical operation for a read-only external-manager catalog search.</summary>
 public static class ManagerDiscovery {
+    #region Static Variables
     public const string Search = "discover-managed";
+    #endregion
 }
 
 /// <summary>Canonical semantic date codes carried by normalized manager discovery metadata.</summary>
 public static class ManagerDiscoveryDates {
+    #region Static Variables
     public const string FirstAir = "first-air";
     public const string LastAir = "last-air";
     public const string TheatricalRelease = "theatrical-release";
     public const string DigitalRelease = "digital-release";
     public const string PhysicalRelease = "physical-release";
+    #endregion
 }
 
 /// <summary>A bounded title search of one external manager's upstream catalog.</summary>
@@ -19,12 +23,14 @@ public sealed record ManagedDiscoveryQuery(string EntityKind, string Query, int 
 
 /// <summary>Canonical credit-role codes understood by Prismedia's shared people relationship model.</summary>
 public static class ManagerCreditRoles {
+    #region Static Variables
     public const string Actor = "actor";
     public const string Director = "director";
     public const string Writer = "writer";
     public const string Producer = "producer";
     public const string Creator = "creator";
     public const string Composer = "composer";
+    #endregion
 }
 
 /// <summary>A normalized person credit supplied by an external manager during exact metadata review.</summary>

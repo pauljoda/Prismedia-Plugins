@@ -2,7 +2,9 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Read-only evidence for relinquishing an externally managed acquisition scope.</summary>
 public static class ManagerRelease {
+    #region Static Variables
     public const string Inspect = "inspect-managed-release";
+    #endregion
 }
 /// <summary>The exact reviewed holding and finite targets; no remote mutation is authorized.</summary>
 public sealed record InspectManagedReleaseInput(ManagedControlScope Scope);

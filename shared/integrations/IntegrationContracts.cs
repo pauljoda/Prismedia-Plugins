@@ -5,13 +5,16 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Independent connected-application wire protocol; does not replace metadata identify v2.</summary>
 public static class IntegrationProtocol {
+    #region Static Variables
     public const string Name = "prismedia-integration";
     public const int Version = 1;
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { PropertyNameCaseInsensitive = true, MaxDepth = 64 };
+    #endregion
 }
 
 /// <summary>Typed integration operations supported by the common executable harness.</summary>
 public static class IntegrationOperations {
+    #region Static Variables
     public const string Probe = "probe";
     public const string Browse = "browse";
     public const string Search = "search";
@@ -28,28 +31,35 @@ public static class IntegrationOperations {
     public const string AuthorizeArtifact = "authorize-artifact";
     public const string RenewRetention = "renew-retention";
     public const string Acknowledge = "acknowledge";
+    #endregion
 }
 /// <summary>Independent connected-application capability families.</summary>
 public static class IntegrationCapabilities {
+    #region Static Variables
     public const string Discovery = "catalog-discovery";
     public const string AcquisitionSource = "acquisition-source";
     public const string TransferExecutor = "transfer-executor";
+    #endregion
 }
 /// <summary>Prismedia entity kinds supported by publication catalogs.</summary>
 public static class MediaKinds {
+    #region Static Variables
     public const string Gallery = "gallery";
     public const string Image = "image";
     public const string Book = "book";
     public const string Comic = "comic-installment";
+    #endregion
 }
 /// <summary>Separates full downloads from loans, checkout, previews, and external workflows.</summary>
 public static class AcquisitionAccess {
+    #region Static Variables
     public const string Download = "download";
     public const string Request = "request";
     public const string Borrow = "borrow";
     public const string Purchase = "purchase";
     public const string Sample = "sample";
     public const string External = "external";
+    #endregion
 }
 /// <summary>Instance configuration and decrypted credentials supplied only for this invocation.</summary>
 public sealed record ConnectionContext(Guid Id, string BaseUrl, string? ExpectedInstanceId, IReadOnlyDictionary<string, string> Settings,
@@ -63,7 +73,9 @@ public sealed record IntegrationResponse(string Protocol, int ProtocolVersion, G
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ErrorCode = null);
 /// <summary>Machine-readable evidence classifications; an ordinary failure never implies remote removal.</summary>
 public static class IntegrationErrorCodes {
+    #region Static Variables
     public const string ManagedItemNotFound = "managed-item-not-found";
+    #endregion
 }
 /// <summary>Declared operation and media-kind support for one capability family.</summary>
 public sealed record Capability(string Kind, IReadOnlyList<string> Operations, IReadOnlyList<string> EntityKinds);
@@ -99,6 +111,8 @@ public sealed record ResolvedSourceOffer(SourceSelection Selection, string Offer
 /// definite refusal instead.
 /// </summary>
 public class IntegrationFailure(string message, string? code = null) : Exception(message) {
+    #region Variables
     /// <summary>Optional classification backed by affirmative adapter evidence.</summary>
     public string? Code { get; } = code;
+    #endregion
 }

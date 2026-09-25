@@ -2,8 +2,10 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Canonical operations for exact identity lookup and initial unmonitored creation.</summary>
 public static class ManagerCreation {
+    #region Static Variables
     public const string Lookup = "lookup-managed";
     public const string Ensure = "ensure-managed";
+    #endregion
 }
 /// <summary>One finite child target requested beneath a managed container, before remote IDs are resolved.</summary>
 public sealed record ManagedLookupTarget(string EntityKind, IReadOnlyDictionary<string, string> ExternalIds,

@@ -8,11 +8,13 @@ public sealed record ObserveSourceInput(SourceSelection Selection, string OfferI
 
 /// <summary>Canonical wire states for source-owned preparation that does not claim executor semantics.</summary>
 public static class SourceAcquisitionStates {
+    #region Static Variables
     public const string NotObserved = "not-observed";
     public const string Queued = "queued";
     public const string Downloading = "downloading";
     public const string Ready = "ready";
     public const string Failed = "failed";
+    #endregion
 }
 
 /// <summary>Source-owned preparation evidence. Ready permits resolving a direct offer; it does not prove retained bytes or a committed local import.</summary>

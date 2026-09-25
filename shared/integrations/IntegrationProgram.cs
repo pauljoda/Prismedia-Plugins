@@ -4,6 +4,7 @@ namespace Prismedia.Plugin.Integrations;
 
 /// <summary>Bounded one-request/one-response entry point shared by integration executables.</summary>
 public static class IntegrationProgram {
+    #region Actions - Invocation
     /// <summary>Reads a bounded invocation file, applies a deadline, and emits exactly one correlated JSON envelope.</summary>
     public static async Task RunAsync(string[] args, Func<IntegrationRequest, CancellationToken, Task<object>> dispatch) {
         IntegrationRequest? request = null;
@@ -35,4 +36,5 @@ public static class IntegrationProgram {
         }
         Console.WriteLine(JsonSerializer.Serialize(response, IntegrationProtocol.Json));
     }
+    #endregion
 }
