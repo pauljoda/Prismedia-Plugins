@@ -136,8 +136,11 @@ internal sealed partial class SonarrLibrary {
             || episodes.Select(episode => episode.Id).Distinct().Count() != episodes.Length)
             throw new IntegrationFailure("The series returned inconsistent episode identities.");
         var byId = episodes.ToDictionary(episode => Id(episode.Id), StringComparer.Ordinal);
+        // Absolute numbering is compared only when both the scope and Sonarr carry one: Sonarr omits it for
+        // most non-anime series, and a scope pinned from another source may not know it.
         if (scope.Targets.Any(target => !byId.TryGetValue(target.RemoteId, out var episode) || target.SeasonNumber != episode.SeasonNumber
-            || target.EpisodeNumber != episode.EpisodeNumber || target.AbsoluteNumber != episode.AbsoluteEpisodeNumber))
+            || target.EpisodeNumber != episode.EpisodeNumber
+            || (target.AbsoluteNumber is { } expectedAbsolute && episode.AbsoluteEpisodeNumber is { } actualAbsolute && expectedAbsolute != actualAbsolute)))
             throw new ManagedMutationRejection("An episode identity or coordinate changed. Review its saved association before changing this scope.");
         return (series, scope.Targets.Select(target => byId[target.RemoteId]).ToArray());
     }

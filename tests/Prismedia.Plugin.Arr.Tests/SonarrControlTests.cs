@@ -42,12 +42,19 @@ public sealed class SonarrControlTests {
         using var fixture = new Fixture();
         foreach (var scope in new[] {
             Scope() with { Targets = [Scope().Targets[0] with { EpisodeNumber = 99 }] },
-            Scope() with { Targets = [Scope().Targets[0] with { AbsoluteNumber = 99 }] },
+            Scope() with { Targets = [Scope().Targets[1] with { AbsoluteNumber = 99 }] },
             Scope() with { Targets = [Scope().Targets[0], Scope().Targets[0]] },
             Scope() with { Targets = [] },
             Scope() with { Item = Scope().Item with { ExpectedExternalIds = new Dictionary<string, string> { [ManagerProtocol.Tvdb] = "999" } } }
         }) Assert.Equal(ManagerControls.Rejected, Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Request, fixture.Search() with { Scope = scope })).Outcome);
         Assert.Empty(fixture.Writes);
+    }
+    [Fact] public async Task AbsoluteNumbersAreComparedOnlyWhenBothTheScopeAndSonarrCarryOne() {
+        using var fixture = new Fixture();
+        var scope = Scope() with { Targets = [Scope().Targets[0] with { AbsoluteNumber = 99 }, Scope().Targets[1] with { AbsoluteNumber = null }] };
+        var result = Assert.IsType<ManagedMutationResult>(await fixture.Call(ManagerControls.Request, fixture.Search() with { Scope = scope }));
+        Assert.Equal(ManagerControls.Accepted, result.Outcome);
+        Assert.Single(fixture.Writes);
     }
     [Fact] public async Task InconsistentOrFailedPreconditionReadsStayUncertainBeforeWriting() {
         using var foreign = new Fixture { ForeignEpisode = true };
