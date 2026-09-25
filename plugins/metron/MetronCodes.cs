@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.Metron;
 
 /// <summary>Host and upstream protocol vocabulary owned by the Metron adapter.</summary>
 internal static class MetronCodes {
+    #region Static Variables
     public const string Provider = "metron";
     public const string SeriesKind = "comic-series";
     public const string IssueKind = "comic-installment";
@@ -45,4 +46,5 @@ internal static class MetronCodes {
     public const string SustainedRemaining = "X-RateLimit-Sustained-Remaining";
     public const string BurstReset = "X-RateLimit-Burst-Reset";
     public const string SustainedReset = "X-RateLimit-Sustained-Reset";
+    #endregion
 }

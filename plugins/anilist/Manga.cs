@@ -1,26 +1,18 @@
 using System.Globalization;
 
 internal static partial class AniListPlugin {
-    private static class MangaCodes {
-        public const string Kind = "comic-series";
-        public const string Type = "MANGA";
-        public const string OneShot = "ONE_SHOT";
-        public const string Creator = "creator";
-        public const string Published = "published";
-        public const string Ended = "ended";
-        public const string ChapterCount = "chapterCount";
-        public const string VolumeCount = "volumeCount";
-        public const string Poster = "poster";
-        public const string Backdrop = "backdrop";
-        public const string LookupId = "lookup-id";
-        public const string LookupUrl = "lookup-url";
-        public const string Reason = "external-id";
-        public const string Story = "Story";
-        public const string Art = "Art";
-        public const string StoryAndArt = "Story & Art";
-        public const string OriginalStory = "Original Story";
-    }
+    #region Static Variables
+    // prism-vocab: external GraphQL field names are decoded once by the Media/Staff records.
+    private const string MangaFields = """
+        id idMal type format isAdult description chapters volumes popularity siteUrl bannerImage genres
+        title { english romaji native } startDate { year month day } endDate { year month day }
+        coverImage { extraLarge large } tags { name rank }
+        staff(perPage: 25) { edges { role node { name { full } } } }
+        """;
+    private static readonly string MangaDetailQuery = $"query ($id: Int!) {{ Media(id: $id, type: {MangaCodes.Type}) {{ {MangaFields} }} }}";
+    #endregion
 
+    #region Actions - Manga
     /// <summary>Identifies a manga work without assigning its identity to a particular edition or synthesizing installments.</summary>
     private static async Task<IdentifyPluginResult> IdentifyMangaAsync(IdentifyPluginRequest request) {
         var id = MangaIdentity(request);
@@ -113,16 +105,32 @@ internal static partial class AniListPlugin {
         return result + "-" + day.ToString("D2", CultureInfo.InvariantCulture);
     }
 
-    // prism-vocab: external GraphQL field names are decoded once by the Media/Staff records.
-    private const string MangaFields = """
-        id idMal type format isAdult description chapters volumes popularity siteUrl bannerImage genres
-        title { english romaji native } startDate { year month day } endDate { year month day }
-        coverImage { extraLarge large } tags { name rank }
-        staff(perPage: 25) { edges { role node { name { full } } } }
-        """;
-    private static readonly string MangaDetailQuery = $"query ($id: Int!) {{ Media(id: $id, type: {MangaCodes.Type}) {{ {MangaFields} }} }}";
     // AniList treats an explicit null adult filter differently from an omitted argument.
     private static string MangaSearchQuery(bool includeNsfw) => $"query ($search: String!, $year: String, $perPage: Int!) {{ Page(perPage: $perPage) {{ media(search: $search, startDate_like: $year, type: {MangaCodes.Type}, format_in: [{MangaCodes.Type}, {MangaCodes.OneShot}]{(includeNsfw ? string.Empty : ", isAdult: false")}, sort: [SEARCH_MATCH, POPULARITY_DESC]) {{ {MangaFields} }} }} }}";
+    #endregion
+
+    private static class MangaCodes {
+        #region Static Variables
+        public const string Kind = "comic-series";
+        public const string Type = "MANGA";
+        public const string OneShot = "ONE_SHOT";
+        public const string Creator = "creator";
+        public const string Published = "published";
+        public const string Ended = "ended";
+        public const string ChapterCount = "chapterCount";
+        public const string VolumeCount = "volumeCount";
+        public const string Poster = "poster";
+        public const string Backdrop = "backdrop";
+        public const string LookupId = "lookup-id";
+        public const string LookupUrl = "lookup-url";
+        public const string Reason = "external-id";
+        public const string Story = "Story";
+        public const string Art = "Art";
+        public const string StoryAndArt = "Story & Art";
+        public const string OriginalStory = "Original Story";
+        #endregion
+    }
+
     internal sealed record StaffConnection(StaffEdge[]? Edges);
     internal sealed record StaffEdge(string? Role, Staff? Node);
     internal sealed record Staff(CharacterName? Name);

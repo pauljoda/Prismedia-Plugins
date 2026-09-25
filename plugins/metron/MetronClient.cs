@@ -6,16 +6,22 @@ namespace Prismedia.Plugin.Metron;
 
 /// <summary>Read-only fixed-origin transport with bounded bodies, quota observation, and no automatic retries.</summary>
 internal sealed class MetronClient(HttpClient http, Func<TimeSpan, CancellationToken, Task>? delay = null) {
+    #region Static Variables
     internal const int MaximumBytes = 8 * 1024 * 1024;
     internal static readonly Uri Origin = new("https://metron.cloud/api/");
     internal static readonly JsonSerializerOptions ApiJson = new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, MaxDepth = 32 };
     internal static readonly JsonSerializerOptions ProtocolJson = new(JsonSerializerDefaults.Web) { MaxDepth = 48 };
+    #endregion
+
+    #region Variables
     private readonly Func<TimeSpan, CancellationToken, Task> _delay = delay ?? Task.Delay;
     private TimeSpan _interval = TimeSpan.FromMilliseconds(3100);
     private bool _sent;
     private DateTimeOffset? _quotaReset;
     private long _totalBytes;
+    #endregion
 
+    #region Actions - Transport
     internal async Task<T?> GetAsync<T>(string relative, string apiToken, CancellationToken token) where T : class {
         var uri = new Uri(Origin, relative);
         if (!SameApiOrigin(uri)) throw new ArgumentException("Metron requests must stay on its API origin.");
@@ -76,6 +82,7 @@ internal sealed class MetronClient(HttpClient http, Func<TimeSpan, CancellationT
     }
     private static long? HeaderNumber(HttpResponseMessage response, string name) => response.Headers.TryGetValues(name, out var values)
         && long.TryParse(values.FirstOrDefault(), out var number) ? number : null;
+    #endregion
 }
 
 // prism-vocab: external Metron response fields are decoded only by these boundary records.

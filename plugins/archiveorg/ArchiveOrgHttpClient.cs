@@ -6,10 +6,16 @@ namespace Prismedia.Plugin.ArchiveOrg;
 
 /// <summary>Reads bounded public Archive metadata and resolves one anonymous storage-host URL.</summary>
 internal sealed class ArchiveOrgHttpClient : IDisposable {
+    #region Static Variables
     private const int MaximumDocumentBytes = 4 * 1024 * 1024;
     private const string UserAgent = "Prismedia-ArchiveOrg/1.0.0 (+https://pauljoda.github.io/Prismedia/)";
-    private readonly HttpClient client;
+    #endregion
 
+    #region Variables
+    private readonly HttpClient client;
+    #endregion
+
+    #region Constructors
     internal ArchiveOrgHttpClient(ConnectionContext connection, HttpMessageHandler? handler = null) {
         if (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var address)
             || address.Scheme != Uri.UriSchemeHttps || address.IdnHost != ArchiveOrgProtocol.Host
@@ -22,7 +28,9 @@ internal sealed class ArchiveOrgHttpClient : IDisposable {
             ConnectTimeout = TimeSpan.FromSeconds(10)
         }) { Timeout = Timeout.InfiniteTimeSpan };
     }
+    #endregion
 
+    #region Actions - Transport
     internal async Task<JsonDocument> ReadAsync(string path, CancellationToken cancellationToken) {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(20));
@@ -72,6 +80,9 @@ internal sealed class ArchiveOrgHttpClient : IDisposable {
         request.Headers.AcceptEncoding.ParseAdd("identity");
         return request;
     }
+    #endregion
 
+    #region Actions - Disposal
     public void Dispose() => client.Dispose();
+    #endregion
 }

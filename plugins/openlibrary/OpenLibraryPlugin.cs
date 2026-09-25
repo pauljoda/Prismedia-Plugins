@@ -1,12 +1,24 @@
 namespace Prismedia.Plugin.OpenLibrary;
 
 internal sealed class OpenLibraryPlugin {
-    private readonly OpenLibraryApiClient _client;
+    #region Static Variables
+    // Prolific authors have hundreds of works; page through them (100 at a time) up to a sane ceiling rather
+    // than capping at one page, so a request surfaces the full bibliography.
+    private const int AuthorWorksPageSize = 100;
+    private const int AuthorWorksMax = 500;
+    #endregion
 
+    #region Variables
+    private readonly OpenLibraryApiClient _client;
+    #endregion
+
+    #region Constructors
     public OpenLibraryPlugin(OpenLibraryApiClient client) {
         _client = client;
     }
+    #endregion
 
+    #region Actions - Identification
     public async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
         if (request.Entity.Kind.Equals("book", StringComparison.OrdinalIgnoreCase)) {
             return await IdentifyBookAsync(request, "book");
@@ -113,7 +125,9 @@ internal sealed class OpenLibraryPlugin {
     }
 
     private static int SearchLimit(IdentifyPluginRequest request) => Math.Clamp(request.Query.Limit, 1, 100);
+    #endregion
 
+    #region Actions - Proposals
     private async Task<EntityMetadataProposal> SeriesProposalAsync(
         string seriesName,
         Guid? targetId,
@@ -274,11 +288,6 @@ internal sealed class OpenLibraryPlugin {
     /// cover/year/rating fields, results are de-duplicated by title (preferring an edition with a cover) and
     /// ordered newest-first.
     /// </summary>
-    // Prolific authors have hundreds of works; page through them (100 at a time) up to a sane ceiling rather
-    // than capping at one page, so a request surfaces the full bibliography.
-    private const int AuthorWorksPageSize = 100;
-    private const int AuthorWorksMax = 500;
-
     private async Task<IReadOnlyList<EntityMetadataProposal>> AuthorWorkChildrenAsync(string authorId) {
         var collected = new List<OpenLibrarySearchDoc>();
         for (var offset = 0; offset < AuthorWorksMax; offset += AuthorWorksPageSize) {
@@ -416,7 +425,9 @@ internal sealed class OpenLibraryPlugin {
             children ?? [],
             []);
     }
+    #endregion
 
+    #region Actions - Candidates
     private static IEnumerable<EntitySearchCandidate> WorkCandidates(IEnumerable<OpenLibrarySearchDoc> docs, string query) =>
         docs
             .Where(doc => OpenLibraryMetadata.WorkIdFromKey(doc.Key) is not null)
@@ -531,7 +542,9 @@ internal sealed class OpenLibraryPlugin {
             Confidence: null,
             MatchReason: "author-search");
     }
+    #endregion
 
+    #region Actions - Lookup
     private async Task<WorkLookup?> ResolveWorkLookupAsync(IdentifyPluginRequest request) {
         var explicitWork = WorkIdFromIds(request.Query.ExternalIds) ?? OpenLibraryMetadata.WorkIdFromUrl(request.Query.Url);
         var explicitEdition = EditionIdFromIds(request.Query.ExternalIds) ?? OpenLibraryMetadata.EditionIdFromUrl(request.Query.Url);
@@ -663,7 +676,9 @@ internal sealed class OpenLibraryPlugin {
         var index = request.StructuralContext?.Positions.ContainsKey("sortOrder") == true ? position.Value : position.Value - 1;
         return index >= 0 && index < docs.Count ? docs[index] : null;
     }
+    #endregion
 
+    #region Actions - Evidence
     private static IReadOnlyList<AuthorRef> AuthorRefs(OpenLibraryWork work, OpenLibrarySearchDoc? doc) {
         var refs = new List<AuthorRef>();
         var ids = (work.Authors ?? []).Select(author => OpenLibraryMetadata.AuthorIdFromKey(author.Author?.Key)).Where(id => id is not null).Select(id => id!).ToArray();
@@ -831,7 +846,9 @@ internal sealed class OpenLibraryPlugin {
 
         return null;
     }
+    #endregion
 
+    #region Actions - Identities
     private static string? ResolveSeriesName(IdentifyPluginRequest request) =>
         SeriesFromIds(request.Query.ExternalIds) ??
         SeriesFromIds(request.Entity.ExternalIds) ??
@@ -925,7 +942,7 @@ internal sealed class OpenLibraryPlugin {
         (!string.IsNullOrWhiteSpace(request.Query.Title) || request.Query.Fields?.Values.Any(value => !string.IsNullOrWhiteSpace(value)) == true) &&
         string.IsNullOrWhiteSpace(request.Query.Url) &&
         request.Query.ExternalIds is not { Count: > 0 };
-
+    #endregion
 
     private sealed record WorkLookup(string WorkId, string MatchReason, OpenLibraryEdition? Edition);
     private sealed record AuthorRef(string Id, string Name);

@@ -9,11 +9,19 @@ namespace Prismedia.Plugin.Suwayomi;
 
 /// <summary>Bounded same-origin access to one configured Suwayomi server.</summary>
 internal sealed class SuwayomiClient : IDisposable {
+    #region Static Variables
     private const int MaximumResponseBytes = 8 * 1024 * 1024;
+    #endregion
+
+    #region Variables
     private readonly HttpClient client;
     private readonly Uri baseAddress;
     private readonly Dictionary<string, string> headers = [];
 
+    internal IReadOnlyDictionary<string, string> DeliveryHeaders => new Dictionary<string, string>(headers);
+    #endregion
+
+    #region Constructors
     internal SuwayomiClient(ConnectionContext connection, HttpMessageHandler? handler = null) {
         if (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("http" or "https")
             || parsed.UserInfo.Length != 0 || parsed.Query.Length != 0 || parsed.Fragment.Length != 0 || connection.ExpectedInstanceId is not null)
@@ -29,9 +37,9 @@ internal sealed class SuwayomiClient : IDisposable {
         client = new(handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false,
             AutomaticDecompression = DecompressionMethods.All, ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     }
+    #endregion
 
-    internal IReadOnlyDictionary<string, string> DeliveryHeaders => new Dictionary<string, string>(headers);
-
+    #region Actions - Transport
     internal async Task<T> GraphQlAsync<T>(string query, object? variables, CancellationToken cancellationToken) where T : class {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(40));
@@ -79,5 +87,9 @@ internal sealed class SuwayomiClient : IDisposable {
     }
     private static string? Value(IReadOnlyDictionary<string, string> values, string key) =>
         values.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value) ? value : null;
+    #endregion
+
+    #region Actions - Disposal
     public void Dispose() => client.Dispose();
+    #endregion
 }

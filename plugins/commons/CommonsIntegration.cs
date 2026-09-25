@@ -8,20 +8,23 @@ namespace Prismedia.Plugin.Commons;
 
 /// <summary>Searches Commons images and resolves exact selected file versions with source attribution.</summary>
 internal sealed class CommonsIntegration(CommonsClient client, ConnectionContext connection) {
-    private sealed record Cursor(Guid ConnectionId, string Query, int Limit, int Offset);
-    private sealed record Selection(Guid ConnectionId, long PageId, string Sha1, DateTimeOffset Timestamp);
+    #region Static Variables
     private static readonly Capability[] Capabilities = [
         new(IntegrationCapabilities.Discovery, [IntegrationOperations.Search], [MediaKinds.Image]),
         new(IntegrationCapabilities.AcquisitionSource, [IntegrationOperations.Resolve], [MediaKinds.Image])
     ];
+    #endregion
 
+    #region Actions - Dispatch
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) => request.Operation switch {
         IntegrationOperations.Probe => await Probe(cancellationToken),
         IntegrationOperations.Search => await Search(Read<DiscoveryInput>(request.Input), cancellationToken),
         IntegrationOperations.Resolve => await Resolve(Read<ResolveOfferInput>(request.Input), cancellationToken),
         _ => throw new IntegrationFailure("This Commons operation is unavailable.")
     };
+    #endregion
 
+    #region Actions - Catalog
     private async Task<ProbeResult> Probe(CancellationToken cancellationToken) {
         var result = await client.ReadAsync(new Dictionary<string, string> { [CommonsQuery.Meta] = CommonsQuery.SiteInfo,
             [CommonsQuery.SiteInfoProperty] = CommonsQuery.General }, cancellationToken);
@@ -74,7 +77,9 @@ internal sealed class CommonsIntegration(CommonsClient client, ConnectionContext
         return new(input.Selection, input.OfferId, item.Publication, item.Offers[0],
             new(url, new Dictionary<string, string>(), fileName, image.Size, Sha1: selection.Sha1));
     }
+    #endregion
 
+    #region Actions - Evidence
     private CatalogItem? ToItem(CommonsPage page) {
         if (page.Namespace != CommonsCodes.FileNamespace || page.PageId <= 0 || string.IsNullOrWhiteSpace(page.Title) || page.Title.Length > 512
             || page.Images is not { Count: 1 } || page.Images[0] is not { } image || Extension(image.Mime) is null
@@ -127,4 +132,8 @@ internal sealed class CommonsIntegration(CommonsClient client, ConnectionContext
         try { return JsonSerializer.Deserialize<T>(Convert.FromBase64String(value), IntegrationProtocol.Json) ?? throw new IntegrationFailure("The Commons selection or cursor is invalid."); }
         catch (Exception error) when (error is JsonException or FormatException) { throw new IntegrationFailure("The Commons selection or cursor is invalid."); }
     }
+    #endregion
+
+    private sealed record Cursor(Guid ConnectionId, string Query, int Limit, int Offset);
+    private sealed record Selection(Guid ConnectionId, long PageId, string Sha1, DateTimeOffset Timestamp);
 }

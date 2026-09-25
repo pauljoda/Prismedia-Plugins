@@ -5,12 +5,16 @@ namespace Prismedia.Plugin.Archiver;
 
 /// <summary>Maps the independent Archiver executor API to Prismedia's declared integration capabilities.</summary>
 internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionContext connection) {
+    #region Static Variables
     private static readonly Capability[] Capabilities = [
         new(IntegrationCapabilities.Discovery, [IntegrationOperations.Inspect], [MediaKinds.Book, MediaKinds.Comic, MediaKinds.Image, MediaKinds.Gallery]),
         new(IntegrationCapabilities.TransferExecutor, [IntegrationOperations.Submit, IntegrationOperations.FindSubmission,
             IntegrationOperations.GetJob, IntegrationOperations.Cancel, IntegrationOperations.CancelSubmission, IntegrationOperations.ListArtifacts,
             IntegrationOperations.AuthorizeArtifact, IntegrationOperations.RenewRetention, IntegrationOperations.Acknowledge], [MediaKinds.Book, MediaKinds.Comic, MediaKinds.Image, MediaKinds.Gallery])
     ];
+    #endregion
+
+    #region Actions - Dispatch
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) {
         var system = await client.SendAsync<SystemInfo>(HttpMethod.Get, "system", null, cancellationToken)
             ?? throw new IntegrationFailure("The Archiver did not return its identity.");
@@ -114,6 +118,9 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
             default: throw new IntegrationFailure("This Archiver operation is not supported.");
         }
     }
+    #endregion
+
+    #region Actions - Transfers
     private async Task<ManifestPage> ReadManifestAsync(ReadTransferManifestInput input, CancellationToken cancellationToken) {
         var path = $"jobs/{Escape(input.JobId)}/artifacts?revision={Escape(input.Revision)}&limit={input.Limit}";
         if (input.Cursor is not null) path += "&cursor=" + Escape(input.Cursor);
@@ -130,4 +137,5 @@ internal sealed class ArchiverIntegration(ArchiverClient client, ConnectionConte
     };
     private static string Escape(string value) => Uri.EscapeDataString(value);
     private static T Input<T>(IntegrationRequest request) => request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
+    #endregion
 }

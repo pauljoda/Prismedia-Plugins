@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.GoogleBooks;
 
 /// <summary>Protocol and provider vocabulary used by the Google Books adapter.</summary>
 internal static class GoogleBooksCodes {
+    #region Static Variables
     public const string Provider = "googlebooks";
     public const string Book = "book";
     public const string BookVolume = "book-volume";
@@ -21,4 +22,5 @@ internal static class GoogleBooksCodes {
     public const string Isbn13Type = "ISBN_13";
     public const string BookPrintType = "BOOK";
     public const string Mature = "MATURE";
+    #endregion
 }

@@ -8,12 +8,14 @@ namespace Prismedia.Plugin.Opds;
 
 /// <summary>Implements capability negotiation, bounded browsing, advertised search, and revalidated full-content offers.</summary>
 internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext connection) {
-    private sealed record Cursor(string Url, int Offset);
+    #region Static Variables
     private static readonly string[] Kinds = [MediaKinds.Book, MediaKinds.Comic];
     private static readonly XNamespace OpenSearch = "http://a9.com/-/spec/opensearch/1.1/";
     private const string SearchTerms = "{searchTerms}";
     private const string QueryVariable = "{?query}";
+    #endregion
 
+    #region Actions - Dispatch
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) => request.Operation switch {
         IntegrationOperations.Probe => await ProbeAsync(cancellationToken),
         IntegrationOperations.Browse or IntegrationOperations.Search => await DiscoverAsync(Read<DiscoveryInput>(request.Input), request.Operation == IntegrationOperations.Search, cancellationToken),
@@ -21,7 +23,9 @@ internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext con
         _ => throw new IntegrationFailure("This OPDS operation is not supported.")
     };
     private static T Read<T>(JsonElement input) => input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
+    #endregion
 
+    #region Actions - Catalog
     internal async Task<ProbeResult> ProbeAsync(CancellationToken cancellationToken) {
         var root = await ReadDocumentAsync(connection.BaseUrl, MediaKinds.Book, cancellationToken);
         var search = await SearchTemplateAsync(root, cancellationToken);
@@ -67,7 +71,9 @@ internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext con
         var filename = SuggestedFileName(acquisition.Url, acquisition.MediaType);
         return new(input.Selection, offer.Id, entry.Item.Publication, offer, new(acquisition.Url.AbsoluteUri, http.Headers, filename, offer.ByteSize));
     }
+    #endregion
 
+    #region Actions - Documents
     private async Task<OpdsDocument> ReadDocumentAsync(string address, string kind, CancellationToken cancellationToken) {
         var response = await http.ReadAsync(http.RequireScope(address), cancellationToken);
         return OpdsParser.Parse(response.Body, response.Url, kind);
@@ -117,4 +123,7 @@ internal sealed class OpdsIntegration(OpdsHttpClient http, ConnectionContext con
         "application/epub+zip" => ".epub", "application/pdf" => ".pdf", "application/vnd.comicbook+zip" or "application/x-cbz" => ".cbz",
         "application/vnd.comicbook-rar" or "application/x-cbr" => ".cbr", "application/x-mobipocket-ebook" => ".mobi", "application/vnd.amazon.ebook" => ".azw", _ => ".bin"
     };
+    #endregion
+
+    private sealed record Cursor(string Url, int Offset);
 }

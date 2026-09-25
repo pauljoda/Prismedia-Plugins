@@ -6,9 +6,15 @@ namespace Prismedia.Plugin.Commons;
 
 /// <summary>Anonymous, bounded GET access to the fixed Commons Action API; redirects never expand its scope.</summary>
 internal sealed class CommonsClient : IDisposable {
+    #region Static Variables
     private const int MaximumResponseBytes = 4 * 1024 * 1024;
-    private readonly HttpClient client;
+    #endregion
 
+    #region Variables
+    private readonly HttpClient client;
+    #endregion
+
+    #region Constructors
     internal CommonsClient(ConnectionContext connection, HttpMessageHandler? handler = null) {
         if (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var address) || !SameOrigin(address, CommonsCodes.Origin)
             || address.AbsolutePath is not ("/" or "/w/api.php") || address.Query.Length != 0 || address.Fragment.Length != 0
@@ -17,7 +23,9 @@ internal sealed class CommonsClient : IDisposable {
         client = new(handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false,
             AutomaticDecompression = DecompressionMethods.All, ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     }
+    #endregion
 
+    #region Actions - Transport
     internal async Task<CommonsResponse> ReadAsync(IReadOnlyDictionary<string, string> parameters, CancellationToken cancellationToken) {
         var query = new Dictionary<string, string>(parameters) {
             [CommonsQuery.Action] = CommonsQuery.Query, [CommonsQuery.Format] = CommonsQuery.Json,
@@ -49,5 +57,9 @@ internal sealed class CommonsClient : IDisposable {
 
     internal static bool SameOrigin(Uri address, string origin) => address.Scheme == Uri.UriSchemeHttps && address.UserInfo.Length == 0
         && address.Port == 443 && address.IdnHost.Equals(new Uri(origin).IdnHost, StringComparison.OrdinalIgnoreCase);
+    #endregion
+
+    #region Actions - Disposal
     public void Dispose() => client.Dispose();
+    #endregion
 }

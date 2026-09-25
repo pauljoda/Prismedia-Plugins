@@ -7,9 +7,15 @@ namespace Prismedia.Plugin.Metron;
 
 /// <summary>Identifies concrete Metron runs and issues; title searches remain explicit candidate choices.</summary>
 internal sealed partial class MetronPlugin(HttpClient http, Func<TimeSpan, CancellationToken, Task>? delay = null) {
+    #region Static Variables
     internal const int MaximumIssues = 500;
-    private readonly MetronClient _client = new(http, delay);
+    #endregion
 
+    #region Variables
+    private readonly MetronClient _client = new(http, delay);
+    #endregion
+
+    #region Actions - Identification
     internal async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
         if (request.ProtocolVersion != 2) throw new ArgumentException("Metron requires metadata protocol version 2.");
         var series = request.Entity.Kind == MetronCodes.SeriesKind;
@@ -111,7 +117,9 @@ internal sealed partial class MetronPlugin(HttpClient http, Func<TimeSpan, Cance
         }
         throw new InvalidOperationException("Metron issue pagination exceeded its review limit. Search for an individual issue instead.");
     }
+    #endregion
 
+    #region Actions - Proposals
     private static EntityMetadataProposal SeriesProposal(MetronSeries item, IReadOnlyList<MetronIssue> issues, Guid entityId) {
         var dates = new Dictionary<string, string>();
         if (item.YearBegan is > 0 and <= 9999) dates[MetronCodes.PublicationDate] = item.YearBegan.Value.ToString("D4", CultureInfo.InvariantCulture);
@@ -182,6 +190,9 @@ internal sealed partial class MetronPlugin(HttpClient http, Func<TimeSpan, Cance
         : WebUtility.HtmlDecode(HtmlTags().Replace(value[..Math.Min(value.Length, 100000)], " ")).Trim();
     private static decimal NumericOrder(string? label) => decimal.TryParse(label, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
         CultureInfo.InvariantCulture, out var value) ? value : label == "½" ? 0.5m : decimal.MaxValue;
+    #endregion
+
+    #region Actions - Validation
     private static void RequireIdentity(long actual, string expected) {
         if (actual <= 0 || actual.ToString(CultureInfo.InvariantCulture) != expected) throw new InvalidDataException("Metron returned a different record identity.");
     }
@@ -219,7 +230,11 @@ internal sealed partial class MetronPlugin(HttpClient http, Func<TimeSpan, Cance
     private static string QueryString(Dictionary<string, string> values) => string.Join('&', values.Select(pair => Uri.EscapeDataString(pair.Key) + "=" + Uri.EscapeDataString(pair.Value)));
     private static InvalidDataException InvalidPage() => new("Metron returned an invalid catalog page.");
     private static InvalidDataException ChangedPage() => new("Metron's issue list changed or contains conflicting identities. Retry before reviewing this series.");
+    #endregion
+
+    #region Actions - Patterns
     [GeneratedRegex("^[1-9][0-9]{0,17}$", RegexOptions.CultureInvariant)] private static partial Regex PositiveId();
     [GeneratedRegex("^[A-Za-z]{2}$", RegexOptions.CultureInvariant)] private static partial Regex LanguageCode();
     [GeneratedRegex("<[^>]+>", RegexOptions.CultureInvariant)] private static partial Regex HtmlTags();
+    #endregion
 }

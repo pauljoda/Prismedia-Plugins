@@ -74,9 +74,11 @@ internal sealed record EntityMetadataPatch(
     IReadOnlyDictionary<string, int> Stats,
     IReadOnlyDictionary<string, int> Positions,
     string? Classification) {
+    #region Variables
     public int? Rating { get; init; }
     public EntityMetadataFlagsPatch? Flags { get; init; }
     public IReadOnlyList<ExternalIdentityRetirement> RetiredExternalIds { get; init; } = [];
+    #endregion
 }
 
 internal sealed record ExternalIdentityRetirement(string Namespace, string Value);
@@ -98,9 +100,11 @@ internal sealed record IdentifyPluginResult(
     string Type,
     EntityMetadataProposal? Proposal,
     IReadOnlyList<EntitySearchCandidate> Candidates) {
+    #region Constructors
     public static IdentifyPluginResult ForProposal(EntityMetadataProposal proposal) => new("proposal", proposal, []);
     public static IdentifyPluginResult ForCandidates(IReadOnlyList<EntitySearchCandidate> candidates) => new("candidates", null, candidates);
     public static IdentifyPluginResult None() => new("none", null, []);
+    #endregion
 }
 
 internal sealed record IdentifyPluginResponse(

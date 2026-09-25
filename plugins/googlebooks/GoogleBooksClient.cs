@@ -5,10 +5,13 @@ namespace Prismedia.Plugin.GoogleBooks;
 
 /// <summary>Bounded read-only access to the public volume API; errors never include credential-bearing URLs.</summary>
 internal sealed class GoogleBooksClient(HttpClient http) {
+    #region Static Variables
     private const int MaximumBytes = 8 * 1024 * 1024;
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { MaxDepth = 32 };
     private static readonly Uri Origin = new("https://www.googleapis.com/books/v1/");
+    #endregion
 
+    #region Actions - Transport
     public async Task<T?> GetAsync<T>(string relative, string? apiKey) {
         var uri = new Uri(Origin, relative + (string.IsNullOrWhiteSpace(apiKey) ? string.Empty :
             (relative.Contains('?') ? "&" : "?") + "key=" + Uri.EscapeDataString(apiKey)));
@@ -32,6 +35,7 @@ internal sealed class GoogleBooksClient(HttpClient http) {
         }
         return JsonSerializer.Deserialize<T>(output.ToArray(), JsonOptions);
     }
+    #endregion
 }
 
 // prism-vocab: external Google Books response fields, decoded only in these boundary models.

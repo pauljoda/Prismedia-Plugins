@@ -7,10 +7,17 @@ namespace Prismedia.Plugin.Archiver;
 
 /// <summary>Bounded authenticated control transport. Redirects are rejected; credentials stay on the configured origin.</summary>
 internal sealed class ArchiverClient : IDisposable {
+    #region Static Variables
     private const int MaximumResponseBytes = 4 * 1024 * 1024;
+    #endregion
+
+    #region Variables
     private readonly HttpClient client;
     private readonly Uri root;
     internal IReadOnlyDictionary<string, string> Headers { get; }
+    #endregion
+
+    #region Constructors
     internal ArchiverClient(ConnectionContext connection, HttpMessageHandler? handler = null) {
         if (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var address) || address.Scheme is not ("http" or "https")
             || address.UserInfo.Length != 0 || address.Query.Length != 0 || address.Fragment.Length != 0)
@@ -21,6 +28,9 @@ internal sealed class ArchiverClient : IDisposable {
         Headers = new Dictionary<string, string> { ["Authorization"] = "Bearer " + token };
         client = new(handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     }
+    #endregion
+
+    #region Actions - Transport
     internal Uri ArtifactUrl(string contentPath) {
         if (string.IsNullOrWhiteSpace(contentPath) || !contentPath.StartsWith('/') || contentPath.StartsWith("//") || contentPath.Contains('\\'))
             throw new IntegrationFailure("The artifact requires an API-relative content path.");
@@ -53,5 +63,9 @@ internal sealed class ArchiverClient : IDisposable {
         }
         return JsonSerializer.Deserialize<T>(buffer.ToArray(), IntegrationProtocol.Json) ?? throw new IntegrationFailure("The Archiver returned an empty control message.");
     }
+    #endregion
+
+    #region Actions - Disposal
     public void Dispose() => client.Dispose();
+    #endregion
 }

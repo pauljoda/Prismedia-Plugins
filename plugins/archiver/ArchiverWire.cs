@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.Archiver;
 
 /// <summary>Archiver API v1 scalar vocabulary; translated at the adapter boundary.</summary>
 internal static class ArchiverWire {
+    #region Static Variables
     internal const string Gallery = "gallery";
     internal const string GalleryProfile = "ordered-gallery";
     internal const string ImageSet = "image-set";
@@ -24,6 +25,7 @@ internal static class ArchiverWire {
     internal const string Artifacts = "artifacts";
     internal const string Retention = "retention";
     internal const string Receipts = "receipts";
+    #endregion
 }
 internal sealed record SystemInfo(string InstanceId, string ApiVersion, string ApplicationVersion, IReadOnlyList<string> Capabilities,
     IReadOnlyList<string> OutputProfiles, int MaximumItems, long MaximumBytes, int DefaultRetentionDays, int OperationRetentionDays);

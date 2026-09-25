@@ -5,21 +5,24 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.ArchiveOrg;
 
 internal static class ArchiveOrgProtocol {
+    #region Static Variables
     internal const string Host = "archive.org";
     internal const string ExternalIdProvider = "archive.org";
     internal const string ComicMediaType = "application/vnd.comicbook+zip";
     internal const string PublicDomainMark = "Public Domain Mark 1.0";
     internal const string CcZero = "CC0 1.0";
     internal const string PublicDomainQuery = "subject:(comic books) AND mediatype:texts AND licenseurl:*publicdomain*";
+    #endregion
 }
 
 /// <summary>Discovers explicitly public-domain-labeled Archive items and revalidates original CBZ files.</summary>
 internal sealed class ArchiveOrgIntegration(ArchiveOrgHttpClient http) {
-    private sealed record Cursor(string? Query, string? Container, int Offset, int Limit);
-    private sealed record ArchiveFile(string Name, long Size, string Sha1);
+    #region Static Variables
     private static readonly Regex IssuePattern = new(@"(?:#|\bNo\.?\s*)(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex IdentifierPattern = new(@"^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$", RegexOptions.Compiled);
+    #endregion
 
+    #region Actions - Dispatch
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) => request.Operation switch {
         IntegrationOperations.Probe => await ProbeAsync(cancellationToken),
         IntegrationOperations.Browse or IntegrationOperations.Search => await DiscoverAsync(
@@ -30,7 +33,9 @@ internal sealed class ArchiveOrgIntegration(ArchiveOrgHttpClient http) {
 
     private static T Read<T>(JsonElement input) => input.Deserialize<T>(IntegrationProtocol.Json)
         ?? throw new IntegrationFailure("The operation input is missing.");
+    #endregion
 
+    #region Actions - Catalog
     internal async Task<ProbeResult> ProbeAsync(CancellationToken cancellationToken) {
         using var result = await http.ReadAsync("/advancedsearch.php?q=mediatype%3Atexts&rows=0&output=json", cancellationToken);
         if (!result.RootElement.TryGetProperty("response", out _))
@@ -109,7 +114,9 @@ internal sealed class ArchiveOrgIntegration(ArchiveOrgHttpClient http) {
         return new(input.Selection, input.OfferId, item.Publication, item.Offers[0],
             new(address.AbsoluteUri, new Dictionary<string, string>(), file.Name, file.Size, Sha1: file.Sha1));
     }
+    #endregion
 
+    #region Actions - Evidence
     private async Task<JsonDocument> ReadItemAsync(string identifier, CancellationToken cancellationToken) =>
         await http.ReadAsync("/metadata/" + Uri.EscapeDataString(identifier), cancellationToken);
 
@@ -193,4 +200,8 @@ internal sealed class ArchiveOrgIntegration(ArchiveOrgHttpClient http) {
         identifier = Uri.UnescapeDataString(address.AbsolutePath["/metadata/".Length..]);
         return IdentifierPattern.IsMatch(identifier) && address.AbsoluteUri == ItemUrl(identifier);
     }
+    #endregion
+
+    private sealed record Cursor(string? Query, string? Container, int Offset, int Limit);
+    private sealed record ArchiveFile(string Name, long Size, string Sha1);
 }

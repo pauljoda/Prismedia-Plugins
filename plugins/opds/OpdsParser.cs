@@ -11,6 +11,7 @@ namespace Prismedia.Plugin.Opds;
 
 /// <summary>Decodes bounded OPDS documents into source choices without executing acquisition links.</summary>
 internal static class OpdsParser {
+    #region Static Variables
     internal const int MaximumDocumentBytes = 4 * 1024 * 1024;
     private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
     private static readonly XNamespace Dublin = "http://purl.org/dc/terms/";
@@ -24,8 +25,9 @@ internal static class OpdsParser {
     private const string NextRelation = "next";
     internal const string OpenSearchType = "application/opensearchdescription+xml";
     private const string SourceIdentity = "opds";
-    private sealed record Link(string Href, string? Type, string[] Relations, Uri Base, bool Indirect = false, long? Length = null);
+    #endregion
 
+    #region Actions - Parsing
     internal static OpdsDocument Parse(string body, Uri source, string kind) {
         if (body.Length > MaximumDocumentBytes) throw new IntegrationFailure("The catalog exceeds the document size limit.");
         try {
@@ -54,6 +56,9 @@ internal static class OpdsParser {
         return text.Length <= limit ? text : text[..limit];
     }
     private static string[] Words(string? value) => value?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+    #endregion
+
+    #region Actions - Atom
     private static Uri XmlBase(XElement element, Uri source) {
         var result = source;
         foreach (var ancestor in element.AncestorsAndSelf().Reverse()) {
@@ -86,7 +91,9 @@ internal static class OpdsParser {
         var rootLinks = root.Elements(Atom + "link").Select(link => XmlLink(link, source)).ToArray();
         return Document(Clean(root.Element(Atom + "title")?.Value) ?? "Catalog", entries, rootLinks, source);
     }
+    #endregion
 
+    #region Actions - Json
     // prism-vocab: external — OPDS JSON decoding boundary.
     private static OpdsDocument ParseJson(string body, Uri source, string kind) {
         using var document = JsonDocument.Parse(body, new JsonDocumentOptions { MaxDepth = 64 });
@@ -136,7 +143,9 @@ internal static class OpdsParser {
     }
     private static string? String(JsonElement element, string key) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     private static IEnumerable<JsonElement> Array(JsonElement element, string key) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Array ? value.EnumerateArray() : [];
+    #endregion
 
+    #region Actions - Entries
     private static void Add(List<OpdsEntry> entries, string? identity, CatalogPublication publication, Link[] links, Uri source, string requestedKind) {
         var acquisitions = links.Where(link => link.Relations.Any(relation => relation == Acquisition || relation.StartsWith(Acquisition + "/", StringComparison.Ordinal))).ToArray();
         if (acquisitions.Length == 0) {
@@ -190,4 +199,7 @@ internal static class OpdsParser {
         return new(title, entries.DistinctBy(entry => entry.Item.Selection.ItemId).ToArray(), next,
             search is null ? null : new(Resolve(search)!, search.Type == OpenSearchType));
     }
+    #endregion
+
+    private sealed record Link(string Href, string? Type, string[] Relations, Uri Base, bool Indirect = false, long? Length = null);
 }

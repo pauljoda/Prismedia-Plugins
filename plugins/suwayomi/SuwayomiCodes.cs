@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.Suwayomi;
 
 /// <summary>Fixed Suwayomi v2.3.2243 protocol vocabulary and safe adapter bounds.</summary>
 internal static class SuwayomiCodes {
+    #region Static Variables
     internal const string SupportedVersion = "2.3.2243";
     internal const string ReportedVersion = "v" + SupportedVersion;
     internal const string CbzOffer = "cbz";
@@ -18,4 +19,5 @@ internal static class SuwayomiCodes {
     internal const int MaximumCatalogLimit = 100;
     internal const int MaximumCursorOffset = 10_000;
     internal const long MaximumArtifactBytes = 2L * 1024 * 1024 * 1024;
+    #endregion
 }

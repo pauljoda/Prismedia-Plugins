@@ -7,8 +7,11 @@ namespace Prismedia.Plugin.GoogleBooks;
 
 /// <summary>Edition-specific identification. A title search always remains a reviewed candidate choice.</summary>
 internal sealed partial class GoogleBooksPlugin(HttpClient http) {
+    #region Variables
     private readonly GoogleBooksClient client = new(http);
+    #endregion
 
+    #region Actions - Identification
     public async Task<IdentifyPluginResult> IdentifyAsync(IdentifyPluginRequest request) {
         if (request.Entity.Kind is not (GoogleBooksCodes.Book or GoogleBooksCodes.BookVolume)) return IdentifyPluginResult.None();
         var id = Value(request.Query.ExternalIds, GoogleBooksCodes.Provider);
@@ -63,7 +66,9 @@ internal sealed partial class GoogleBooksPlugin(HttpClient http) {
         // Search pagination and regional catalogs cannot prove that a single result is the only edition.
         return volumes.Count == 0 ? IdentifyPluginResult.None() : IdentifyPluginResult.ForCandidates(volumes.Select(Candidate).ToArray());
     }
+    #endregion
 
+    #region Actions - Evidence
     private static bool Visible(GoogleVolume volume, bool includeNsfw) => volume is not null && volume.VolumeInfo is not null
         && VolumeIdPattern().IsMatch(volume.Id ?? string.Empty) && !string.IsNullOrWhiteSpace(volume.VolumeInfo.Title)
         && (volume.VolumeInfo.PrintType is null or GoogleBooksCodes.BookPrintType)
@@ -163,8 +168,11 @@ internal sealed partial class GoogleBooksPlugin(HttpClient http) {
         if (required) throw new ArgumentException("Use a Google Books volume URL containing its exact ID.");
         return null;
     }
+    #endregion
 
+    #region Actions - Patterns
     [GeneratedRegex(@"\A[A-Za-z0-9_-]{1,128}\z", RegexOptions.CultureInvariant)] private static partial Regex VolumeIdPattern();
     [GeneratedRegex(@"\A[a-zA-Z]{2}\z", RegexOptions.CultureInvariant)] private static partial Regex LanguagePattern();
     [GeneratedRegex(@"<[^>]*>", RegexOptions.CultureInvariant, 1000)] private static partial Regex HtmlTags();
+    #endregion
 }

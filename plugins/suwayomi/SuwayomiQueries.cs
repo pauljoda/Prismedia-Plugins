@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.Suwayomi;
 
 /// <summary>Version-pinned GraphQL documents for the supported Suwayomi server release.</summary>
 internal static class SuwayomiQueries {
+    #region Static Variables
     internal const string About = "query PrismediaAbout { aboutServer { name version } }";
     internal const string Sources = "query PrismediaSources($first:Int!,$offset:Int!){ sources(first:$first,offset:$offset,order:[{by:NAME,byType:ASC}]){ nodes{id name lang contentWarning} totalCount } }";
     internal const string Source = "query PrismediaSource($id:LongString!){ source(id:$id){id name lang contentWarning} }";
@@ -11,4 +12,5 @@ internal static class SuwayomiQueries {
     internal const string RefreshNonLibraryManga = "mutation PrismediaRefreshManga($id:Int!){ fetchMangaAndChapters(input:{id:$id,fetchManga:true,fetchChapters:true}){ manga{id sourceId url title author artist description initialized inLibrary chaptersLastFetchedAt} chapters{id} } }";
     internal const string Exact = "query PrismediaExact($sourceId:LongString!,$mangaId:Int!,$chapterId:Int!){ source:source(id:$sourceId){id name lang contentWarning} manga(id:$mangaId){id sourceId url title author artist description initialized inLibrary chaptersLastFetchedAt} chapter(id:$chapterId){id url name uploadDate chapterNumber scanlator mangaId sourceOrder realUrl isDownloaded pageCount} downloadStatus{queue{state progress tries position chapter{id url name uploadDate chapterNumber scanlator mangaId sourceOrder realUrl isDownloaded pageCount}}} }";
     internal const string Enqueue = "mutation PrismediaEnqueue($id:Int!,$clientMutationId:String!){ enqueueChapterDownload(input:{id:$id,clientMutationId:$clientMutationId}){clientMutationId downloadStatus{queue{state progress tries position chapter{id url name uploadDate chapterNumber scanlator mangaId sourceOrder realUrl isDownloaded pageCount}}}} }";
+    #endregion
 }

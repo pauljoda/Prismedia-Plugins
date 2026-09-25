@@ -4,6 +4,7 @@ namespace Prismedia.Plugin.Commons;
 
 /// <summary>Fixed public service identities and MediaWiki wire vocabulary used by the adapter.</summary>
 internal static class CommonsCodes {
+    #region Static Variables
     internal const string Origin = "https://commons.wikimedia.org";
     internal const string FileOrigin = "https://upload.wikimedia.org";
     internal const string WikiId = "commonswiki";
@@ -20,10 +21,12 @@ internal static class CommonsCodes {
     internal const string UsageTerms = "UsageTerms";
     internal const string AttributionRequired = "AttributionRequired";
     internal const string Description = "ImageDescription";
+    #endregion
 }
 
 /// <summary>MediaWiki query parameters, owned at this protocol boundary.</summary>
 internal static class CommonsQuery {
+    #region Static Variables
     internal const string Action = "action";
     internal const string Query = "query";
     internal const string Format = "format";
@@ -47,6 +50,7 @@ internal static class CommonsQuery {
     internal const string ImageLocalOnly = "iilocalonly";
     internal const string PageIds = "pageids";
     internal const string ImageFields = "url|size|mime|sha1|timestamp|extmetadata";
+    #endregion
 }
 
 // prism-vocab: external — the single decode boundary for MediaWiki JSON field names.

@@ -7,13 +7,16 @@ namespace Prismedia.Plugin.Suwayomi;
 
 /// <summary>Browses installed Suwayomi sources and prepares one exact chapter without changing library or reading state.</summary>
 internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionContext connection) {
+    #region Static Variables
     private static readonly string[] Kinds = [MediaKinds.Comic];
     private static readonly Capability[] Capabilities = [
         new(IntegrationCapabilities.Discovery, [IntegrationOperations.Browse, IntegrationOperations.Search], Kinds),
         new(IntegrationCapabilities.AcquisitionSource,
             [IntegrationOperations.RequestSource, IntegrationOperations.ObserveSource, IntegrationOperations.Resolve], Kinds)
     ];
+    #endregion
 
+    #region Actions - Dispatch
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) {
         if (request.Operation == IntegrationOperations.Probe) return await ProbeAsync(cancellationToken);
         await RequireSupportedServerAsync(cancellationToken);
@@ -26,7 +29,9 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
             _ => throw new IntegrationFailure("This Suwayomi operation is unavailable.")
         };
     }
+    #endregion
 
+    #region Actions - Catalog
     internal async Task<ProbeResult> ProbeAsync(CancellationToken cancellationToken) {
         var about = await RequireSupportedServerAsync(cancellationToken);
         return new(null, about.Name, about.Version, Capabilities);
@@ -78,7 +83,9 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
             new(client.ChapterDownloadUrl(locator.ChapterId), client.DeliveryHeaders,
                 $"suwayomi-{locator.MangaId.ToString(CultureInfo.InvariantCulture)}-{locator.ChapterId.ToString(CultureInfo.InvariantCulture)}.cbz"));
     }
+    #endregion
 
+    #region Actions - Browsing
     private async Task<CatalogPage> BrowseSourcesAsync(DiscoveryInput input, CancellationToken cancellationToken) {
         var offset = 0;
         if (input.Cursor is not null) {
@@ -164,7 +171,9 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
         return new(manga.Title, items, nextOffset < data.Chapters.TotalCount
             ? Encode(new ChapterCursor(connection.Id, source.Id, manga.Id, nextOffset, input.Limit)) : null, false);
     }
+    #endregion
 
+    #region Actions - Reads
     private async Task<ExactData> ReadExactAsync(SourceSelection selection, CancellationToken cancellationToken) {
         var locator = DecodeChapter(selection);
         var data = await client.GraphQlAsync<ExactData>(SuwayomiQueries.Exact,
@@ -213,7 +222,9 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
     }
     private Task<ChaptersData> ReadChaptersAsync(int mangaId, int first, int offset, CancellationToken cancellationToken) =>
         client.GraphQlAsync<ChaptersData>(SuwayomiQueries.Chapters, new { mangaId, first, offset }, cancellationToken);
+    #endregion
 
+    #region Actions - Items
     private CatalogItem MangaItem(SuwayomiSource source, SuwayomiManga manga) {
         RequireValidManga(manga);
         var locator = new MangaLocator(SuwayomiCodes.MangaContainer, connection.Id, source.Id, source.Name, source.Lang,
@@ -238,7 +249,9 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
         SuwayomiCodes.CbzMediaType);
     private static string[] Authors(SuwayomiManga manga) => new[] { manga.Author, manga.Artist }
         .Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.Ordinal).Cast<string>().ToArray();
+    #endregion
 
+    #region Actions - Validation
     private ChapterLocator DecodeChapter(SourceSelection selection) {
         if (selection.EntityKind != MediaKinds.Comic) throw new IntegrationFailure("Select a Suwayomi comic chapter.");
         var locator = Decode<ChapterLocator>(selection.Locator);
@@ -296,6 +309,9 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
         var digest = SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(canonicalTuple, IntegrationProtocol.Json));
         return $"{kind}:{Convert.ToHexString(digest).ToLowerInvariant()}";
     }
+    #endregion
+
+    #region Actions - Encoding
     private static T Read<T>(JsonElement input) => input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The Suwayomi request is incomplete.");
     private static string Encode<T>(T value) => Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(value, IntegrationProtocol.Json));
     private static string LocatorKind(string value) {
@@ -313,4 +329,5 @@ internal sealed class SuwayomiIntegration(SuwayomiClient client, ConnectionConte
             ?? throw new IntegrationFailure("The Suwayomi selection or cursor is invalid."); }
         catch (Exception error) when (error is JsonException or FormatException) { throw new IntegrationFailure("The Suwayomi selection or cursor is invalid."); }
     }
+    #endregion
 }

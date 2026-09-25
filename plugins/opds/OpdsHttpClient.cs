@@ -6,13 +6,19 @@ namespace Prismedia.Plugin.Opds;
 
 /// <summary>Catalog HTTP transport with explicit credential scope, redirects, deadlines, and decompressed response limits.</summary>
 internal sealed class OpdsHttpClient : IDisposable {
+    #region Static Variables
     private const string UsernameKey = "username";
     private const string PasswordKey = "password";
     private const string TokenKey = "token";
+    #endregion
+
+    #region Variables
     private readonly HttpClient client;
     private readonly Uri origin;
     internal IReadOnlyDictionary<string, string> Headers { get; }
+    #endregion
 
+    #region Constructors
     internal OpdsHttpClient(ConnectionContext connection, HttpMessageHandler? handler = null) {
         if (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var address) || !OpdsParser.SameOrigin(address, address))
             throw new IntegrationFailure("Configure a valid HTTP or HTTPS catalog address without embedded credentials.");
@@ -33,7 +39,9 @@ internal sealed class OpdsHttpClient : IDisposable {
             Timeout = Timeout.InfiniteTimeSpan
         };
     }
+    #endregion
 
+    #region Actions - Transport
     internal Uri RequireScope(string address) {
         if (!Uri.TryCreate(address, UriKind.Absolute, out var target) || !OpdsParser.SameOrigin(origin, target))
             throw new IntegrationFailure("The catalog link is outside this connection's configured server.");
@@ -73,6 +81,9 @@ internal sealed class OpdsHttpClient : IDisposable {
         }
         throw new IntegrationFailure("The catalog returned too many redirects.");
     }
+    #endregion
 
+    #region Actions - Disposal
     public void Dispose() => client.Dispose();
+    #endregion
 }

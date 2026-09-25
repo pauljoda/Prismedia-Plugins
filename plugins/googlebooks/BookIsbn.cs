@@ -2,6 +2,7 @@ namespace Prismedia.Plugin.GoogleBooks;
 
 /// <summary>Checksum-validated ISBN with an equivalent ISBN-13 matching value.</summary>
 internal sealed record BookIsbn(string Value, string Canonical13) {
+    #region Actions - Parsing
     public static BookIsbn? Parse(string? raw) {
         if (string.IsNullOrWhiteSpace(raw) || raw.Length > 64) return null;
         var value = new string(raw.Where(c => c != '-' && !char.IsWhiteSpace(c)).Select(char.ToUpperInvariant).ToArray());
@@ -16,4 +17,5 @@ internal sealed record BookIsbn(string Value, string Canonical13) {
         return new(value, prefix + Check13(prefix));
     }
     private static char Check13(string prefix) => (char)('0' + (10 - prefix.Select((c, index) => (c - '0') * (index % 2 == 0 ? 1 : 3)).Sum() % 10) % 10);
+    #endregion
 }
