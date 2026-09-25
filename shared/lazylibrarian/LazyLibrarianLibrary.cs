@@ -123,7 +123,7 @@ internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, C
         if (expectedIds is not { Count: > 0 and <= 64 })
             throw new ManagedMutationRejection("Select a book with its known identities.");
         var root = Root(rendition);
-        if (rendition.FileOf(row) is { } reported && !UnderRoot(root, reported))
+        if (rendition.FileOf(row) is { } reported && !RemoteLibraryPath.Parse(root).IsAncestorOf(reported))
             throw new IntegrationFailure($"The reported {rendition.Noun} file is outside this rendition's configured library root.");
         var item = Item(row, rendition);
         if (expectedIds.Any(pair => item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
@@ -133,17 +133,13 @@ internal sealed partial class LazyLibrarianLibrary(LazyLibrarianClient client, C
         return (item, root + "/" + pathPart);
     }
 
+    /// <summary>The configured root of one rendition: an absolute, traversal-free remote path with no trailing separator.</summary>
     private string Root(LazyLibrarianRendition rendition) {
         var root = connection.Settings.GetValueOrDefault(rendition.RootSetting)?.TrimEnd('/');
-        if (root is null || root.Length < 2 || root.Length > 8192 || !root.StartsWith('/')
-            || root.Any(char.IsControl) || root.Split('/').Any(part => part is "." or ".."))
+        if (root is null || root.Length < 2 || !root.StartsWith('/') || !RemoteLibraryPath.TryParse(root, out _))
             throw new IntegrationFailure("Configure absolute ebook and audiobook roots from LazyLibrarian's library settings.");
         return root;
     }
-
-    private static bool UnderRoot(string root, string path) => path.StartsWith(root + "/", StringComparison.Ordinal)
-        && path.Length <= 8192 && !path.Any(char.IsControl)
-        && !path.Split('/').Any(part => part is "." or "..");
 
     /// <summary>
     /// The host item for one book. With a rendition, monitoring is that format's; without one, a book

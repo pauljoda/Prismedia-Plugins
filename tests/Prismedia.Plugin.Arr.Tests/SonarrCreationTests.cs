@@ -154,6 +154,16 @@ public sealed class SonarrCreationTests {
         Assert.Single(settings.Writes);
     }
 
+    [Theory]
+    [InlineData("/library-archive/Series")]
+    [InlineData("/library")]
+    [InlineData("/Library/Series")]
+    public async Task AddedSeriesOutsideTheReviewedRootStaysUncertainAfterWrite(string seriesPath) {
+        using var fixture = new Fixture { CatalogReadyAfterWrite = true, SeriesPath = seriesPath };
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
+        Assert.Single(fixture.Writes);
+    }
+
     private sealed class Fixture : HttpMessageHandler {
         internal bool Exists, Monitored, LoseResponse, CatalogReady, CatalogReadyAfterWrite;
         internal bool ChangeIdentityAfterWrite, ChangeSettingsAfterWrite;

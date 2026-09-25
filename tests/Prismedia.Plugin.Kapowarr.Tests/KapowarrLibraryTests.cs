@@ -269,6 +269,24 @@ public sealed class KapowarrLibraryTests {
         Assert.Empty(fixture.Bodies);
     }
 
+    [Theory]
+    [InlineData("/comics-archive/Comic 1")]
+    [InlineData("/comics")]
+    [InlineData("/Comics/Comic 1")]
+    public async Task EnsureTreatsARunOutsideTheReviewedRootAsUncertain(string folder) {
+        using var fixture = new Fixture();
+        fixture.Results["volumes"] = Array.Empty<object>();
+        fixture.Results["volumes/search"] = new[] { new { comicvine_id = 1001, title = "Comic 1", year = 2024, already_added = (int?)null } };
+        fixture.Results["rootfolder"] = new[] { new { id = 7, folder = "/comics/" } };
+        fixture.PostResults["volumes"] = new { id = 17 };
+        fixture.Results["volumes/17"] = new { id = 17, comicvine_id = 1001, title = "Comic 1", year = 2024,
+            monitored = false, folder, issues = Array.Empty<object>() };
+
+        await Assert.ThrowsAnyAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent() with { Work = RunWork() }));
+
+        Assert.Single(fixture.Bodies);
+    }
+
     [Fact]
     public async Task EnsureTreatsAnUnconfirmedIssueAfterAddAsUncertain() {
         using var fixture = new Fixture();

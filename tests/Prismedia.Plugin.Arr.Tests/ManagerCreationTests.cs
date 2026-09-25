@@ -147,10 +147,28 @@ public sealed class ManagerCreationTests {
         await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
         Assert.Single(fixture.Writes);
     }
+    [Theory]
+    [InlineData("/library-archive/film")]
+    [InlineData("/library")]
+    [InlineData("/Library/film")]
+    public async Task AddedMovieOutsideTheReviewedRootStaysUncertainAfterWrite(string moviePath) {
+        using var fixture = new Fixture { MoviePath = moviePath };
+        await Assert.ThrowsAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Ensure, Intent()));
+        Assert.Single(fixture.Writes);
+    }
+    [Fact]
+    public async Task WindowsRootConfirmsTheAddedMovieByWholeSegmentsIgnoringCase() {
+        using var fixture = new Fixture { RootPath = "C:\\Library", MoviePath = "c:/library/Film (2024)" };
+        var result = Assert.IsType<EnsureManagedResult>(await fixture.Call(ManagerCreation.Ensure, Intent() with { ExpectedRootPath = "C:\\Library" }));
+        Assert.Equal(ManagerControls.Applied, result.Outcome);
+        Assert.True(result.Created);
+        Assert.Single(fixture.Writes);
+    }
     private sealed class Fixture : HttpMessageHandler {
         internal bool Exists, Monitored, LoseResponse, ChangeIdentityAfterWrite;
         internal bool Accessible = true;
         internal int Profile = 2, ReturnedTmdb = 1001;
+        internal string RootPath = "/library";
         internal string MoviePath = "/library/film";
         internal string? FailingRead;
         internal HttpStatusCode? WriteStatus;
@@ -182,7 +200,7 @@ public sealed class ManagerCreationTests {
                 "movie/1" => Response(Movie()),
                 "credit?movieId=1" => Response(Credits),
                 "qualityprofile" => Response(new[] { new { id = 2, name = "Chosen" } }),
-                "rootfolder" => Response(new[] { new { id = 3, path = "/library", accessible = Accessible } }),
+                "rootfolder" => Response(new[] { new { id = 3, path = RootPath, accessible = Accessible } }),
                 _ => throw new InvalidOperationException("Unexpected read: " + path)
                 };
             }

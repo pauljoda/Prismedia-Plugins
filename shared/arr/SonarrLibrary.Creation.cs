@@ -76,7 +76,8 @@ internal sealed partial class SonarrLibrary {
         ArrRoot root, CancellationToken token) {
         var observed = await GetAsync(ParseId(Id(added.Id)), token);
         Candidate(observed.Item.Title, observed.Item.Year, observed.Item.ExternalIds, input.Work);
-        if (observed.Item.Monitored || observed.Item.ProfileId != input.ProfileId || !InsideRemoteRoot(observed.Path, root.Path))
+        if (observed.Item.Monitored || observed.Item.ProfileId != input.ProfileId
+            || !RemoteLibraryPath.TryParse(root.Path, out var remoteRoot) || !remoteRoot.IsAncestorOf(observed.Path))
             throw new IntegrationFailure("The added series settings or root could not be confirmed. Reconcile it before any acquisition action.");
         var targets = await ResolveTargetsAsync(added.Id, input.Work.Targets, token);
         return new(ManagerControls.Applied, observed, true, Targets: targets);
@@ -178,11 +179,6 @@ internal sealed partial class SonarrLibrary {
             || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))
             throw new ManagedMutationRejection("The manager returned a different or incomplete metadata identity.");
         return new(ManagerProtocol.Series, title, year, ids);
-    }
-
-    private static bool InsideRemoteRoot(string path, string root) {
-        var prefix = root.TrimEnd('/', '\\');
-        return path.StartsWith(prefix + "/", StringComparison.Ordinal) || path.StartsWith(prefix + "\\", StringComparison.Ordinal);
     }
 
     private sealed record CreationIdentity(int? TvdbId, int? TmdbId);

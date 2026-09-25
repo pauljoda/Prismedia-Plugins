@@ -60,7 +60,9 @@ internal sealed partial class RadarrLibrary {
         var observed = await GetAsync(ParseId(Id(added.Id)), token);
         if (input.Work.ExternalIds.Any(pair => observed.Item.ExternalIds.GetValueOrDefault(pair.Key) != pair.Value))
             throw new IntegrationFailure("The manager returned a different or incomplete metadata identity.");
-        if (observed.Item.Monitored || observed.Item.ProfileId != input.ProfileId || !InsideRemoteRoot(observed.Path, root.Path))
+        // Containment is decided in the remote path namespace. Local mapping and canonical byte checks remain host-owned.
+        if (observed.Item.Monitored || observed.Item.ProfileId != input.ProfileId
+            || !RemoteLibraryPath.TryParse(root.Path, out var remoteRoot) || !remoteRoot.IsAncestorOf(observed.Path))
             throw new IntegrationFailure("The added movie's settings or root could not be confirmed. Reconcile it before any acquisition action.");
         return new(ManagerControls.Applied, observed, true);
     }
@@ -93,11 +95,6 @@ internal sealed partial class RadarrLibrary {
             || expected.ExternalIds.Any(pair => ids.GetValueOrDefault(pair.Key) != pair.Value))
             throw new ManagedMutationRejection("The manager returned a different or incomplete metadata identity.");
         return new(ManagerProtocol.Movie, movie.Title, movie.Year, ids, DiscoveryMetadata(movie, credits));
-    }
-    private static bool InsideRemoteRoot(string path, string root) {
-        // This is the remote path namespace. Local mapping and canonical byte checks remain host-owned.
-        var prefix = root.TrimEnd('/', '\\');
-        return path.StartsWith(prefix + "/", StringComparison.Ordinal) || path.StartsWith(prefix + "\\", StringComparison.Ordinal);
     }
     private sealed record MovieLookup(string Title, int Year, int TmdbId, string? ImdbId,
         string? OriginalTitle = null, string? Overview = null, string? Studio = null,

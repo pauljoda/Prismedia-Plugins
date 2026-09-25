@@ -74,7 +74,7 @@ internal sealed partial class KapowarrLibrary {
     private async Task<EnsureManagedResult> ConfirmAddedAsync(EnsureManagedInput input, KapowarrWork work,
         KapowarrVolumeReceipt added, CancellationToken token) {
         var observed = await ReadRunAsync(new(ManagerProtocol.ComicSeries, Id(added.Id), input.Work.ExternalIds), token);
-        if (observed.Monitored || !InsideRoot(input.ExpectedRootPath, observed.Snapshot.Path))
+        if (observed.Monitored || !RemoteLibraryPath.TryParse(input.ExpectedRootPath, out var root) || !root.IsAncestorOf(observed.Snapshot.Path))
             throw new IntegrationFailure("The added comic run's monitoring or root could not be confirmed.");
         if (work.Target is not { } target) return new(ManagerControls.Applied, observed.Snapshot, true);
         var issue = observed.RequireIssue(target.ComicVineId, target.Label);
@@ -97,12 +97,6 @@ internal sealed partial class KapowarrLibrary {
             || target.SeasonNumber is not null || target.EpisodeNumber is not null || target.AbsoluteNumber is not null)
             throw new ManagedMutationRejection("Select one exact Comic Vine issue with its label.");
         return new(seriesId, new(issueId, target.IssueLabel));
-    }
-
-    private static bool InsideRoot(string root, string path) {
-        var prefix = root.TrimEnd('/', '\\');
-        return path.StartsWith(prefix + '/', StringComparison.Ordinal)
-            || path.StartsWith(prefix + '\\', StringComparison.Ordinal);
     }
     #endregion
 

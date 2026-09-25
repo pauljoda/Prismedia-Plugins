@@ -73,9 +73,11 @@ public sealed class LazyLibrarianLibraryTests : IDisposable {
         Assert.Contains("is not in the mapped folder", (await Assert.ThrowsAnyAsync<IntegrationFailure>(() =>
             missing.Call(ManagerProtocol.GetLibraryItem, Item(LazyLibrarianRendition.Audiobook)))).Message);
 
-        var escaping = Fixture(audioPath: "/outside/example.m4b");
-        Assert.Contains("outside this rendition's configured library root", (await Assert.ThrowsAnyAsync<IntegrationFailure>(() =>
-            escaping.Call(ManagerProtocol.GetLibraryItem, Item(LazyLibrarianRendition.Audiobook)))).Message);
+        foreach (var outside in new[] { "/outside/example.m4b", "/audio-archive/example.m4b", "/audio/../outside/example.m4b", "/Audio/example.m4b", "/audio" }) {
+            var escaping = Fixture(audioPath: outside);
+            Assert.Contains("outside this rendition's configured library root", (await Assert.ThrowsAnyAsync<IntegrationFailure>(() =>
+                escaping.Call(ManagerProtocol.GetLibraryItem, Item(LazyLibrarianRendition.Audiobook)))).Message);
+        }
         Assert.DoesNotContain("AudioBook", unmapped.Handler.HeadTypes.Concat(missing.Handler.HeadTypes));
     }
 
