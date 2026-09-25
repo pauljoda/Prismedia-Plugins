@@ -205,6 +205,7 @@ public sealed class LazyLibrarianLibraryTests : IDisposable {
     public async Task OnlyALibraryReadReportsAnAbsentBookAsRemoved() {
         var fixture = Fixture(audioPath: null);
         fixture.Handler.IncludeBook = false;
+        fixture.Handler.ExtraBooks = [("OL9W", "Omega", "Skipped", "Skipped")];
         var scope = Scope(LazyLibrarianRendition.Ebook);
 
         var removed = await Assert.ThrowsAnyAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, Item(LazyLibrarianRendition.Ebook)));
@@ -223,6 +224,25 @@ public sealed class LazyLibrarianLibraryTests : IDisposable {
         Assert.Equal(ManagerControls.Rejected, configure.Outcome);
         Assert.Contains("no longer in LazyLibrarian's catalog", configure.Problem);
         Assert.Equal(ManagerControls.Rejected, request.Outcome);
+        Assert.Empty(fixture.Handler.Writes);
+    }
+
+    [Fact]
+    public async Task AnEmptyCatalogIsInconclusiveRatherThanProofOfRemoval() {
+        var fixture = Fixture(audioPath: null);
+        fixture.Handler.IncludeBook = false;
+        var scope = Scope(LazyLibrarianRendition.Ebook);
+
+        var read = await Assert.ThrowsAnyAsync<IntegrationFailure>(() => fixture.Call(ManagerProtocol.GetLibraryItem, Item(LazyLibrarianRendition.Ebook)));
+        var lookup = await Assert.ThrowsAnyAsync<IntegrationFailure>(() => fixture.Call(ManagerCreation.Lookup,
+            new ManagedLookupInput(MediaKinds.Book, Identities(), null, LazyLibrarianRendition.Ebook.Code)));
+        var configure = await Assert.ThrowsAnyAsync<IntegrationFailure>(() => fixture.Call(ManagerControls.Configure,
+            new ConfigureManagedInput(Guid.NewGuid(), scope, "/books/OL450063W", null, new Dictionary<string, bool>(), new(Monitored: true))));
+
+        Assert.Null(read.Code);
+        Assert.Contains("empty book catalog", read.Message);
+        Assert.Null(lookup.Code);
+        Assert.IsNotType<ManagedMutationRejection>(configure);
         Assert.Empty(fixture.Handler.Writes);
     }
 

@@ -31,15 +31,21 @@ internal sealed class LazyLibrarianBooks(LazyLibrarianClient client) {
 
     #region Actions - Books
     /// <summary>
-    /// Reads one book's complete row, or returns null when the complete catalog does not contain it.
-    /// A null result is catalog evidence of absence; callers decide whether it means removal.
+    /// Reads one book's complete row, or returns null when the complete, non-empty catalog does not
+    /// contain it. A null result is catalog evidence of absence; callers decide whether it means removal.
+    /// An empty catalog is inconclusive: one empty reply cannot distinguish a removed book from a
+    /// LazyLibrarian that answered without its library, so it fails instead of reporting absence.
     /// </summary>
     /// <param name="bookId">LazyLibrarian BookID.</param>
     /// <param name="token">Invocation deadline.</param>
+    /// <exception cref="IntegrationFailure">The catalog was empty, malformed, or ambiguous.</exception>
     internal async Task<LazyLibrarianBookRow?> FindAsync(string bookId, CancellationToken token) {
         if (!Text(bookId, 512)) throw new ManagedMutationRejection("Select a valid LazyLibrarian book identity.");
         if (!authorsByBook.TryGetValue(bookId, out var authorId)) {
-            var summary = (await ListAsync(token)).SingleOrDefault(row => row.BookID == bookId);
+            var catalog = await ListAsync(token);
+            if (catalog.Count == 0)
+                throw new IntegrationFailure("LazyLibrarian returned an empty book catalog, so this book cannot be located. Check LazyLibrarian before treating it as removed.");
+            var summary = catalog.SingleOrDefault(row => row.BookID == bookId);
             if (summary is null) return null;
             authorId = summary.AuthorID!;
             authorsByBook[bookId] = authorId;
