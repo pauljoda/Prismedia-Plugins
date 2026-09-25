@@ -3,10 +3,13 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class RadarrLibrary {
+    #region Static Variables
     private const int MaximumRemoteCredits = 5000;
     private const int MaximumNormalizedCredits = 1000;
     private const int MaximumCreditSortOrder = 1_000_000;
+    #endregion
 
+    #region Actions - Credits
     /// <summary>Reads Radarr's movie-scoped credit resource for one exact existing holding.</summary>
     private async Task<IReadOnlyList<ManagedPersonCredit>> CreditsAsync(int movieId, CancellationToken token) {
         var credits = await Client.GetAsync<MovieCredit?[]>($"credit?movieId={Id(movieId)}", token);
@@ -67,6 +70,7 @@ internal sealed partial class RadarrLibrary {
         string.IsNullOrWhiteSpace(value) || value.Length > maximum || value.Any(char.IsControl)
             ? null
             : value.Trim();
+    #endregion
 
     private sealed record MovieCredit(
         string? PersonName,
@@ -81,12 +85,15 @@ internal sealed partial class RadarrLibrary {
 
 /// <summary>External Radarr credit-type vocabulary at its single protocol boundary.</summary>
 internal static class ArrCreditType {
+    #region Static Variables
     internal const string Cast = "cast";
     internal const string Crew = "crew";
+    #endregion
 }
 
 /// <summary>External Radarr/TMDB crew-job vocabulary mapped into Prismedia's bounded roles.</summary>
 internal static class ArrCreditJob {
+    #region Static Variables
     internal const string Director = "Director";
     internal const string Writer = "Writer";
     internal const string Screenplay = "Screenplay";
@@ -99,4 +106,5 @@ internal static class ArrCreditJob {
     internal const string Creator = "Creator";
     internal const string Composer = "Composer";
     internal const string OriginalMusicComposer = "Original Music Composer";
+    #endregion
 }

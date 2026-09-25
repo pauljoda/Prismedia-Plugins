@@ -5,6 +5,7 @@ namespace Prismedia.Plugin.Arr;
 
 /// <summary>Sonarr series holdings with exact episode-to-file associations, including specials and combined episodes.</summary>
 internal sealed partial class SonarrLibrary(ArrClient client) : ArrLibrary(client, "Sonarr", 4, ManagerProtocol.Series) {
+    #region Actions - Library
     protected override async Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken) =>
         (await Client.GetAsync<Series[]>("series", cancellationToken)).Select(Summary).ToArray();
     protected override async Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken) {
@@ -34,6 +35,8 @@ internal sealed partial class SonarrLibrary(ArrClient client) : ArrLibrary(clien
         if (series.TmdbId > 0) identities[ManagerProtocol.Tmdb] = Id(series.TmdbId);
         return identities;
     }
+    #endregion
+
     private sealed record Series(int Id, string Title, int Year, int TvdbId, int TmdbId, string? ImdbId, [property: JsonRequired] bool Monitored, int QualityProfileId, string Path, SeriesStatistics? Statistics,
         string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null,
         string? Network = null, string? FirstAired = null, string? LastAired = null, SeriesRatings? Ratings = null);

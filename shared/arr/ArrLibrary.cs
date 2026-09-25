@@ -8,10 +8,22 @@ namespace Prismedia.Plugin.Arr;
 
 /// <summary>Common manager protocol, with concrete adapters declaring and translating only their supported controls.</summary>
 internal abstract class ArrLibrary(ArrClient client, string appName, int supportedMajor, string kind) {
+    #region Static Variables
     private const string InvalidIdentityProblem = "Select a valid remote item identity.";
+    #endregion
+
+    #region Variables
     protected ArrClient Client => client;
     protected string Kind => kind;
     protected virtual IReadOnlyList<string> ControlOperations => [];
+    #endregion
+
+    #region Abstract Methods
+    protected abstract Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken);
+    protected abstract Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken);
+    #endregion
+
+    #region Actions - Dispatch
     internal async Task<object> DispatchAsync(IntegrationRequest request, CancellationToken cancellationToken) {
         var status = await client.GetAsync<ArrStatus>("system/status", cancellationToken);
         if (status.AppName != appName || !Version.TryParse(status.Version, out var version) || version.Major != supportedMajor)
@@ -85,8 +97,9 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
     }
     protected virtual Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken cancellationToken) =>
         throw new IntegrationFailure("This operation is not implemented by the installed adapter.");
-    protected abstract Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken);
-    protected abstract Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken);
+    #endregion
+
+    #region Actions - Evidence
     /// <summary>
     /// Requires a complete catalog to exclude both the former manager ID and its canonical metadata
     /// identity. This prevents a delete/re-add race from being mistaken for confirmed absence.
@@ -103,11 +116,22 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
             || item.ExternalIds.GetValueOrDefault(canonicalIdentityNamespace) == expectedIdentity))
             throw new IntegrationFailure("The managed holding is present in the connected library. Refresh its association before releasing ownership.");
     }
+    #endregion
+
+    #region Actions - Identities
     protected static string Id(int id) => id > 0 ? id.ToString(CultureInfo.InvariantCulture) : throw new IntegrationFailure("The application returned an invalid item identity.");
     protected static int ParseId(string value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new IntegrationFailure(InvalidIdentityProblem);
     /// <summary>Parses a host-selected positive ID that a manager mutation relies on.</summary>
     /// <exception cref="ManagedMutationRejection">The selection is not a positive decimal ID.</exception>
     protected static int ParseSelectedId(string? value) => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0 ? id : throw new ManagedMutationRejection(InvalidIdentityProblem);
+    protected static Dictionary<string, string> Identities(string primaryNamespace, int primaryId, string? imdbId = null) {
+        var result = new Dictionary<string, string> { [primaryNamespace] = Id(primaryId) };
+        if (!string.IsNullOrWhiteSpace(imdbId)) result[ManagerProtocol.Imdb] = imdbId;
+        return result;
+    }
+    #endregion
+
+    #region Actions - Parsing
     private static string Required(string? value, int maximum) => !string.IsNullOrWhiteSpace(value) && value.Length <= maximum
         && !value.Any(char.IsControl) ? value : throw new IntegrationFailure("The application returned an invalid library path.");
     private static string LibraryLabel(string path) {
@@ -116,12 +140,8 @@ internal abstract class ArrLibrary(ArrClient client, string appName, int support
         var separator = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
         return separator >= 0 && separator < trimmed.Length - 1 ? trimmed[(separator + 1)..] : trimmed;
     }
-    protected static Dictionary<string, string> Identities(string primaryNamespace, int primaryId, string? imdbId = null) {
-        var result = new Dictionary<string, string> { [primaryNamespace] = Id(primaryId) };
-        if (!string.IsNullOrWhiteSpace(imdbId)) result[ManagerProtocol.Imdb] = imdbId;
-        return result;
-    }
     protected static T Input<T>(IntegrationRequest request) => request.Input.Deserialize<T>(IntegrationProtocol.Json) ?? throw new IntegrationFailure("The operation input is missing.");
+    #endregion
 }
 
 // Typed records below are the single decode boundary for the external API v3 wire vocabulary.

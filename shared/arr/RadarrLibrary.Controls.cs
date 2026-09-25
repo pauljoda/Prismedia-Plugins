@@ -3,8 +3,11 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class RadarrLibrary {
+    #region Variables
     protected override IReadOnlyList<string> ControlOperations => [ManagerDiscovery.Search, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request, ManagerCreation.Lookup, ManagerCreation.Ensure, ManagerRelease.Inspect];
+    #endregion
 
+    #region Actions - Dispatch
     protected override async Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken token) => request.Operation switch {
         ManagerDiscovery.Search => await DiscoverAsync(Input<ManagedDiscoveryQuery>(request), token),
         ManagerControls.Reconcile => await ReconcileAsync(Input<ReconcileManagedInput>(request), token),
@@ -16,7 +19,9 @@ internal sealed partial class RadarrLibrary {
             ct => ObserveReleaseScopeAsync(Input<InspectManagedReleaseInput>(request).Scope, ct), false, token),
         _ => throw new IntegrationFailure("This operation is not implemented by the installed adapter.")
     };
+    #endregion
 
+    #region Actions - Controls
     private async Task<ManagedControlState> ReconcileAsync(ReconcileManagedInput input, CancellationToken token) {
         var movie = await RequireMovieAsync(input.Scope, token);
         ManagedCommandSnapshot? command = null;
@@ -145,6 +150,9 @@ internal sealed partial class RadarrLibrary {
         if (string.IsNullOrWhiteSpace(expectedPath) || movie.Path != expectedPath)
             throw new ManagedMutationRejection("The movie's managed path changed since review. Refresh its library association.");
     }
+    #endregion
+
+    #region Actions - Commands
     private static bool MatchesCommand(ArrCommand command, int movieId) => command.Id > 0 && command.Queued.Year >= 1970
         && command.Name == ArrCommands.MoviesSearch && command.Body?.Name == ArrCommands.MoviesSearch
         && command.Body.MovieIds is { Length: 1 } && command.Body.MovieIds[0] == movieId;
@@ -161,6 +169,7 @@ internal sealed partial class RadarrLibrary {
         };
     }
     private static ManagedCommandSnapshot Unknown(ManagedCommandReference reference, string problem) => new(reference, ManagerControls.Unknown, problem);
+    #endregion
 
     // Typed records are the single external API v3 encode/decode boundary.
     private sealed record MovieEdit(int[] MovieIds, bool? Monitored, int? QualityProfileId);
@@ -172,6 +181,7 @@ internal sealed partial class RadarrLibrary {
 
 /// <summary>External command names and states owned by the supported API v3 versions.</summary>
 internal static class ArrCommands {
+    #region Static Variables
     internal const string MoviesSearch = "MoviesSearch";
     internal const string EpisodeSearch = "EpisodeSearch";
     internal const string Queued = "queued";
@@ -184,4 +194,5 @@ internal static class ArrCommands {
     internal const string Unsuccessful = "unsuccessful";
     internal const string Unknown = "unknown";
     internal const string Orphaned = "orphaned";
+    #endregion
 }

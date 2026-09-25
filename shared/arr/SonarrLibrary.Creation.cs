@@ -3,6 +3,7 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class SonarrLibrary {
+    #region Actions - Creation
     /// <summary>
     /// Resolves one exact TVDB or TMDB series, and optionally its exact episodes, without mutating Sonarr:
     /// the existing holding for that identity, or otherwise the metadata lookup's candidate.
@@ -180,6 +181,7 @@ internal sealed partial class SonarrLibrary {
             throw new ManagedMutationRejection("The manager returned a different or incomplete metadata identity.");
         return new(ManagerProtocol.Series, title, year, ids);
     }
+    #endregion
 
     private sealed record CreationIdentity(int? TvdbId, int? TmdbId);
     private sealed record SeriesCreationAcknowledgement(int Id);

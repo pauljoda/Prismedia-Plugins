@@ -11,12 +11,19 @@ namespace Prismedia.Plugin.Arr;
 /// <see cref="ManagedMutationRejection"/>; every other write failure stays uncertain.
 /// </summary>
 internal sealed class ArrClient : IDisposable {
+    #region Static Variables
     internal const string ApiKey = "apiKey";
     private const int MaximumBytes = 8 * 1024 * 1024;
     private static readonly JsonSerializerOptions WriteJson = new(IntegrationProtocol.Json) { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+    #endregion
+
+    #region Variables
     private readonly HttpClient client;
     private readonly Uri root;
     private readonly string key;
+    #endregion
+
+    #region Constructors
     internal ArrClient(ConnectionContext connection, HttpMessageHandler? handler = null) {
         if (!Uri.TryCreate(connection.BaseUrl, UriKind.Absolute, out var address) || address.Scheme is not ("http" or "https")
             || address.UserInfo.Length != 0 || address.Query.Length != 0 || address.Fragment.Length != 0)
@@ -26,6 +33,9 @@ internal sealed class ArrClient : IDisposable {
         if (string.IsNullOrWhiteSpace(key) || key.Any(char.IsControl)) throw new IntegrationFailure("Configure a valid API key.");
         client = new(handler ?? new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false, ConnectTimeout = TimeSpan.FromSeconds(10) }) { Timeout = Timeout.InfiniteTimeSpan };
     }
+    #endregion
+
+    #region Actions - Transport
     internal async Task<T> GetAsync<T>(string relativePath, CancellationToken cancellationToken) where T : class =>
         (await SendAsync<T>(HttpMethod.Get, relativePath, null, false, cancellationToken))!;
     internal Task<T?> GetOptionalAsync<T>(string relativePath, CancellationToken cancellationToken) where T : class =>
@@ -67,5 +77,9 @@ internal sealed class ArrClient : IDisposable {
         }
         return JsonSerializer.Deserialize<T>(bytes.ToArray(), IntegrationProtocol.Json) ?? throw new IntegrationFailure("The connected application returned an empty response.");
     }
+    #endregion
+
+    #region Actions - Disposal
     public void Dispose() => client.Dispose();
+    #endregion
 }

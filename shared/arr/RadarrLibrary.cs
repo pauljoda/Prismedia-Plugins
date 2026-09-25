@@ -5,6 +5,7 @@ namespace Prismedia.Plugin.Arr;
 
 /// <summary>Radarr movie holdings; file presence is verified through the referenced movie-file endpoint.</summary>
 internal sealed partial class RadarrLibrary(ArrClient client) : ArrLibrary(client, "Radarr", 6, ManagerProtocol.Movie) {
+    #region Actions - Library
     protected override async Task<IReadOnlyList<ManagedLibraryItem>> ListAsync(CancellationToken cancellationToken) =>
         (await Client.GetAsync<Movie[]>("movie", cancellationToken)).Select(Summary).ToArray();
     protected override async Task<ManagedItemSnapshot> GetAsync(int id, CancellationToken cancellationToken) {
@@ -23,6 +24,8 @@ internal sealed partial class RadarrLibrary(ArrClient client) : ArrLibrary(clien
     private ManagedLibraryItem Summary(Movie movie) => new(Id(movie.Id), Kind, movie.Title, movie.Year,
         Identities(ManagerProtocol.Tmdb, movie.TmdbId, movie.ImdbId), movie.Monitored, Id(movie.QualityProfileId), movie.HasFile ? 1 : 0,
         ArrPresentation.Map(movie.Overview, movie.Images, movie.Genres, movie.Runtime, movie.Certification));
+    #endregion
+
     private sealed record Movie(int Id, string Title, int Year, int TmdbId, string? ImdbId,
         [property: JsonRequired] bool Monitored, int QualityProfileId, [property: JsonRequired] bool HasFile, int MovieFileId, string Path,
         string? Overview = null, ArrImage?[]? Images = null, string[]? Genres = null, int? Runtime = null, string? Certification = null,

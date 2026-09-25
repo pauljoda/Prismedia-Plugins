@@ -4,6 +4,7 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class SonarrLibrary {
+    #region Actions - Discovery
     private async Task<ManagedDiscoveryPage> DiscoverAsync(ManagedDiscoveryQuery input, CancellationToken token) {
         if (input?.EntityKind != ManagerProtocol.Series || string.IsNullOrWhiteSpace(input.Query)
             || input.Query.Length > 512 || input.Query.Any(char.IsControl) || input.Limit is < 1 or > 100)
@@ -54,4 +55,5 @@ internal sealed partial class SonarrLibrary {
 
     private static string? Text(string? value, int limit) => string.IsNullOrWhiteSpace(value) || value.Length > limit
         || value.Any(char.IsControl) ? null : value.Trim();
+    #endregion
 }

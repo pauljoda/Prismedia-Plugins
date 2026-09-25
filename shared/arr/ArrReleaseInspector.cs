@@ -5,6 +5,7 @@ namespace Prismedia.Plugin.Arr;
 
 /// <summary>Conservative, read-only drain evidence; unknown work anywhere in the application blocks release.</summary>
 internal static class ArrReleaseInspector {
+    #region Actions - Inspection
     internal static async Task<ManagedReleaseObservation> InspectAsync(ArrClient client,
         Func<CancellationToken, Task<ArrReleaseScopeObservation>> readScope, bool television, CancellationToken token) {
         var before = await readScope(token);
@@ -52,6 +53,7 @@ internal static class ArrReleaseInspector {
             throw new IntegrationFailure("The manager returned incomplete or inconsistent download activity.");
         return page.TotalRecords == 0;
     }
+    #endregion
 
     // Single API v3 decode boundaries. Required members distinguish empty activity from missing evidence.
     private sealed record ActivityQueuePage([property: JsonRequired] int Page, [property: JsonRequired] int PageSize,
@@ -63,6 +65,8 @@ internal static class ArrReleaseInspector {
 
 /// <summary>One exact holding observation, either current state or independently confirmed absence.</summary>
 internal sealed record ArrReleaseScopeObservation(ManagedControlState? State, bool RemoteItemAbsent) {
+    #region Constructors
     internal static ArrReleaseScopeObservation Present(ManagedControlState state) => new(state, false);
     internal static ArrReleaseScopeObservation Absent() => new(null, true);
+    #endregion
 }

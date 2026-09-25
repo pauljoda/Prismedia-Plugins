@@ -3,6 +3,7 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class RadarrLibrary {
+    #region Actions - Creation
     /// <summary>
     /// Resolves one exact TMDB movie without mutating Radarr: the existing holding for that identity, or
     /// otherwise the metadata lookup's candidate.
@@ -96,6 +97,8 @@ internal sealed partial class RadarrLibrary {
             throw new ManagedMutationRejection("The manager returned a different or incomplete metadata identity.");
         return new(ManagerProtocol.Movie, movie.Title, movie.Year, ids, DiscoveryMetadata(movie, credits));
     }
+    #endregion
+
     private sealed record MovieLookup(string Title, int Year, int TmdbId, string? ImdbId,
         string? OriginalTitle = null, string? Overview = null, string? Studio = null,
         string? Certification = null, int? Runtime = null, string[]? Genres = null,
@@ -111,6 +114,8 @@ internal sealed partial class RadarrLibrary {
 
 /// <summary>External Radarr creation vocabulary at its single protocol boundary.</summary>
 internal static class ArrCreation {
+    #region Static Variables
     internal const string Unmonitored = "none";
     internal const string Released = "released";
+    #endregion
 }

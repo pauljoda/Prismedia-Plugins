@@ -3,8 +3,12 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class SonarrLibrary {
+    #region Variables
     protected override IReadOnlyList<string> ControlOperations => [ManagerDiscovery.Search, ManagerControls.Reconcile, ManagerControls.Configure, ManagerControls.Request,
         ManagerCreation.Lookup, ManagerCreation.Ensure, ManagerRelease.Inspect];
+    #endregion
+
+    #region Actions - Dispatch
     protected override async Task<object> DispatchControlAsync(IntegrationRequest request, CancellationToken token) => request.Operation switch {
         ManagerDiscovery.Search => await DiscoverAsync(Input<ManagedDiscoveryQuery>(request), token),
         ManagerControls.Reconcile => await ReconcileAsync(Input<ReconcileManagedInput>(request), token),
@@ -16,7 +20,9 @@ internal sealed partial class SonarrLibrary {
             ct => ObserveReleaseScopeAsync(Input<InspectManagedReleaseInput>(request).Scope, ct), true, token),
         _ => throw new IntegrationFailure("This operation is not implemented by the installed adapter.")
     };
+    #endregion
 
+    #region Actions - Controls
     private async Task<ManagedControlState> ReconcileAsync(ReconcileManagedInput input, CancellationToken token) {
         var (series, episodes) = await RequireScopeAsync(input.Scope, token);
         ManagedCommandSnapshot? command = null;
@@ -152,6 +158,9 @@ internal sealed partial class SonarrLibrary {
         if (string.IsNullOrWhiteSpace(path) || series.Path != path || Id(series.QualityProfileId) != profile)
             throw new ManagedMutationRejection("The series folder or profile changed since review. Refresh before continuing.");
     }
+    #endregion
+
+    #region Actions - Commands
     private static bool MatchesCommand(EpisodeCommand command, Episode[] episodes) => command.Id > 0 && command.Queued.Year >= 1970
         && command.Name == ArrCommands.EpisodeSearch && command.Body?.Name == ArrCommands.EpisodeSearch
         && command.Body.EpisodeIds is { } ids && ids.Order().SequenceEqual(episodes.Select(episode => episode.Id).Order());
@@ -167,6 +176,8 @@ internal sealed partial class SonarrLibrary {
             _ => new(reference, ManagerControls.Unknown, "The manager cannot establish this command's outcome.")
         };
     }
+    #endregion
+
     // Exact API v3 encode/decode boundaries. No series editor or parent monitoring requests exist here.
     private sealed record EpisodeMonitor(int[] EpisodeIds, bool Monitored);
     private sealed record EpisodeAcknowledgement(int Id);

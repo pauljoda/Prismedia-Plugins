@@ -4,9 +4,11 @@ namespace Prismedia.Plugin.Arr;
 
 /// <summary>Canonical Arr image roles at the external protocol boundary.</summary>
 internal static class ArrCoverType {
+    #region Static Variables
     internal const string Poster = "poster";
     internal const string Fanart = "fanart";
     internal const string Headshot = "headshot";
+    #endregion
 }
 
 /// <summary>External Arr artwork shape; only its public remote URL is eligible for presentation.</summary>
@@ -14,6 +16,7 @@ internal sealed record ArrImage(string? CoverType, string? RemoteUrl, string? Ur
 
 /// <summary>Maps optional Arr metadata into the bounded connected-library presentation contract.</summary>
 internal static class ArrPresentation {
+    #region Actions - Presentation
     internal static ManagedLibraryPresentation? Map(
         string? overview,
         IReadOnlyList<ArrImage?>? images,
@@ -69,4 +72,5 @@ internal static class ArrPresentation {
             return null;
         return uri.AbsoluteUri;
     }
+    #endregion
 }

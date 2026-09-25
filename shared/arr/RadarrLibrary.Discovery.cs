@@ -4,6 +4,7 @@ using Prismedia.Plugin.Integrations;
 namespace Prismedia.Plugin.Arr;
 
 internal sealed partial class RadarrLibrary {
+    #region Actions - Discovery
     private async Task<ManagedDiscoveryPage> DiscoverAsync(ManagedDiscoveryQuery input, CancellationToken token) {
         if (input?.EntityKind != ManagerProtocol.Movie || string.IsNullOrWhiteSpace(input.Query)
             || input.Query.Length > 512 || input.Query.Any(char.IsControl) || input.Limit is < 1 or > 100)
@@ -80,4 +81,5 @@ internal sealed partial class RadarrLibrary {
             || uri.Host.Length == 0 || uri.UserInfo.Length > 0 || uri.Fragment.Length > 0) return null;
         return uri.AbsoluteUri;
     }
+    #endregion
 }
