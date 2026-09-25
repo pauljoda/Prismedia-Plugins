@@ -14,12 +14,13 @@ internal sealed partial class LazyLibrarianLibrary {
     /// Reports the final files of one rendition. An ebook is confirmed through LazyLibrarian's direct
     /// file HEAD. An audiobook is inventoried from its mapped local folder, because LazyLibrarian
     /// answers a direct audiobook request, including HEAD, by building a ZIP of the whole folder.
-    /// Prismedia re-checks every mapped path and size before import.
+    /// Prismedia re-checks every mapped path and size before import. A reported file of a type this
+    /// adapter does not import, such as a .mobi or .azw3 ebook, is omitted rather than failing the
+    /// whole read, so the book's monitoring and holding stay observable.
     /// </summary>
     private async Task<IReadOnlyList<ManagedLibraryFile>> FilesAsync(LazyLibrarianBookRow row, LazyLibrarianRendition rendition,
         string reportedPath, CancellationToken token) {
-        if (!rendition.Accepts(reportedPath))
-            throw new IntegrationFailure($"LazyLibrarian reports a {rendition.Noun} file type that this adapter does not import.");
+        if (!rendition.Accepts(reportedPath)) return [];
         var anchorTarget = new ManagedFileTarget(rendition.AnchorTargetId(row.BookID!), rendition.TargetKind, row.BookName!);
         if (rendition.ReadsMappedFolder) return InventoryMappedFolder(row, rendition, reportedPath, anchorTarget, token);
         if (!Help.Supports(LazyLibrarianCommand.GetFileDirect, rendition))

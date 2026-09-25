@@ -227,6 +227,23 @@ public sealed class LazyLibrarianLibraryTests : IDisposable {
         Assert.Empty(fixture.Handler.Writes);
     }
 
+    [Theory]
+    [InlineData("/books/example.mobi")]
+    [InlineData("/books/example.azw3")]
+    public async Task AnUnsupportedEbookTypeIsOmittedInsteadOfFailingTheRead(string ebookPath) {
+        var fixture = Fixture(audioPath: null);
+        fixture.Handler.EbookPath = ebookPath;
+
+        var snapshot = Assert.IsType<ManagedItemSnapshot>(await fixture.Call(ManagerProtocol.GetLibraryItem, Item(LazyLibrarianRendition.Ebook)));
+
+        Assert.Equal("/books/OL450063W", snapshot.Path);
+        Assert.Empty(snapshot.Files);
+        Assert.Equal(0, snapshot.Item.RemoteFileCount);
+        Assert.Equal("OL450063W", snapshot.Item.RemoteId);
+        Assert.False(snapshot.Item.Monitored);
+        Assert.Empty(fixture.Handler.HeadTypes);
+    }
+
     [Fact]
     public async Task AnEmptyCatalogIsInconclusiveRatherThanProofOfRemoval() {
         var fixture = Fixture(audioPath: null);
@@ -335,6 +352,7 @@ public sealed class LazyLibrarianLibraryTests : IDisposable {
         public string EbookStatus { get; set; } = "Open";
         public string AudioStatus { get; set; } = "Skipped";
         public string? AudioPath { get; set; }
+        public string? EbookPath { get; set; } = "/books/example.epub";
         public bool IncludeBook { get; set; } = true;
         public string SearchReply { get; set; } = "OK";
         public IReadOnlyList<(string Id, string Name, string Status, string AudioStatus)> ExtraBooks { get; set; } = [];
@@ -383,7 +401,7 @@ public sealed class LazyLibrarianLibraryTests : IDisposable {
 
         private IEnumerable<LazyLibrarianBookRow> Rows() {
             if (IncludeBook)
-                yield return new("OL450063W", "author-1", "Author", "Example", EbookStatus, AudioStatus, "/books/example.epub", AudioPath, null, null);
+                yield return new("OL450063W", "author-1", "Author", "Example", EbookStatus, AudioStatus, EbookPath, AudioPath, null, null);
             foreach (var extra in ExtraBooks)
                 yield return new(extra.Id, "author-2", extra.Name == "Omega" ? "Omega Writer" : "Writer", extra.Name,
                     extra.Status, extra.AudioStatus, null, null, null, null);
