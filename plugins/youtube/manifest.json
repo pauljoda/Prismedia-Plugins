@@ -5,8 +5,9 @@
   ],
   "id": "youtube",
   "name": "YouTube Metadata",
-  "version": "1.2.4",
-  "date": "2026-07-09",
+  "version": "1.2.5",
+  "date": "2026-09-18",
+  "icon": "assets/icon.svg",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.Youtube.dll",
   "compat": {

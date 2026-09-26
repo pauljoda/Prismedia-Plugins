@@ -1,0 +1,60 @@
+namespace Prismedia.Plugin.Integrations;
+
+/// <summary>Canonical wire vocabulary for connected holdings and manager reads.</summary>
+public static class ManagerProtocol {
+    #region Static Variables
+    public const string SearchLibrary = "search-library";
+    public const string GetLibraryItem = "get-library-item";
+    public const string ListLibraries = "list-libraries";
+    public const string Options = "manager-options";
+    public const string ConnectedLibrary = "connected-library";
+    public const string ExternalManager = "external-manager";
+    public const string Movie = "movie";
+    public const string Series = "video-series";
+    public const string Episode = "video-episode";
+    public const string AudioTrack = "audio-track";
+    public const string ComicSeries = "comic-series";
+    public const string Tmdb = "tmdb";
+    public const string Tvdb = "tvdb";
+    public const string Imdb = "imdb";
+    #endregion
+}
+/// <summary>Read-only holdings query; pagination remains connection-scoped.</summary>
+public sealed record ManagedLibraryQuery(string EntityKind, string? Query, string? Cursor, int Limit);
+/// <summary>Remote file counts do not establish local availability.</summary>
+public sealed record ManagedLibraryItem(string RemoteId, string EntityKind, string Title, int? Year,
+    IReadOnlyDictionary<string, string> ExternalIds, bool Monitored, string? ProfileId, int? RemoteFileCount,
+    ManagedLibraryPresentation? Presentation = null);
+/// <summary>Optional remote metadata used to enrich a connected-library holding without changing its identity.</summary>
+public sealed record ManagedLibraryPresentation(string? Overview = null, string? PosterUrl = null,
+    string? BackdropUrl = null, IReadOnlyList<string>? Genres = null, int? RuntimeMinutes = null,
+    string? ContentRating = null);
+/// <summary>One bounded page of existing holdings.</summary>
+public sealed record ManagedLibraryPage(IReadOnlyList<ManagedLibraryItem> Items, string? NextCursor = null);
+/// <summary>A provider-owned library available for an explicit local folder mapping.</summary>
+public sealed record ProviderLibraryDescriptor(string RemoteId, string Label, string RemotePath,
+    IReadOnlyList<string> EntityKinds, string? ManagementUrl = null);
+/// <summary>The complete bounded provider library catalog.</summary>
+public sealed record ProviderLibraryCatalog(IReadOnlyList<ProviderLibraryDescriptor> Libraries);
+/// <summary>Stable metadata identities fence reuse of an application's numeric item ID.</summary>
+public sealed record ManagedItemInput(string EntityKind, string RemoteId, IReadOnlyDictionary<string, string> ExpectedExternalIds,
+    string? BookRendition = null);
+/// <summary>Exact content targets represented by a remote file, including combined episodes.</summary>
+public sealed record ManagedFileTarget(string RemoteId, string EntityKind, string Title,
+    int? SeasonNumber = null, int? EpisodeNumber = null, int? AbsoluteNumber = null, string? IssueLabel = null);
+/// <summary>File evidence uses the external server's path namespace and is not a byte-transfer authorization.</summary>
+public sealed record ManagedLibraryFile(string RemoteId, string Path, long SizeBytes, DateTimeOffset? AddedAt, IReadOnlyList<ManagedFileTarget> Targets);
+/// <summary>One issue in a connected comic run, including issues with no final file yet.</summary>
+public sealed record ManagedComicIssue(string RemoteId, string IssueLabel, string Title, bool Monitored,
+    IReadOnlyDictionary<string, string>? ExternalIds = null);
+/// <summary>Current remote item, exact final file associations, and optional complete comic issue list.</summary>
+public sealed record ManagedItemSnapshot(ManagedLibraryItem Item, string Path, IReadOnlyList<ManagedLibraryFile> Files, DateTimeOffset ObservedAt,
+    IReadOnlyList<ManagedComicIssue>? ComicIssues = null);
+/// <summary>Kind whose manager choices are requested.</summary>
+public sealed record ManagerOptionsInput(string EntityKind, string? BookRendition = null);
+/// <summary>Opaque external profile identity and display name.</summary>
+public sealed record ManagerChoice(string Id, string Label);
+/// <summary>External root evidence; never used directly as a local destination.</summary>
+public sealed record ManagerRootChoice(string Id, string Path, bool? Accessible);
+/// <summary>Existing external profiles and folders.</summary>
+public sealed record ManagerOptions(IReadOnlyList<ManagerChoice> Profiles, IReadOnlyList<ManagerRootChoice> Roots);

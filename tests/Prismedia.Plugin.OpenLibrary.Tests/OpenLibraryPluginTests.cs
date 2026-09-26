@@ -259,13 +259,13 @@ public sealed class OpenLibraryPluginTests {
         Assert.Equal("book", proposal.TargetKind);
         Assert.Equal("series-context", proposal.MatchReason);
         Assert.Equal("A Game of Thrones", proposal.Patch.Title);
-        Assert.Equal(801, proposal.Patch.Stats["pageCount"]);
+        Assert.False(proposal.Patch.Stats.ContainsKey("pageCount"));
         Assert.Equal(1, proposal.Patch.Positions["volumeNumber"]);
         Assert.Equal(0, proposal.Patch.Positions["sortOrder"]);
     }
 
     [Fact]
-    public async Task WorkLookupHydratesEditionSeriesPositionAndAuthorRelationship() {
+    public async Task WorkLookupHydratesSeriesAndAuthorWithoutInferringAnEdition() {
         using var http = new HttpClient(new StubHandler(request => request.RequestUri?.AbsolutePath switch {
             "/works/OL257943W.json" => """
                 {
@@ -351,10 +351,10 @@ public sealed class OpenLibraryPluginTests {
         var proposal = result.Proposal!;
         Assert.Equal("book-volume", proposal.TargetKind);
         Assert.Equal("A Game of Thrones", proposal.Patch.Title);
-        Assert.Equal("Bantam", proposal.Patch.Studio);
+        Assert.Null(proposal.Patch.Studio);
         Assert.Equal("OL257943W", proposal.Patch.ExternalIds[OpenLibraryMetadata.WorkIdKey]);
-        Assert.Equal("9780553573404", proposal.Patch.ExternalIds["isbn13"]);
-        Assert.Equal(694, proposal.Patch.Stats["pageCount"]);
+        Assert.False(proposal.Patch.ExternalIds.ContainsKey("isbn13"));
+        Assert.False(proposal.Patch.Stats.ContainsKey("pageCount"));
         Assert.Equal(1, proposal.Patch.Positions["volumeNumber"]);
         Assert.Contains("series: A Song of Ice and Fire", proposal.Patch.Tags);
         Assert.Contains("place: Westeros", proposal.Patch.Tags);

@@ -14,7 +14,7 @@ const pluginsRoot = join(root, "plugins");
 const pluginIds = readdirSync(pluginsRoot).sort();
 const index = yaml.load(readFileSync(join(root, "index.yml"), "utf8"));
 
-test("published index, source manifests, and all six zips agree", () => {
+test("published index, source manifests, and all plugin archives agree", () => {
   assert.ok(Array.isArray(index));
   assert.deepEqual([...index.map((entry) => entry.id)].sort(), pluginIds);
 
@@ -35,7 +35,7 @@ test("published index, source manifests, and all six zips agree", () => {
     const packagedManifest = JSON.parse(strFromU8(files["manifest.json"]));
     assert.deepEqual(packagedManifest, manifest, `${pluginId} packaged manifest`);
 
-    for (const field of ["manifestVersion", "apiTags", "id", "name", "version", "date", "runtime", "isNsfw", "compat", "supports", "execution"]) {
+    for (const field of ["manifestVersion", "apiTags", "id", "name", "version", "date", "runtime", "isNsfw", "compat", "supports", "execution", "integration"]) {
       assert.deepEqual(entry[field], manifest[field], `${pluginId} index field ${field}`);
     }
     assert.equal(entry.path, `plugins/${pluginId}/${pluginId}.zip`);

@@ -1,0 +1,67 @@
+{
+  "manifestVersion": 2,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "archiver",
+  "name": "The Archiver (executor API)",
+  "version": "1.3.1",
+  "date": "2026-09-18",
+  "icon": "assets/icon.svg",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Archiver.dll",
+  "compat": {
+    "pluginApiMin": "2.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "3.8.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "token",
+      "label": "Integration token",
+      "required": true,
+      "url": null
+    }
+  ],
+  "isNsfw": false,
+  "supports": [],
+  "integration": {
+    "protocolVersion": 1,
+    "capabilities": [
+      {
+        "kind": "catalog-discovery",
+        "operations": [
+          "inspect"
+        ],
+        "entityKinds": [
+          "book",
+          "comic-installment",
+          "image",
+          "gallery"
+        ]
+      },
+      {
+        "kind": "transfer-executor",
+        "operations": [
+          "submit",
+          "find-submission",
+          "get-job",
+          "cancel",
+          "list-artifacts",
+          "authorize-artifact",
+          "renew-retention",
+          "acknowledge",
+          "cancel-submission"
+        ],
+        "entityKinds": [
+          "book",
+          "comic-installment",
+          "image",
+          "gallery"
+        ]
+      }
+    ],
+    "settings": []
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Prismedia.Plugin.Archiver/1.0.0": {
+        "runtime": {
+          "Prismedia.Plugin.Archiver.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Prismedia.Plugin.Archiver/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

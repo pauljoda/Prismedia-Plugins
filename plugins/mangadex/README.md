@@ -18,3 +18,10 @@ MangaDex adult ratings are requested only when Prismedia runs the plugin with NS
 ## Auth
 
 No MangaDex credentials are required. The plugin uses public MangaDex API endpoints and respects Prismedia's NSFW mode when requesting content ratings.
+
+## Exact chapter designations
+
+Requires Prismedia 3.8.0 or newer. Chapter labels such as `12.5` travel in typed
+position entries independently from their catalog order. Stored exact labels take
+precedence over integer fallback positions. An explicit label or release ID that
+cannot be found stays unresolved rather than selecting a neighboring chapter.

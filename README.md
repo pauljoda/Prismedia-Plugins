@@ -16,12 +16,16 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 
 | Plugin | Version | Runtime | Capabilities | NSFW | Description |
 |---|---|---|---|---|---|
-| [TMDB](./plugins/tmdb) | 1.1.13 | .NET process | `movie`, `video`, `video-episode`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |
-| [YouTube Metadata](./plugins/youtube) | 1.2.4 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
-| [MusicBrainz](./plugins/musicbrainz) | 1.2.3 | .NET process | `music-artist`, `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
-| [AniList](./plugins/anilist) | 1.0.5 | .NET process | `movie`, `video-series`, `video-season`, `video-episode`, `video` lookup/search/cascade | No | Anime identification (TV, movies, OVAs) via the AniList GraphQL API |
-| [MangaDex](./plugins/mangadex) | 2.0.0 | .NET process | `comic-series` lookup/search/cascade, `comic-volume` and `comic-installment` lookup | No | Serialized manga title, volume, and chapter metadata via MangaDex |
-| [Open Library](./plugins/openlibrary) | 0.3.2 | .NET process | `book` lookup/search/cascade, `book-volume` and `person` lookup/search | No | Prose book, book-series, edition, cover, and author metadata via Open Library |
+| [Kapowarr](./plugins/kapowarr) | 1.6.1 | .NET process | Connected comic library and provider libraries | No | Exact issue identities, existing-run lookup, and per-issue controls |
+| [LazyLibrarian](./plugins/lazylibrarian) | 1.3.1 | .NET process | Connected Book library and existing-work management | No | Separate ebook and audiobook roots, mapped multi-part audio inventory, monitoring, and search |
+| [Google Books](./plugins/googlebooks) | 1.0.1 | .NET process | `book`, `book-volume` lookup/search | No | Edition-specific metadata with reviewed title and ISBN searches |
+| [Metron](./plugins/metron) | 1.0.1 | .NET process | `comic-series` lookup/search/cascade, `comic-installment` lookup/search | No | Western comic runs and exact issue designations with creator credits and cross-provider identities |
+| [TMDB](./plugins/tmdb) | 1.1.15 | .NET process | `movie`, `video`, `video-episode`, `video-series`, `video-season`, `person`, `studio`, `cascade` | No | Movies, TV hierarchy, people, studios, and relationship cascade identification via The Movie Database |
+| [YouTube Metadata](./plugins/youtube) | 1.2.5 | .NET process | `video`, `music-artist`, `audio-library`, `audio-track` lookup/search | No | Video metadata from YouTube URLs (InnerTube + oEmbed), plus YouTube Music artist icons, album/song square cover art, and track lists (WEB_REMIX) |
+| [MusicBrainz](./plugins/musicbrainz) | 1.2.5 | .NET process | `music-artist`, `audio-library`, `audio-track` lookup/search | No | Music metadata via MusicBrainz and Cover Art Archive |
+| [AniList](./plugins/anilist) | 1.1.1 | .NET process | Anime lookup/search/cascade; `comic-series` lookup/search | No | Anime and manga work metadata via the AniList GraphQL API |
+| [MangaDex](./plugins/mangadex) | 2.1.1 | .NET process | `comic-series` lookup/search/cascade, `comic-volume` and `comic-installment` lookup | No | Serialized manga title, volume, and chapter metadata via MangaDex |
+| [Open Library](./plugins/openlibrary) | 0.3.7 | .NET process | `book` lookup/search/cascade, `book-volume` and `person` lookup/search | No | Prose book, book-series, edition, cover, and author metadata via Open Library |
 
 `index.yml` is the source of truth. The table above is for humans.
 
@@ -38,20 +42,21 @@ Community-maintained metadata-identification plugins for [Prismedia](https://pau
 └── plugins/
     └── <plugin-id>/
         ├── manifest.json         # Prismedia plugin metadata + declared support
+        ├── assets/icon.svg       # Packaged SVG or PNG brand icon
         ├── *.csproj + *.cs       # .NET process plugin host and implementation
         ├── dist/                 # Generated runtime output
         └── <id>.zip              # Distributable bundle (committed)
 ```
 
-Each plugin directory is self-contained — plugins do not import from one another, and the `.zip` is the unit a client downloads and runs.
+Plugins do not import from one another. Some projects source-link shared protocol code at build time; the published `.zip` contains the complete runtime a client downloads and runs.
 
 ---
 
 ## Installing a plugin
 
-Open Prismedia → **Settings → Plugins → Browse community registry**, then enable any plugin from the list. The client fetches `index.yml` from this repository, verifies the SHA-256 of the downloaded `.zip` against the registry, and runs the plugin in its sandboxed runtime.
+Open Prismedia → **Settings → Plugins → Browse community registry**, then enable any plugin from the list. The client fetches `index.yml` from this repository, verifies the SHA-256 of the downloaded `.zip` against the registry, and runs the plugin as a child process. Process time and output limits do not provide an operating-system sandbox; install code you trust.
 
-Some plugins (TMDB) require an API key from the upstream service. Prismedia prompts for these on first use; the keys are stored in your local Prismedia keychain and passed to the plugin request as `auth` values.
+Some plugins, including TMDB and Google Books, require an API key from the upstream service. Configure credentials in Prismedia; it passes the required values to the plugin request as `auth` values.
 
 For step-by-step screenshots and troubleshooting, see the [Prismedia plugin docs](https://pauljoda.github.io/Prismedia/docs/plugins/overview).
 
@@ -82,6 +87,7 @@ Required fields:
 | `apiTags` | Include `prismedia`. |
 | `id` | Lowercase, no spaces. Must match the directory name. |
 | `name` | Display name shown to users. |
+| `icon` | Packaged SVG or PNG path, normally `assets/icon.svg` or `assets/icon.png`. |
 | `version` | Semver. Bump on every change that affects the zip. |
 | `runtime` | `dotnet-process`. |
 | `entry` | Published assembly path under `dist/`, for example `dist/Prismedia.Plugin.Example.dll`. |
@@ -133,6 +139,7 @@ Append a new entry. The build script overwrites `sha256`, `version`, `runtime`, 
 Commit:
 
 - `plugins/<id>/manifest.json`
+- `plugins/<id>/assets/icon.svg` or `icon.png`
 - `plugins/<id>/*.csproj`
 - `plugins/<id>/*.cs`
 - `plugins/<id>/<id>.zip`

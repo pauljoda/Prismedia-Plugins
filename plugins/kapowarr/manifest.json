@@ -1,0 +1,61 @@
+{
+  "manifestVersion": 2,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "kapowarr",
+  "name": "Kapowarr",
+  "version": "1.6.1",
+  "date": "2026-09-25",
+  "icon": "assets/icon.png",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Kapowarr.dll",
+  "compat": {
+    "pluginApiMin": "2.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "3.8.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "apiKey",
+      "label": "API key",
+      "required": true,
+      "url": null
+    }
+  ],
+  "isNsfw": false,
+  "supports": [],
+  "integration": {
+    "protocolVersion": 1,
+    "capabilities": [
+      {
+        "kind": "connected-library",
+        "operations": [
+          "search-library",
+          "get-library-item",
+          "list-libraries"
+        ],
+        "entityKinds": [
+          "comic-series"
+        ]
+      },
+      {
+        "kind": "external-manager",
+        "operations": [
+          "discover-managed",
+          "manager-options",
+          "reconcile-managed",
+          "configure-managed",
+          "request-managed",
+          "lookup-managed",
+          "ensure-managed"
+        ],
+        "entityKinds": [
+          "comic-series"
+        ]
+      }
+    ],
+    "settings": []
+  }
+}

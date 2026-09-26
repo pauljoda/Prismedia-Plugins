@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <DebugType>none</DebugType><DebugSymbols>false</DebugSymbols><PathMap>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))=/_/</PathMap>
+  </PropertyGroup>
+  <ItemGroup><Compile Include="../../shared/integrations/*.cs" Link="Integrations/%(Filename)%(Extension)" />
+    <InternalsVisibleTo Include="Prismedia.Plugin.Kapowarr.Tests" />
+  </ItemGroup>
+</Project>

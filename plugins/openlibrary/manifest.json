@@ -5,14 +5,15 @@
   ],
   "id": "openlibrary",
   "name": "Open Library",
-  "version": "0.3.3",
-  "date": "2026-07-24",
+  "version": "0.3.7",
+  "date": "2026-09-18",
+  "icon": "assets/icon.png",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.OpenLibrary.dll",
   "compat": {
     "pluginApiMin": "2.0.0",
     "pluginApiMax": null,
-    "prismediaMin": "2.0.1",
+    "prismediaMin": "3.8.0",
     "prismediaMax": null
   },
   "auth": [],
@@ -31,13 +32,44 @@
         "lookup-url",
         "search"
       ],
-      "identityNamespaces": ["openlibrary", "openlibrarywork", "openlibraryedition", "isbn", "isbn10", "isbn13"],
+      "identityNamespaces": [
+        "openlibrary",
+        "openlibrarywork",
+        "openlibraryedition",
+        "isbn",
+        "isbn10",
+        "isbn13"
+      ],
       "search": {
         "fields": [
-          { "key": "title", "label": "Title", "type": "text", "required": true, "placeholder": "Book or series title" },
-          { "key": "author", "label": "Author", "type": "text", "required": false, "placeholder": "Author name" },
-          { "key": "year", "label": "First published", "type": "year", "required": false, "placeholder": "1996" },
-          { "key": "seriesTitle", "label": "Series", "type": "text", "required": false, "placeholder": "Series title" }
+          {
+            "key": "title",
+            "label": "Title",
+            "type": "text",
+            "required": true,
+            "placeholder": "Book or series title"
+          },
+          {
+            "key": "author",
+            "label": "Author",
+            "type": "text",
+            "required": false,
+            "placeholder": "Author name"
+          },
+          {
+            "key": "year",
+            "label": "First published",
+            "type": "year",
+            "required": false,
+            "placeholder": "1996"
+          },
+          {
+            "key": "seriesTitle",
+            "label": "Series",
+            "type": "text",
+            "required": false,
+            "placeholder": "Series title"
+          }
         ]
       }
     },
@@ -48,13 +80,44 @@
         "lookup-url",
         "search"
       ],
-      "identityNamespaces": ["openlibrary", "openlibrarywork", "openlibraryedition", "isbn", "isbn10", "isbn13"],
+      "identityNamespaces": [
+        "openlibrary",
+        "openlibrarywork",
+        "openlibraryedition",
+        "isbn",
+        "isbn10",
+        "isbn13"
+      ],
       "search": {
         "fields": [
-          { "key": "title", "label": "Volume title", "type": "text", "required": true, "placeholder": "Volume title" },
-          { "key": "author", "label": "Author", "type": "text", "required": false, "placeholder": "Author name" },
-          { "key": "year", "label": "First published", "type": "year", "required": false, "placeholder": "1996" },
-          { "key": "seriesTitle", "label": "Series", "type": "text", "required": false, "placeholder": "Series title" }
+          {
+            "key": "title",
+            "label": "Volume title",
+            "type": "text",
+            "required": true,
+            "placeholder": "Volume title"
+          },
+          {
+            "key": "author",
+            "label": "Author",
+            "type": "text",
+            "required": false,
+            "placeholder": "Author name"
+          },
+          {
+            "key": "year",
+            "label": "First published",
+            "type": "year",
+            "required": false,
+            "placeholder": "1996"
+          },
+          {
+            "key": "seriesTitle",
+            "label": "Series",
+            "type": "text",
+            "required": false,
+            "placeholder": "Series title"
+          }
         ]
       }
     },
@@ -65,11 +128,26 @@
         "lookup-url",
         "search"
       ],
-      "identityNamespaces": ["openlibrary", "openlibraryauthor"],
+      "identityNamespaces": [
+        "openlibrary",
+        "openlibraryauthor"
+      ],
       "search": {
         "fields": [
-          { "key": "title", "label": "Author", "type": "text", "required": true, "placeholder": "Author name" },
-          { "key": "birthYear", "label": "Birth year", "type": "year", "required": false, "placeholder": "1948" }
+          {
+            "key": "title",
+            "label": "Author",
+            "type": "text",
+            "required": true,
+            "placeholder": "Author name"
+          },
+          {
+            "key": "birthYear",
+            "label": "Birth year",
+            "type": "year",
+            "required": false,
+            "placeholder": "1948"
+          }
         ]
       }
     }

@@ -3,10 +3,10 @@
 
 - id: tmdb
   name: The Movie Database
-  version: 1.1.14
-  date: '2026-09-01'
+  version: 1.1.15
+  date: '2026-09-18'
   path: plugins/tmdb/tmdb.zip
-  sha256: c0d50a238c48e6d42bd66bc1eeeead5112e969b663f6d3f39781fab8a564562f
+  sha256: 3db2d97c059f3db0df5e98cdde02cd6fc7d2be38096401672a343c12c81258bf
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -141,12 +141,13 @@
             type: text
             required: true
             placeholder: Studio name
+  icon: plugins/tmdb/assets/icon.svg
 - id: youtube
   name: YouTube Metadata
-  version: 1.2.4
-  date: '2026-07-09'
+  version: 1.2.5
+  date: '2026-09-18'
   path: plugins/youtube/youtube.zip
-  sha256: c100ec28314edb3dedbe05d90eb12c056791543a8438f84b0fbf00aa41c6e448
+  sha256: 2a82c3f5d0a156515952b5ae9f831c4ce35c2b9d18dec8d200594152343a6977
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -238,12 +239,13 @@
             type: text
             required: false
             placeholder: Album title
+  icon: plugins/youtube/assets/icon.svg
 - id: musicbrainz
   name: MusicBrainz
-  version: 1.2.4
-  date: '2026-07-24'
+  version: 1.2.5
+  date: '2026-09-18'
   path: plugins/musicbrainz/musicbrainz.zip
-  sha256: 80c51864da4e3aeedecb28abf49286aa64bad1cd0b4a488c26d047e1a8c3b78b
+  sha256: a5063e182215269ef1183d0b96146b38d245ba9cd9b59125a37b294d477fef40
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -337,15 +339,16 @@
             type: year
             required: false
             placeholder: '2024'
+  icon: plugins/musicbrainz/assets/icon.svg
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 1100
 - id: anilist
   name: AniList
-  version: 1.0.5
-  date: '2026-08-01'
+  version: 1.1.1
+  date: '2026-09-18'
   path: plugins/anilist/anilist.zip
-  sha256: 3c3e413accd35e004942407d641a84892a8416490e047f36ff40f22199e400a1
+  sha256: ecdda82891e9efe4eed5ab53b270c25ab24f0f6f8b785c23feaeb8472ac3f9e5
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -354,7 +357,7 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 3.0.0
+    prismediaMin: 3.8.0
     prismediaMax: null
   supports:
     - entityKind: movie
@@ -424,12 +427,36 @@
         - lookup-id
       identityNamespaces:
         - anilistepisode
+    - entityKind: comic-series
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - anilist
+      search:
+        fields:
+          - key: seriesTitle
+            label: Manga title
+            type: text
+            required: true
+            placeholder: Manga title
+          - key: year
+            label: Publication year
+            type: year
+            required: false
+            placeholder: '2024'
+      identityUrls:
+        - identityNamespace: anilist
+          valuePattern: '{id}'
+          urlTemplate: https://anilist.co/manga/{id}
+  icon: plugins/anilist/assets/icon.svg
 - id: mangadex
   name: MangaDex
-  version: 2.0.0
-  date: '2026-08-21'
+  version: 2.1.1
+  date: '2026-09-18'
   path: plugins/mangadex/mangadex.zip
-  sha256: 5f231160ce04e6ad2249dac50e7558dbe6519ec469a6a2d1447a204bcb261610
+  sha256: 326b6feb84e3d663257601a4466fa2ef198c8584a435b819c60db3aa85a0ed78
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -438,7 +465,7 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 3.5.0
+    prismediaMin: 3.8.0
     prismediaMax: null
   supports:
     - entityKind: comic-series
@@ -476,15 +503,16 @@
         - lookup-url
       identityNamespaces:
         - mangadexchapter
+  icon: plugins/mangadex/assets/icon.svg
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 250
 - id: openlibrary
   name: Open Library
-  version: 0.3.3
-  date: '2026-07-24'
+  version: 0.3.7
+  date: '2026-09-18'
   path: plugins/openlibrary/openlibrary.zip
-  sha256: c41e4d7c5df87a010e6df59d1c5496d2e84bd57ce5735376e1417b165cb41c20
+  sha256: 4a866804074a1938c21064bb40629f459392344b6f8b99cd07457349834ffe8a
   runtime: dotnet-process
   isNsfw: false
   manifestVersion: 2
@@ -493,7 +521,7 @@
   compat:
     pluginApiMin: 2.0.0
     pluginApiMax: null
-    prismediaMin: 2.0.1
+    prismediaMin: 3.8.0
     prismediaMax: null
   supports:
     - entityKind: book
@@ -584,8 +612,546 @@
             type: year
             required: false
             placeholder: '1948'
+  icon: plugins/openlibrary/assets/icon.png
   execution:
     maxConcurrentInvocations: 1
     minimumStartIntervalMs: 1100
   description: Book, book-series, edition, and author metadata from Open Library
   author: Prismedia Community
+- id: opds
+  name: OPDS Catalogs
+  version: 1.0.3
+  date: '2026-09-23'
+  path: plugins/opds/opds.zip
+  sha256: de8c7a427c148be7818a34fe0e4b2c4f71b75c8c37eee5d0c7e6ba45907da444
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/opds/assets/icon.png
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - browse
+          - search
+        entityKinds:
+          - book
+          - comic-installment
+      - kind: acquisition-source
+        operations:
+          - resolve
+        entityKinds:
+          - book
+          - comic-installment
+    settings: []
+- id: archiver
+  name: The Archiver (executor API)
+  version: 1.3.1
+  date: '2026-09-18'
+  path: plugins/archiver/archiver.zip
+  sha256: 83fe5b9c7146925cb24a2c2235afe03f828168797eebd493429b898eda0d25a2
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/archiver/assets/icon.svg
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - inspect
+        entityKinds:
+          - book
+          - comic-installment
+          - image
+          - gallery
+      - kind: transfer-executor
+        operations:
+          - submit
+          - find-submission
+          - get-job
+          - cancel
+          - list-artifacts
+          - authorize-artifact
+          - renew-retention
+          - acknowledge
+          - cancel-submission
+        entityKinds:
+          - book
+          - comic-installment
+          - image
+          - gallery
+    settings: []
+- id: radarr
+  name: Radarr
+  version: 1.8.1
+  date: '2026-09-25'
+  path: plugins/radarr/radarr.zip
+  sha256: 3fc909464010e0eb30998adcfcd482b986ada3c00fd91953ca9610e93acf6ba1
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/radarr/assets/icon.svg
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+          - list-libraries
+        entityKinds:
+          - movie
+      - kind: external-manager
+        operations:
+          - manager-options
+          - discover-managed
+          - lookup-managed
+          - ensure-managed
+          - reconcile-managed
+          - configure-managed
+          - request-managed
+          - inspect-managed-release
+        entityKinds:
+          - movie
+    settings: []
+- id: sonarr
+  name: Sonarr
+  version: 1.8.1
+  date: '2026-09-25'
+  path: plugins/sonarr/sonarr.zip
+  sha256: ccccbf0b2bfda6f7b64527790c286d28cf303d1668bb7cd7c20aa5156da0116e
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/sonarr/assets/icon.svg
+  description: Adopt or create exact Sonarr series scopes and request selected episodes
+  author: Prismedia Community
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+          - list-libraries
+        entityKinds:
+          - video-series
+      - kind: external-manager
+        operations:
+          - manager-options
+          - discover-managed
+          - lookup-managed
+          - ensure-managed
+          - reconcile-managed
+          - configure-managed
+          - request-managed
+          - inspect-managed-release
+        entityKinds:
+          - video-series
+    settings: []
+- id: googlebooks
+  name: Google Books
+  version: 1.0.1
+  date: '2026-09-18'
+  path: plugins/googlebooks/googlebooks.zip
+  sha256: f4d47d4b0760b118e8b50fc756cb6d92eac7fe7099aacfa4f653f68a7c286815
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports:
+    - entityKind: book
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - googlebooks
+        - isbn
+        - isbn10
+        - isbn13
+      identityUrls:
+        - identityNamespace: googlebooks
+          valuePattern: '{id}'
+          urlTemplate: https://books.google.com/books?id={id}
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+          - key: author
+            label: Author
+            type: text
+            required: false
+          - key: language
+            label: Language code
+            type: text
+            required: false
+            placeholder: en
+    - entityKind: book-volume
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - googlebooks
+        - isbn
+        - isbn10
+        - isbn13
+      identityUrls:
+        - identityNamespace: googlebooks
+          valuePattern: '{id}'
+          urlTemplate: https://books.google.com/books?id={id}
+      search:
+        fields:
+          - key: title
+            label: Title
+            type: text
+            required: true
+          - key: author
+            label: Author
+            type: text
+            required: false
+          - key: language
+            label: Language code
+            type: text
+            required: false
+            placeholder: en
+  icon: plugins/googlebooks/assets/icon.svg
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 300
+  description: Edition-specific book metadata with reviewed title and ISBN searches
+  author: Prismedia Community
+- id: metron
+  name: Metron
+  version: 1.0.1
+  date: '2026-09-18'
+  path: plugins/metron/metron.zip
+  sha256: 931c906ec3f1f5192e34e5939d4d0adc9e84f49ae36792ff9bd2bad947af5eca
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports:
+    - entityKind: comic-series
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - metronseries
+      identityUrls:
+        - identityNamespace: metronseries
+          valuePattern: '{id}'
+          urlTemplate: https://metron.cloud/api/series/{id}/
+      search:
+        fields:
+          - key: seriesTitle
+            label: Series title
+            type: text
+            required: true
+          - key: year
+            label: Series start year
+            type: year
+            required: false
+          - key: volume
+            label: Run volume
+            type: number
+            required: false
+          - key: publisher
+            label: Publisher
+            type: text
+            required: false
+          - key: language
+            label: Language code
+            type: text
+            required: false
+    - entityKind: comic-installment
+      actions:
+        - lookup-id
+        - lookup-url
+        - search
+      identityNamespaces:
+        - metronissue
+      identityUrls:
+        - identityNamespace: metronissue
+          valuePattern: '{id}'
+          urlTemplate: https://metron.cloud/api/issue/{id}/
+      search:
+        fields:
+          - key: seriesTitle
+            label: Series title
+            type: text
+            required: true
+          - key: issueNumber
+            label: Exact issue designation
+            type: text
+            required: true
+          - key: year
+            label: Series start year
+            type: year
+            required: false
+          - key: volume
+            label: Run volume
+            type: number
+            required: false
+          - key: publisher
+            label: Publisher
+            type: text
+            required: false
+  icon: plugins/metron/assets/icon.png
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 3100
+  description: Western comic series and issue metadata with exact issue designations and reviewed run matching
+  author: Prismedia Community
+- id: kapowarr
+  name: Kapowarr
+  version: 1.6.1
+  date: '2026-09-25'
+  path: plugins/kapowarr/kapowarr.zip
+  sha256: 06fab90690ccf3979a35f7eb81a01147e421977cc95e0f26249038435922764a
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/kapowarr/assets/icon.png
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+          - list-libraries
+        entityKinds:
+          - comic-series
+      - kind: external-manager
+        operations:
+          - discover-managed
+          - manager-options
+          - reconcile-managed
+          - configure-managed
+          - request-managed
+          - lookup-managed
+          - ensure-managed
+        entityKinds:
+          - comic-series
+    settings: []
+- id: commons
+  name: Wikimedia Commons
+  version: 1.0.1
+  date: '2026-09-18'
+  path: plugins/commons/commons.zip
+  sha256: b6a55bc604d05a16f6f3fa762d711d63d1cd0b0d173fa277cfdcf925ecf0534b
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/commons/assets/icon.svg
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 1100
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - search
+        entityKinds:
+          - image
+      - kind: acquisition-source
+        operations:
+          - resolve
+        entityKinds:
+          - image
+    settings: []
+    anonymousArtifactOrigins:
+      - https://upload.wikimedia.org
+- id: suwayomi
+  name: Suwayomi Sources
+  version: 1.0.2
+  date: '2026-09-18'
+  path: plugins/suwayomi/suwayomi.zip
+  sha256: 0451fc05e96670d4e09fb5a56d6460ca7308cb5430b8f932aa8441fbb1ab574b
+  runtime: dotnet-process
+  isNsfw: true
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/suwayomi/assets/icon.png
+  description: Browse installed Suwayomi manga sources and acquire one exact chapter as a CBZ
+  author: Prismedia Community
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - browse
+          - search
+        entityKinds:
+          - comic-installment
+      - kind: acquisition-source
+        operations:
+          - request-source
+          - observe-source
+          - resolve
+        entityKinds:
+          - comic-installment
+    settings: []
+- id: lazylibrarian
+  name: LazyLibrarian
+  version: 1.3.1
+  date: '2026-09-25'
+  path: plugins/lazylibrarian/lazylibrarian.zip
+  sha256: c72cde31a8d062e96c4fd07a4c4f392f43c3d6f79b0ae62e440d9d9eed1d36c2
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/lazylibrarian/assets/icon.svg
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: connected-library
+        operations:
+          - search-library
+          - get-library-item
+          - list-libraries
+        entityKinds:
+          - book
+      - kind: external-manager
+        operations:
+          - manager-options
+          - lookup-managed
+          - reconcile-managed
+          - configure-managed
+          - request-managed
+        entityKinds:
+          - book
+    settings:
+      - key: ebookRoot
+        label: LazyLibrarian ebook root
+        type: text
+        required: true
+        placeholder: /books
+        help: Absolute path as reported by LazyLibrarian. Map it to a Prismedia library folder.
+      - key: audiobookRoot
+        label: LazyLibrarian audiobook root
+        type: text
+        required: true
+        placeholder: /audiobooks
+        help: Absolute path as reported by LazyLibrarian. Map it to a Prismedia library folder.
+- id: archiveorg
+  name: Internet Archive Comics
+  version: 1.0.0
+  date: '2026-09-23'
+  path: plugins/archiveorg/archiveorg.zip
+  sha256: 8a19aa62b595ae634e37161687776a2332993b633a162c444ab2511bd86a3ce4
+  runtime: dotnet-process
+  isNsfw: false
+  manifestVersion: 2
+  apiTags:
+    - prismedia
+  compat:
+    pluginApiMin: 2.0.0
+    pluginApiMax: null
+    prismediaMin: 3.8.0
+    prismediaMax: null
+  supports: []
+  icon: plugins/archiveorg/assets/icon.svg
+  execution:
+    maxConcurrentInvocations: 1
+    minimumStartIntervalMs: 1100
+  integration:
+    protocolVersion: 1
+    capabilities:
+      - kind: catalog-discovery
+        operations:
+          - browse
+          - search
+        entityKinds:
+          - comic-installment
+      - kind: acquisition-source
+        operations:
+          - resolve
+        entityKinds:
+          - comic-installment
+    settings: []
+    anonymousArtifactHostSuffixes:
+      - archive.org

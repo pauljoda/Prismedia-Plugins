@@ -49,6 +49,32 @@ public sealed class MangaDexIdentityRoundTripTests {
                 resolvedChapter.Patch.ExternalIds);
             Assert.Equal("2024-01-02", resolvedChapter.Patch.Dates["published"]);
             Assert.Equal(20, resolvedChapter.Patch.Stats["pageCount"]);
+            var exactPosition = Assert.Single(resolvedChapter.Patch.PositionEntries);
+            Assert.Equal("12.5", exactPosition.Label);
+            Assert.Equal(1, exactPosition.Value);
+        } finally {
+            MangaDexPlugin.Http = previous;
+        }
+    }
+
+    [Theory]
+    [InlineData("12.5", true)]
+    [InlineData("12", false)]
+    public async Task ExactContextLabelDoesNotFallBackToTheIntegerPosition(string label, bool matches) {
+        var previous = MangaDexPlugin.Http;
+        using var http = new HttpClient(new StubHandler(ResponseFor));
+        MangaDexPlugin.Http = http;
+        try {
+            var request = new IdentifyPluginRequest(2, "lookup-id", new Dictionary<string, string>(),
+                new IdentifyEntitySnapshot(Guid.NewGuid(), "comic-installment", "Opening"),
+                new IdentifyQuery(null, null, null), new IdentifyMatchHints(new Dictionary<string, string>(), [], null, null),
+                new IdentifyStructuralContext([
+                    new IdentifyEntitySnapshot(Guid.NewGuid(), "comic-series", "Case Saga", new Dictionary<string, string> { ["mangadex"] = MangaId })
+                ], new Dictionary<string, int> { ["chapter"] = 12500, ["sort"] = 0 }) {
+                    PositionEntries = [new EntityPosition("chapter", 12, label)]
+                });
+            var proposal = Assert.IsType<EntityMetadataProposal>((await MangaDexPlugin.IdentifyAsync(request)).Proposal);
+            Assert.Equal(matches, proposal.Patch.ExternalIds.ContainsKey("mangadexchapter"));
         } finally {
             MangaDexPlugin.Http = previous;
         }
@@ -112,7 +138,7 @@ public sealed class MangaDexIdentityRoundTripTests {
               "attributes": {
                 "title": "Opening",
                 "volume": "Vol:Case",
-                "chapter": "1",
+                "chapter": "12.5",
                 "translatedLanguage": "en",
                 "publishAt": "2024-01-02T00:00:00Z",
                 "pages": 20

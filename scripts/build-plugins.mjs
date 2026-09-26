@@ -53,6 +53,24 @@ function loadManifest(pluginDir) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function validatePackagedIcon(pluginDir, manifest) {
+  const icon = requireString(manifest.icon, "icon", manifest.id);
+  const iconPath = resolve(pluginDir, icon);
+  if (!iconPath.startsWith(`${resolve(pluginDir)}/`) || !existsSync(iconPath)) {
+    throw new Error(`${manifest.id} manifest icon is missing from its package`);
+  }
+  const content = readFileSync(iconPath);
+  if (content.length === 0 || content.length > 256 * 1024) {
+    throw new Error(`${manifest.id} manifest icon must be 1 through 262144 bytes`);
+  }
+  if (/\.png$/i.test(icon) && !content.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    throw new Error(`${manifest.id} manifest icon does not contain PNG data`);
+  }
+  if (/\.svg$/i.test(icon) && !/^\s*(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(content.toString("utf8"))) {
+    throw new Error(`${manifest.id} manifest icon does not contain SVG data`);
+  }
+}
+
 function buildDotnet(pluginDir) {
   const project = readdirSync(pluginDir).find((name) => name.endsWith(".csproj"));
   if (!project) {
@@ -126,13 +144,14 @@ function indexEntryFromManifest(manifest, id, digest) {
     apiTags: optionalArray(manifest.apiTags),
     compat: manifest.compat,
     supports: optionalArray(manifest.supports),
+    icon: `plugins/${id}/${requireString(manifest.icon, "icon", id)}`,
   };
 
   if (manifest.execution !== undefined) {
     entry.execution = manifest.execution;
   }
 
-  for (const key of ["description", "author", "capabilities"]) {
+  for (const key of ["description", "author", "capabilities", "integration"]) {
     if (manifest[key] !== undefined) {
       entry[key] = manifest[key];
     }
@@ -168,6 +187,7 @@ for (const id of orderedIds) {
   const manifest = loadManifest(pluginDir);
   if (!manifest) throw new Error(`Plugin is missing manifest.json: ${id}`);
   validateManifest(manifest, id);
+  validatePackagedIcon(pluginDir, manifest);
   if (manifest.runtime !== "dotnet-process") throw new Error(`unsupported runtime for ${id}: ${manifest.runtime}`);
   manifestsById.set(id, manifest);
 

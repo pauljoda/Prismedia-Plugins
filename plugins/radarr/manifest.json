@@ -1,0 +1,62 @@
+{
+  "manifestVersion": 2,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "radarr",
+  "name": "Radarr",
+  "version": "1.8.1",
+  "date": "2026-09-25",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Radarr.dll",
+  "icon": "assets/icon.svg",
+  "compat": {
+    "pluginApiMin": "2.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "3.8.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "apiKey",
+      "label": "API key",
+      "required": true,
+      "url": null
+    }
+  ],
+  "isNsfw": false,
+  "supports": [],
+  "integration": {
+    "protocolVersion": 1,
+    "capabilities": [
+      {
+        "kind": "connected-library",
+        "operations": [
+          "search-library",
+          "get-library-item",
+          "list-libraries"
+        ],
+        "entityKinds": [
+          "movie"
+        ]
+      },
+      {
+        "kind": "external-manager",
+        "operations": [
+          "manager-options",
+          "discover-managed",
+          "lookup-managed",
+          "ensure-managed",
+          "reconcile-managed",
+          "configure-managed",
+          "request-managed",
+          "inspect-managed-release"
+        ],
+        "entityKinds": [
+          "movie"
+        ]
+      }
+    ],
+    "settings": []
+  }
+}

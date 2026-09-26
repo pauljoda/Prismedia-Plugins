@@ -5,8 +5,9 @@
   ],
   "id": "musicbrainz",
   "name": "MusicBrainz",
-  "version": "1.2.4",
-  "date": "2026-07-24",
+  "version": "1.2.5",
+  "date": "2026-09-18",
+  "icon": "assets/icon.svg",
   "runtime": "dotnet-process",
   "entry": "dist/Prismedia.Plugin.MusicBrainz.dll",
   "compat": {

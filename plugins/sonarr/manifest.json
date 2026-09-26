@@ -1,0 +1,64 @@
+{
+  "manifestVersion": 2,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "sonarr",
+  "name": "Sonarr",
+  "version": "1.8.1",
+  "date": "2026-09-25",
+  "icon": "assets/icon.svg",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Sonarr.dll",
+  "compat": {
+    "pluginApiMin": "2.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "3.8.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "apiKey",
+      "label": "API key",
+      "required": true,
+      "url": null
+    }
+  ],
+  "isNsfw": false,
+  "description": "Adopt or create exact Sonarr series scopes and request selected episodes",
+  "author": "Prismedia Community",
+  "supports": [],
+  "integration": {
+    "protocolVersion": 1,
+    "capabilities": [
+      {
+        "kind": "connected-library",
+        "operations": [
+          "search-library",
+          "get-library-item",
+          "list-libraries"
+        ],
+        "entityKinds": [
+          "video-series"
+        ]
+      },
+      {
+        "kind": "external-manager",
+        "operations": [
+          "manager-options",
+          "discover-managed",
+          "lookup-managed",
+          "ensure-managed",
+          "reconcile-managed",
+          "configure-managed",
+          "request-managed",
+          "inspect-managed-release"
+        ],
+        "entityKinds": [
+          "video-series"
+        ]
+      }
+    ],
+    "settings": []
+  }
+}

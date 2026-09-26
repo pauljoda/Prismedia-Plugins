@@ -1,0 +1,140 @@
+{
+  "manifestVersion": 2,
+  "apiTags": [
+    "prismedia"
+  ],
+  "id": "metron",
+  "name": "Metron",
+  "version": "1.0.1",
+  "date": "2026-09-18",
+  "icon": "assets/icon.png",
+  "runtime": "dotnet-process",
+  "entry": "dist/Prismedia.Plugin.Metron.dll",
+  "compat": {
+    "pluginApiMin": "2.0.0",
+    "pluginApiMax": null,
+    "prismediaMin": "3.8.0",
+    "prismediaMax": null
+  },
+  "auth": [
+    {
+      "key": "apiToken",
+      "label": "Metron API token",
+      "required": true,
+      "url": "https://metron.cloud/"
+    }
+  ],
+  "isNsfw": false,
+  "execution": {
+    "maxConcurrentInvocations": 1,
+    "minimumStartIntervalMs": 3100
+  },
+  "description": "Western comic series and issue metadata with exact issue designations and reviewed run matching",
+  "author": "Prismedia Community",
+  "supports": [
+    {
+      "entityKind": "comic-series",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ],
+      "identityNamespaces": [
+        "metronseries"
+      ],
+      "identityUrls": [
+        {
+          "identityNamespace": "metronseries",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://metron.cloud/api/series/{id}/"
+        }
+      ],
+      "search": {
+        "fields": [
+          {
+            "key": "seriesTitle",
+            "label": "Series title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "year",
+            "label": "Series start year",
+            "type": "year",
+            "required": false
+          },
+          {
+            "key": "volume",
+            "label": "Run volume",
+            "type": "number",
+            "required": false
+          },
+          {
+            "key": "publisher",
+            "label": "Publisher",
+            "type": "text",
+            "required": false
+          },
+          {
+            "key": "language",
+            "label": "Language code",
+            "type": "text",
+            "required": false
+          }
+        ]
+      }
+    },
+    {
+      "entityKind": "comic-installment",
+      "actions": [
+        "lookup-id",
+        "lookup-url",
+        "search"
+      ],
+      "identityNamespaces": [
+        "metronissue"
+      ],
+      "identityUrls": [
+        {
+          "identityNamespace": "metronissue",
+          "valuePattern": "{id}",
+          "urlTemplate": "https://metron.cloud/api/issue/{id}/"
+        }
+      ],
+      "search": {
+        "fields": [
+          {
+            "key": "seriesTitle",
+            "label": "Series title",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "issueNumber",
+            "label": "Exact issue designation",
+            "type": "text",
+            "required": true
+          },
+          {
+            "key": "year",
+            "label": "Series start year",
+            "type": "year",
+            "required": false
+          },
+          {
+            "key": "volume",
+            "label": "Run volume",
+            "type": "number",
+            "required": false
+          },
+          {
+            "key": "publisher",
+            "label": "Publisher",
+            "type": "text",
+            "required": false
+          }
+        ]
+      }
+    }
+  ]
+}

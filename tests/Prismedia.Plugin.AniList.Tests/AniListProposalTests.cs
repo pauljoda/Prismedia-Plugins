@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 
-public sealed class AniListProposalTests {
+public sealed partial class AniListProposalTests {
     [Fact]
     public void SearchInputUsesManifestFieldsWithoutLegacyTitle() {
         var request = new IdentifyPluginRequest(

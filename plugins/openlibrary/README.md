@@ -19,3 +19,20 @@ Open Library asks API clients to use structured API endpoints rather than scrapi
 ## Test Cases
 
 The primary live smoke case used during development was George R. R. Martin's `A Game of Thrones` (`OL257943W`) and the `A Song of Ice and Fire` series subject. The unit tests cover series candidate generation, work hydration, edition selection, series positioning, author relationship hydration, and ID parsing.
+
+## Work and edition identity
+
+A work-only lookup keeps work metadata separate from edition-specific ISBNs, publishers,
+page counts, and publication dates. Those edition facts are returned only when an edition
+ID or ISBN explicitly resolves them. The plugin never picks an English edition merely
+because it has a cover or richer metadata.
+
+An exact edition takes precedence when the request also carries its work ID. Conflicting
+work/edition/ISBN evidence and missing editions fail without falling back to title search.
+An explicit new work selection ignores old stored edition hints. If it supersedes a stored
+edition ID, the review includes that exact ID's removal under **Provider IDs**. Accepting
+that field unlinks only the old Open Library edition; ISBNs, other providers, and saved
+URLs remain intact. Later lookups prefer stored Open Library IDs over stale URL or ISBN
+hints. Deselecting Provider IDs preserves the existing identities. This behavior requires
+Prismedia 3.8.0 or later; omitted metadata fields remain unchanged. See Open Library
+[Works and Editions](https://openlibrary.org/dev/docs/api/books#learnings-about-works-v-editions).

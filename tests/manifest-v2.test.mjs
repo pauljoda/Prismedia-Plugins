@@ -7,7 +7,25 @@ import { validateManifest } from "../scripts/manifest-contract.mjs";
 
 const pluginsRoot = resolve("plugins");
 const expectedContracts = {
+  archiveorg: {},
+  commons: {},
+  metron: {
+    "comic-series": { identities: ["metronseries"], fields: ["seriesTitle", "year", "volume", "publisher", "language"] },
+    "comic-installment": { identities: ["metronissue"], fields: ["seriesTitle", "issueNumber", "year", "volume", "publisher"] },
+  },
+  archiver: {},
+  kapowarr: {},
+  lazylibrarian: {},
+  googlebooks: {
+    book: { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
+    "book-volume": { identities: ["googlebooks", "isbn", "isbn10", "isbn13"], fields: ["title", "author", "language"] },
+  },
+  opds: {},
+  radarr: {},
+  sonarr: {},
+  suwayomi: {},
   anilist: {
+    "comic-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
     movie: { identities: ["anilist"], fields: ["title", "year"] },
     "video-series": { identities: ["anilist"], fields: ["seriesTitle", "year"] },
     "video-season": { identities: ["anilistseason"], fields: [] },
@@ -59,6 +77,12 @@ for (const pluginId of readdirSync(pluginsRoot).sort()) {
       }])),
       expectedContracts[pluginId],
     );
+  });
+
+  test(`${pluginId} packages its declared icon`, () => {
+    const icon = readFileSync(join(pluginsRoot, pluginId, manifest.icon));
+    assert.ok(icon.length > 0 && icon.length <= 256 * 1024);
+    assert.match(manifest.icon, /^assets\/icon\.(svg|png)$/);
   });
 }
 
@@ -117,6 +141,7 @@ function validManifest(overrides = {}) {
     date: "2026-07-09",
     runtime: "dotnet-process",
     entry: "dist/Validation.dll",
+    icon: "assets/icon.svg",
     compat: {
       pluginApiMin: "2.0.0",
       pluginApiMax: null,
@@ -335,4 +360,50 @@ test("manifest-v2 identity URLs preserve every captured identity component", () 
     }],
   });
   assert.equal(validateManifest(repeated, "invalid"), repeated);
+});
+
+
+test("integration-only manifests are independently versioned and do not need metadata support", () => {
+  const manifest = validManifest({ supports: [], integration: { protocolVersion: 1, settings: [],
+    capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["book"] }] } });
+  assert.equal(validateManifest(manifest), manifest);
+  for (const integration of [
+    { ...manifest.integration, protocolVersion: 9 },
+    { ...manifest.integration, capabilities: [{ kind: "catalog-discovery", operations: ["submit"], entityKinds: ["book"] }] },
+    { ...manifest.integration, capabilities: [...manifest.integration.capabilities, ...manifest.integration.capabilities] },
+  ]) assert.throws(() => validateManifest({ ...manifest, integration }));
+  assert.throws(() => validateManifest({ ...manifest, integration: undefined }), /non-empty supports/);
+});
+
+test("anonymous artifact origins are bounded HTTPS origins for acquisition sources", () => {
+  const integration = { protocolVersion: 1, settings: [],
+    capabilities: [{ kind: "acquisition-source", operations: ["resolve"], entityKinds: ["book"] }],
+    anonymousArtifactOrigins: ["https://files.test"] };
+  const manifest = validManifest({ integration });
+  assert.equal(validateManifest(manifest), manifest);
+  for (const origins of [
+    ["http://files.test"], ["https://files.test/path"], ["https://user@files.test"],
+    ["https://files.test?query"], ["https://files.test#fragment"],
+    ["https://files.test", "https://FILES.test:443/"],
+    Array.from({ length: 9 }, (_, index) => `https://files${index}.test`),
+    [null], "https://files.test", [" https://files.test"], ["https://files.test/.."], ["https:files.test"],
+  ]) assert.throws(() => validateManifest({ ...manifest, integration: { ...integration, anonymousArtifactOrigins: origins } }), /artifact origins/);
+  assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
+    capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["book"] }] } }), /artifact origins/);
+});
+
+test("anonymous artifact host suffixes require exact DNS host declarations", () => {
+  const integration = { protocolVersion: 1, settings: [],
+    capabilities: [{ kind: "acquisition-source", operations: ["resolve"], entityKinds: ["comic-installment"] }],
+    anonymousArtifactHostSuffixes: ["archive.org"] };
+  const manifest = validManifest({ integration });
+  assert.equal(validateManifest(manifest), manifest);
+  for (const suffixes of [
+    ["com"], ["127.0.0.1"], ["archive.org", "ARCHIVE.ORG"], ["archive.org/path"],
+    ["archive..org"], [".archive.org"], ["archive.org."], ["archive.org:443"],
+    [null], "archive.org", Array.from({ length: 9 }, (_, index) => `files${index}.archive.org`),
+  ]) assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
+    anonymousArtifactHostSuffixes: suffixes } }), /host suffixes/);
+  assert.throws(() => validateManifest({ ...manifest, integration: { ...integration,
+    capabilities: [{ kind: "catalog-discovery", operations: ["browse"], entityKinds: ["comic-installment"] }] } }), /host suffixes/);
 });

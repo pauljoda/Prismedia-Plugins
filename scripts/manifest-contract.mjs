@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const VALID_ACTIONS = new Set(["lookup-id", "lookup-url", "search"]);
 const VALID_FIELD_TYPES = new Set(["text", "number", "year"]);
 const VALID_ENTITY_KINDS = new Set([
@@ -237,6 +239,63 @@ function validateIdentityUrls(value, namespaces, pluginId, entityKind) {
   }
 }
 
+const INTEGRATION_OPERATIONS = {
+  "catalog-discovery": ["search", "browse", "inspect"],
+  "acquisition-source": ["resolve", "request-source", "observe-source"],
+  "transfer-executor": ["submit", "find-submission", "cancel-submission", "get-job", "cancel", "list-artifacts", "authorize-artifact", "renew-retention", "acknowledge"],
+  "external-manager": ["manager-options", "discover-managed", "lookup-managed", "ensure-managed", "request-managed", "configure-managed", "reconcile-managed", "inspect-managed-release"],
+  "connected-library": ["search-library", "get-library-item", "list-libraries"],
+};
+
+function validateIntegration(integration, auth, pluginId) {
+  requireObject(integration, "integration", pluginId);
+  if (integration.protocolVersion !== 1) throw new Error(`${pluginId} integration protocolVersion must be 1`);
+  const capabilities = requireArray(integration.capabilities, "integration.capabilities", pluginId);
+  if (capabilities.length > 8) throw new Error(`${pluginId} has too many integration capabilities`);
+  requireUnique(capabilities.map(item => item.kind), "integration capabilities", pluginId);
+  for (const capability of capabilities) {
+    const allowed = INTEGRATION_OPERATIONS[capability.kind];
+    if (!allowed) throw new Error(`${pluginId} declares an unknown integration capability`);
+    const operations = requireArray(capability.operations, "integration operations", pluginId);
+    requireUnique(operations, "integration operations", pluginId);
+    if (operations.some(operation => !allowed.includes(operation))) throw new Error(`${pluginId} declares an operation outside its capability`);
+    const kinds = requireArray(capability.entityKinds, "integration entityKinds", pluginId);
+    requireUnique(kinds, "integration entityKinds", pluginId);
+    if (kinds.some(kind => !VALID_ENTITY_KINDS.has(kind))) throw new Error(`${pluginId} declares an unknown integration entity kind`);
+  }
+  const origins = integration.anonymousArtifactOrigins ?? [];
+  const invalidOrigins = () => new Error(`${pluginId} anonymous artifact origins must be unique bounded HTTPS origins for acquisition sources`);
+  if (!Array.isArray(origins) || origins.length > 8) throw invalidOrigins();
+  if (origins.length && !capabilities.some(item => item.kind === "acquisition-source" && item.operations.includes("resolve"))) throw invalidOrigins();
+  const normalizedOrigins = new Set();
+  for (const value of origins) {
+    if (typeof value !== "string" || value.length > 2048 || !/^https:\/\//iu.test(value) || /[\s\p{Cc}\\?#]/u.test(value)) throw invalidOrigins();
+    let url;
+    try { url = new URL(value); } catch { throw invalidOrigins(); }
+    const pathStart = value.indexOf("/", value.indexOf("://") + 3);
+    if (url.protocol !== "https:" || !url.hostname || url.username || url.password
+      || (pathStart >= 0 && value.slice(pathStart) !== "/") || normalizedOrigins.has(url.origin)) throw invalidOrigins();
+    normalizedOrigins.add(url.origin);
+  }
+  const suffixes = integration.anonymousArtifactHostSuffixes ?? [];
+  const invalidSuffixes = () => new Error(`${pluginId} anonymous artifact host suffixes must be unique bounded DNS hosts for acquisition sources`);
+  if (!Array.isArray(suffixes) || suffixes.length + origins.length > 8) throw invalidSuffixes();
+  if (suffixes.length && !capabilities.some(item => item.kind === "acquisition-source" && item.operations.includes("resolve"))) throw invalidSuffixes();
+  const normalizedSuffixes = new Set();
+  for (const value of suffixes) {
+    if (typeof value !== "string" || value.length > 253 || isIP(value)
+      || !value.includes(".") || !value.split(".").every(label => label.length > 0 && label.length <= 63
+        && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/iu.test(label))
+      || normalizedSuffixes.has(value.toLowerCase())) throw invalidSuffixes();
+    normalizedSuffixes.add(value.toLowerCase());
+  }
+  const settings = requireArray(integration.settings, "integration.settings", pluginId, { allowEmpty: true });
+  if (settings.length > 32) throw new Error(`${pluginId} has too many connection settings`);
+  if (settings.length) validateSearch({ fields: settings }, pluginId, "connection");
+  if (settings.some(field => auth.some(credential => credential.key === field.key)))
+    throw new Error(`${pluginId} cannot declare a credential as a nonsecret setting`);
+}
+
 function validateTopLevel(manifest, directoryId) {
   requireObject(manifest, "root", directoryId);
   const pluginId = requireString(manifest.id, "id", directoryId);
@@ -246,6 +305,12 @@ function validateTopLevel(manifest, directoryId) {
   }
   if (manifest.manifestVersion !== 2) throw new Error(`${pluginId} manifestVersion must be 2`);
   requireString(manifest.name, "name", pluginId);
+  const icon = requireString(manifest.icon, "icon", pluginId);
+  if (icon.length > 256 || icon.includes("\\") || icon.startsWith("/") ||
+      icon.split("/").some((segment) => !segment || segment === "." || segment === "..") ||
+      !/\.(svg|png)$/i.test(icon)) {
+    throw new Error(`${pluginId} manifest icon must be a contained package-relative SVG or PNG path`);
+  }
   requireSemver(manifest.version, "version", pluginId);
   const date = requireString(manifest.date, "date", pluginId);
   const parsedDate = new Date(`${date}T00:00:00Z`);
@@ -284,7 +349,8 @@ function validateTopLevel(manifest, directoryId) {
 
 export function validateManifest(manifest, directoryId = manifest?.id ?? "unknown") {
   const pluginId = validateTopLevel(manifest, directoryId);
-  const supports = requireArray(manifest.supports, "supports", pluginId);
+  if (manifest.integration != null) validateIntegration(manifest.integration, manifest.auth, pluginId);
+  const supports = requireArray(manifest.supports, "supports", pluginId, { allowEmpty: Boolean(manifest.integration) });
   requireUnique(supports.map((support) => support?.entityKind), "entity kind declarations", pluginId);
   for (const support of supports) {
     const kind = support?.entityKind;
