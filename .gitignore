@@ -1,2 +1,4 @@
 bin/
 obj/
+/tests
+/plugins/tmdb/obj/Debug

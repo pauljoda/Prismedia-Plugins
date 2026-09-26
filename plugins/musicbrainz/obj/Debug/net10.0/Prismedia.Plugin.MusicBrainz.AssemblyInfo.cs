@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Prismedia.Plugin.MusicBrainz")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4fb2af6b041e256c9e66cc3a51f3579426108c75")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+27137281d4d46d3e71e9cd704b4d8c06f173b4b5")]
 [assembly: System.Reflection.AssemblyProductAttribute("Prismedia.Plugin.MusicBrainz")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Prismedia.Plugin.MusicBrainz")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
